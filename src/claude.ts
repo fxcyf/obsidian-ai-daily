@@ -1,7 +1,9 @@
 /**
  * Claude API client with tool_use support.
- * Runs entirely via HTTP — no SDK dependency, works on iOS.
+ * Uses Obsidian's requestUrl to bypass CORS — works on iOS and desktop.
  */
+
+import { requestUrl } from "obsidian";
 
 const API_URL = "https://api.anthropic.com/v1/messages";
 
@@ -220,7 +222,8 @@ export class ClaudeClient {
 			messages: this.messages,
 		};
 
-		const resp = await fetch(API_URL, {
+		const resp = await requestUrl({
+			url: API_URL,
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -230,11 +233,10 @@ export class ClaudeClient {
 			body: JSON.stringify(body),
 		});
 
-		if (!resp.ok) {
-			const err = await resp.text();
-			throw new Error(`Claude API error ${resp.status}: ${err}`);
+		if (resp.status >= 400) {
+			throw new Error(`Claude API error ${resp.status}: ${resp.text}`);
 		}
 
-		return resp.json();
+		return resp.json;
 	}
 }

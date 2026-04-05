@@ -92,7 +92,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Daily Chat</div>
+			<div class="ai-daily-welcome-title">AI Daily Chat v0.1.1</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">今天有什么值得关注的？</div>

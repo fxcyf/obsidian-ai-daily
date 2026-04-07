@@ -81,23 +81,29 @@ export class ChatView extends ItemView {
 
 	private showWelcome(): void {
 		const activeFile = this.app.workspace.getActiveFile();
-		const dailyFolder = this.plugin.settings.dailyFolder;
+		const { dailyFolder, knowledgeFolders } = this.plugin.settings;
+		const allFolders = [dailyFolder, ...knowledgeFolders];
 
-		let hint = "打开一篇日报后，可以直接提问。";
-		if (activeFile?.path.startsWith(dailyFolder)) {
-			hint = `已加载: ${activeFile.basename}。直接提问吧！`;
+		let hint = "打开任意笔记，或直接提问来探索你的知识库。";
+		if (activeFile) {
+			const inKnowledge = allFolders.some((f) => activeFile.path.startsWith(f));
+			if (inKnowledge) {
+				hint = `已加载: ${activeFile.basename}。直接提问吧！`;
+			} else {
+				hint = `当前笔记: ${activeFile.basename}。可以对它提问。`;
+			}
 		}
 
 		const welcomeEl = this.messagesEl.createDiv({
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Daily Chat v0.1.1</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.2.0</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
-				<div class="ai-daily-example">今天有什么值得关注的？</div>
-				<div class="ai-daily-example">帮我总结最近一周的日报</div>
-				<div class="ai-daily-example">RAG 相关的内容帮我梳理一下</div>
+				<div class="ai-daily-example">总结一下这篇文章的要点</div>
+				<div class="ai-daily-example">帮我在知识库里搜索 RAG 相关内容</div>
+				<div class="ai-daily-example">最近收藏了哪些文章？</div>
 			</div>
 		`;
 
@@ -153,14 +159,16 @@ export class ChatView extends ItemView {
 	}
 
 	private async initClient(): Promise<void> {
-		const { apiKey, model, dailyFolder, contextDays } =
+		const { apiKey, model, dailyFolder, knowledgeFolders, contextDays } =
 			this.plugin.settings;
 
-		this.vaultTools = new VaultTools(this.app, dailyFolder);
+		this.vaultTools = new VaultTools(this.app, dailyFolder, knowledgeFolders);
 
-		// Build system prompt with recent daily context
+		// Load contexts
 		const recentContext =
 			await this.vaultTools.loadRecentContext(contextDays);
+		const knowledgeContext =
+			await this.vaultTools.loadKnowledgeContext(5);
 
 		const activeFile = this.app.workspace.getActiveFile();
 		let currentNote = "";
@@ -168,16 +176,22 @@ export class ChatView extends ItemView {
 			currentNote = await this.app.vault.cachedRead(activeFile);
 		}
 
+		const allFolders = [dailyFolder, ...knowledgeFolders].join("、");
+
 		const systemPrompt = [
-			"你是一个 AI 日报阅读助手。用户正在 Obsidian 中阅读 AI 领域的日报。",
-			"你可以使用工具来读取、搜索和写入 vault 中的笔记。",
-			"回答用中文，简洁有深度。如果用户想保存某些内容，用 append_to_note 工具写回笔记。",
+			"你是一个个人知识库助手。用户在 Obsidian 中管理自己的知识库，包括采集的原始文章（Raw/）、整理的知识条目（Wiki/）和每日笔记。",
+			`知识库文件夹: ${allFolders}`,
+			"你可以使用工具来读取、搜索、列出和写入 vault 中的笔记。支持按文件夹和标签（frontmatter tags）筛选搜索。",
+			"回答用中文，简洁有深度。如果用户想保存洞察，用 append_to_note 工具写回笔记。",
 			"",
 			currentNote
 				? `## 当前打开的笔记\n\n文件: ${activeFile!.path}\n\n${currentNote}`
 				: "",
 			recentContext
 				? `## 最近的日报\n\n${recentContext}`
+				: "",
+			knowledgeContext
+				? `## 最近的知识库笔记\n\n${knowledgeContext}`
 				: "",
 		]
 			.filter(Boolean)
@@ -210,6 +224,12 @@ export class ChatView extends ItemView {
 		}
 
 		this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+	}
+
+	/** Programmatically send a message (used by commands). */
+	sendMessage(text: string): void {
+		this.inputEl.value = text;
+		this.handleSend();
 	}
 
 	private clearChat(): void {

@@ -13,13 +13,13 @@ export const VAULT_TOOLS = [
 	{
 		name: "read_note",
 		description:
-			"读取 vault 中指定路径的笔记内容。用于获取日报或其他笔记的完整文本。",
+			"读取 vault 中指定路径的笔记全文。可用于读取日报、采集的文章（Raw/）、整理的知识条目（Wiki/）等。",
 		input_schema: {
 			type: "object" as const,
 			properties: {
 				path: {
 					type: "string",
-					description: "笔记路径，如 AI-Daily/2026-04-03.md",
+					description: "笔记路径，如 Raw/some-article.md 或 Wiki/concept.md",
 				},
 			},
 			required: ["path"],
@@ -28,7 +28,7 @@ export const VAULT_TOOLS = [
 	{
 		name: "search_vault",
 		description:
-			"在 vault 中搜索包含关键词的笔记，返回匹配的文件路径和摘要片段。用于查找历史日报中的相关内容。",
+			"在 vault 中搜索笔记。支持关键词全文搜索，可按文件夹和标签过滤。用于在知识库中查找相关内容。",
 		input_schema: {
 			type: "object" as const,
 			properties: {
@@ -38,7 +38,11 @@ export const VAULT_TOOLS = [
 				},
 				folder: {
 					type: "string",
-					description: "限定搜索的文件夹路径（可选）",
+					description: "限定搜索的文件夹路径，如 Raw、Wiki（可选）",
+				},
+				tag: {
+					type: "string",
+					description: "按标签过滤，如 ai、rag（可选，匹配 frontmatter 中的 tags）",
 				},
 			},
 			required: ["query"],
@@ -47,7 +51,7 @@ export const VAULT_TOOLS = [
 	{
 		name: "append_to_note",
 		description:
-			"将内容追加到指定笔记的末尾。用于将对话中的洞察、总结写回日报或笔记。",
+			"将内容追加到指定笔记末尾。用于将对话中的洞察、总结写回笔记。",
 		input_schema: {
 			type: "object" as const,
 			properties: {
@@ -64,15 +68,19 @@ export const VAULT_TOOLS = [
 		},
 	},
 	{
-		name: "list_daily_notes",
+		name: "list_notes",
 		description:
-			"列出日报文件夹中的所有日报文件，按日期排序。用于了解有哪些历史日报可用。",
+			"列出指定文件夹中的笔记，按修改时间排序。不指定文件夹则列出所有知识库文件夹（Daily、Raw、Wiki 等）的笔记。",
 		input_schema: {
 			type: "object" as const,
 			properties: {
+				folder: {
+					type: "string",
+					description: "文件夹路径，如 Raw、Wiki、AI-Daily（可选，不填则列出全部）",
+				},
 				limit: {
 					type: "number",
-					description: "返回最近几篇（默认 10）",
+					description: "返回最近几篇（默认 20）",
 				},
 			},
 			required: [],

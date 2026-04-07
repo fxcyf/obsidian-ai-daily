@@ -4,6 +4,7 @@ import type AIDailyChat from "./main";
 export interface AIDailyChatSettings {
 	apiKey: string;
 	dailyFolder: string;
+	knowledgeFolders: string[];
 	contextDays: number;
 	model: string;
 }
@@ -11,6 +12,7 @@ export interface AIDailyChatSettings {
 export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	apiKey: "",
 	dailyFolder: "AI-Daily",
+	knowledgeFolders: ["Raw", "Wiki"],
 	contextDays: 7,
 	model: "claude-haiku-4-5",
 };
@@ -49,6 +51,22 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.dailyFolder)
 					.onChange(async (value) => {
 						this.plugin.settings.dailyFolder = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("知识库文件夹")
+			.setDesc("用逗号分隔多个文件夹路径，如 Raw,Wiki")
+			.addText((text) =>
+				text
+					.setPlaceholder("Raw,Wiki")
+					.setValue(this.plugin.settings.knowledgeFolders.join(","))
+					.onChange(async (value) => {
+						this.plugin.settings.knowledgeFolders = value
+							.split(",")
+							.map((s) => s.trim())
+							.filter(Boolean);
 						await this.plugin.saveSettings();
 					})
 			);

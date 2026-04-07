@@ -1,9 +1,9 @@
 {
 	"id": "ai-daily-chat",
-	"name": "AI Daily Chat",
-	"version": "0.1.0",
+	"name": "AI Knowledge Chat",
+	"version": "0.2.0",
 	"minAppVersion": "1.0.0",
-	"description": "AI daily digest reading companion. Chat about your daily notes with Claude, append insights back to your vault.",
+	"description": "Personal knowledge base companion for Obsidian. Chat with Claude about your collected articles, wiki entries, and daily notes.",
 	"author": "zhoujunwei",
 	"isDesktopOnly": false
 }

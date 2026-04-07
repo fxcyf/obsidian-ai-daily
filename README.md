@@ -1,13 +1,35 @@
-# AI Daily Chat — Obsidian Plugin
+# AI Knowledge Chat — Obsidian Plugin
 
-在 Obsidian 中与 AI 日报对话。打开日报，侧边栏提问，洞察写回笔记。桌面和 iOS 都能用。
+在 Obsidian 中构建个人知识库，与 AI 对话探索你的收藏。支持桌面和 iOS。
 
 ## 功能
 
-- **自动加载上下文** — 打开日报后直接提问，插件自动读取当前笔记 + 最近 N 天日报
-- **AI 工具调用** — Claude 可以主动搜索 vault、读取其他笔记、把总结追加到笔记
-- **移动端优先** — 针对 iPhone 设计的 UI，纯 HTTP 调用 Claude API，不依赖本地进程
-- **知识沉淀** — 对话中的洞察一键写回 Obsidian，不会聊完就丢
+- **知识库管理** — 支持 Raw（原始采集）、Wiki（整理条目）、Daily（每日笔记）多文件夹结构
+- **自动加载上下文** — 打开笔记后直接提问，插件自动读取当前笔记 + 最近日报 + 最近知识库笔记
+- **AI 工具调用** — Claude 可以搜索、读取、列出和写回 vault 笔记，支持按标签和文件夹筛选
+- **一键对话** — 命令面板「对话当前笔记」，自动总结当前打开的文章
+- **移动端优先** — 针对 iPhone 设计的 UI，纯 HTTP 调用 Claude API
+- **知识沉淀** — 对话中的洞察一键写回 Obsidian
+
+## 推荐的 Vault 结构
+
+```
+Vault/
+├── Raw/          # 原始采集：网页、文章（Web Clipper 一键保存）
+├── Wiki/         # 自己整理的知识条目（结构化、双链关联）
+├── AI-Daily/     # 每日笔记/日报
+└── ...
+```
+
+每篇采集的文章建议用 YAML frontmatter 标记：
+
+```yaml
+---
+source: https://example.com/article
+tags: [ai, llm, rag]
+clipped: 2026-04-05
+---
+```
 
 ## 安装
 
@@ -25,47 +47,44 @@ mkdir -p /path/to/vault/.obsidian/plugins/ai-daily-chat
 cp main.js manifest.json styles.css /path/to/vault/.obsidian/plugins/ai-daily-chat/
 ```
 
-Obsidian → 设置 → 第三方插件 → 启用 AI Daily Chat。
-
-如果使用 Obsidian Sync，插件会自动同步到手机端。
+Obsidian → 设置 → 第三方插件 → 启用 AI Knowledge Chat。
 
 ## 配置
-
-在插件设置中填写：
 
 | 设置 | 说明 | 默认值 |
 |------|------|--------|
 | Anthropic API Key | Claude API 密钥 | — |
-| 日报文件夹 | AI Daily 日报所在目录 | `AI-Daily` |
+| 日报文件夹 | 每日笔记所在目录 | `AI-Daily` |
+| 知识库文件夹 | 逗号分隔的文件夹列表 | `Raw,Wiki` |
 | 上下文天数 | 自动加载最近几天的日报 | 7 |
 | 模型 | Haiku (快) / Sonnet (均衡) / Opus (强) | Haiku 4.5 |
 
 ## 使用
 
-1. 打开一篇日报
-2. 点击侧边栏的聊天图标（或命令面板搜索 "AI Daily Chat"）
+1. 打开任意笔记
+2. 点击侧边栏聊天图标（或命令面板搜索 "AI Knowledge Chat"）
 3. 直接提问
 
-Claude 可以自主调用以下工具操作你的 vault：
+**快捷操作**：命令面板搜索「对话当前笔记」，自动总结当前文章并提供深入分析。
+
+Claude 可以自主调用以下工具：
 
 | 工具 | 作用 |
 |------|------|
-| `read_note` | 读取指定笔记 |
-| `search_vault` | 按关键词搜索 vault |
+| `read_note` | 读取指定笔记全文 |
+| `search_vault` | 按关键词搜索，支持文件夹和标签过滤 |
+| `list_notes` | 列出指定文件夹或全部知识库的笔记 |
 | `append_to_note` | 追加内容到笔记 |
-| `list_daily_notes` | 列出最近的日报 |
 
-## 配合 ai-daily 使用
+## 内容采集建议
 
-本插件是 [ai-daily](https://github.com/fxcyf/ai-daily) 的阅读伴侣：
-
-```
-ai-daily generate → 生成日报写入 Obsidian → 本插件提供阅读时的 AI 对话
-```
+- **PC 端**：使用 [Obsidian Web Clipper](https://obsidian.md/clipper) 或 MarkDownload 浏览器插件
+- **手机端**：通过系统分享菜单 + Obsidian URI，或 Readwise 自动同步
+- **同步**：iCloud（iOS）、Obsidian Sync 或 Remotely Save 插件
 
 ## 技术栈
 
 - TypeScript + Obsidian Plugin API
 - Claude API（直接 HTTP 请求，无 SDK 依赖）
-- tool_use 实现 vault 操作
+- tool_use 实现 vault 操作（支持 tag 搜索）
 - esbuild 构建

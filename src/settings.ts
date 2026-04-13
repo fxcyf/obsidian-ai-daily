@@ -127,13 +127,13 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		const topicsSetting = new Setting(containerEl)
 			.setName("关注主题")
 			.setDesc("用逗号分隔，如: RAG,Agent,多模态")
-			.addText((text) =>
+			.addTextArea((text) =>
 				text
-					.setPlaceholder("RAG,Agent,LLM")
-					.setValue(this.plugin.settings.feedTopics.join(","))
+					.setPlaceholder("RAG,Agent,LLM,多模态")
+					.setValue(this.plugin.settings.feedTopics.join(", "))
 					.onChange(async (value) => {
 						this.plugin.settings.feedTopics = value
 							.split(",")
@@ -142,6 +142,11 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+		topicsSetting.settingEl.addClass("ai-daily-setting-full");
+		const topicsTextarea = topicsSetting.settingEl.querySelector("textarea");
+		if (topicsTextarea) {
+			topicsTextarea.rows = 2;
+		}
 
 		new Setting(containerEl)
 			.setName("最大文章数")
@@ -157,7 +162,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		const rssSetting = new Setting(containerEl)
 			.setName("RSS 订阅源")
 			.setDesc(
 				`当前 ${this.plugin.settings.feedSources.length} 个源。` +
@@ -185,5 +190,10 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+		rssSetting.settingEl.addClass("ai-daily-setting-full");
+		const rssTextarea = rssSetting.settingEl.querySelector("textarea");
+		if (rssTextarea) {
+			rssTextarea.rows = 10;
+		}
 	}
 }

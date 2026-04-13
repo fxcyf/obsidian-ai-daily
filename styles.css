@@ -168,3 +168,26 @@
 .ai-daily-example:hover {
 	background: var(--background-modifier-hover);
 }
+
+/* ── Settings: full-width layout for textareas ────────── */
+
+.ai-daily-setting-full .setting-item-info {
+	flex: none;
+	width: 100%;
+	margin-bottom: 8px;
+}
+
+.ai-daily-setting-full .setting-item-control {
+	flex: none;
+	width: 100%;
+}
+
+.ai-daily-setting-full {
+	flex-wrap: wrap;
+}
+
+.ai-daily-setting-full textarea {
+	width: 100%;
+	font-family: var(--font-monospace);
+	font-size: 13px;
+}

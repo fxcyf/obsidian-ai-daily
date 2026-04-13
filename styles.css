@@ -106,12 +106,13 @@
 .ai-daily-header {
 	display: flex;
 	justify-content: flex-end;
+	gap: 4px;
 	padding: 6px 12px;
 	border-bottom: 1px solid var(--background-modifier-border);
 	flex-shrink: 0;
 }
 
-.ai-daily-new-chat {
+.ai-daily-header-btn {
 	padding: 4px 10px;
 	font-size: 12px;
 	color: var(--text-muted);
@@ -119,7 +120,7 @@
 	border-radius: 4px;
 }
 
-.ai-daily-new-chat:hover {
+.ai-daily-header-btn:hover {
 	background: var(--background-modifier-hover);
 }
 

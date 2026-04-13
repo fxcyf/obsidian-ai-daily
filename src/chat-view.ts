@@ -45,9 +45,14 @@ export class ChatView extends ItemView {
 		container.empty();
 		container.addClass("ai-daily-chat-container");
 
-		// Header with new chat button
+		// Header with buttons
 		const header = container.createDiv({ cls: "ai-daily-header" });
-		const newChatBtn = header.createDiv({ cls: "ai-daily-new-chat" });
+
+		const feedBtn = header.createDiv({ cls: "ai-daily-header-btn" });
+		feedBtn.setText("生成 Feed");
+		feedBtn.addEventListener("click", () => this.plugin.generateFeed());
+
+		const newChatBtn = header.createDiv({ cls: "ai-daily-header-btn" });
 		newChatBtn.setText("新对话");
 		newChatBtn.addEventListener("click", () => this.clearChat());
 

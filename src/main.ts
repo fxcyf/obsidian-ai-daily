@@ -1,10 +1,11 @@
-import { Plugin } from "obsidian";
+import { Notice, Plugin } from "obsidian";
 import {
 	AIDailyChatSettings,
 	DEFAULT_SETTINGS,
 	AIDailyChatSettingTab,
 } from "./settings";
 import { ChatView, VIEW_TYPE } from "./chat-view";
+import { generateFeed } from "./feed-generator";
 
 export default class AIDailyChat extends Plugin {
 	settings: AIDailyChatSettings = DEFAULT_SETTINGS;
@@ -40,6 +41,13 @@ export default class AIDailyChat extends Plugin {
 			},
 		});
 
+		// Command to generate feed
+		this.addCommand({
+			id: "generate-feed",
+			name: "生成 AI Feed",
+			callback: () => this.generateFeed(),
+		});
+
 		// Settings tab
 		this.addSettingTab(new AIDailyChatSettingTab(this.app, this));
 	}
@@ -68,6 +76,24 @@ export default class AIDailyChat extends Plugin {
 
 		if (leaf) {
 			workspace.revealLeaf(leaf);
+		}
+	}
+
+	async generateFeed(): Promise<void> {
+		const notice = new Notice("正在生成 AI Feed...", 0);
+		try {
+			const file = await generateFeed(this.app, this.settings, (progress) => {
+				notice.setMessage(progress.message);
+			});
+			notice.hide();
+			new Notice(`Feed 已生成: ${file.path}`, 5000);
+			// Open the generated file
+			const leaf = this.app.workspace.getLeaf(false);
+			await leaf.openFile(file);
+		} catch (e) {
+			notice.hide();
+			const msg = e instanceof Error ? e.message : String(e);
+			new Notice(`Feed 生成失败: ${msg}`, 8000);
 		}
 	}
 

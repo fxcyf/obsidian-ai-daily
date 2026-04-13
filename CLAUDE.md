@@ -77,6 +77,16 @@ rebase 发生冲突时：
 
 **同样的问题不要犯两次！**
 
+## 架构概览
+
+- `src/main.ts` — 插件入口，注册视图、命令、设置
+- `src/chat-view.ts` — 聊天侧边栏 UI
+- `src/claude.ts` — Claude API client，支持 tool_use agentic loop
+- `src/vault-tools.ts` — Vault 工具实现（read/search/append/list）
+- `src/settings.ts` — 插件设置（含 Feed 配置）
+- `src/feeds.ts` — RSS 抓取、XML 解析、关键词过滤、相关度评分
+- `src/feed-generator.ts` — Feed 生成器，编排 RSS + vault 搜索 + Claude 汇总
+
 ## 注意事项
 
 - 在 worktree 中工作时，不要切换到其他分支

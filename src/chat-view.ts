@@ -2,7 +2,7 @@
  * Chat sidebar view — mobile-first UI.
  */
 
-import { ItemView, WorkspaceLeaf, MarkdownRenderer, setIcon } from "obsidian";
+import { ItemView, WorkspaceLeaf, MarkdownRenderer, setIcon, Platform } from "obsidian";
 import type AIDailyChat from "./main";
 import { ClaudeClient } from "./claude";
 import { VaultTools } from "./vault-tools";
@@ -45,6 +45,12 @@ export class ChatView extends ItemView {
 		container.empty();
 		container.addClass("ai-daily-chat-container");
 
+		// Header with new chat button
+		const header = container.createDiv({ cls: "ai-daily-header" });
+		const newChatBtn = header.createDiv({ cls: "ai-daily-new-chat" });
+		newChatBtn.setText("新对话");
+		newChatBtn.addEventListener("click", () => this.clearChat());
+
 		// Messages area
 		this.messagesEl = container.createDiv({ cls: "ai-daily-messages" });
 
@@ -64,17 +70,18 @@ export class ChatView extends ItemView {
 		// Events
 		sendBtn.addEventListener("click", () => this.handleSend());
 		this.inputEl.addEventListener("keydown", (e) => {
-			// Ctrl/Cmd+Enter to send (mobile-friendly: don't hijack plain Enter)
-			if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-				e.preventDefault();
-				this.handleSend();
+			if (e.key === "Enter") {
+				if (Platform.isMobile) {
+					// Mobile: Enter = newline, only button sends
+					return;
+				}
+				// PC: Enter sends, Shift+Enter = newline
+				if (!e.shiftKey) {
+					e.preventDefault();
+					this.handleSend();
+				}
 			}
 		});
-
-		// New chat button in header
-		const newChatBtn = container.createDiv({ cls: "ai-daily-new-chat" });
-		newChatBtn.setText("新对话");
-		newChatBtn.addEventListener("click", () => this.clearChat());
 
 		this.showWelcome();
 	}

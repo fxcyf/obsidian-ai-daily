@@ -1,8 +1,13 @@
 /**
- * Persisted chat session (stored under `.ai-chat/` in the vault).
+ * Persisted chat session.
+ *
+ * Hidden-folder note: Obsidian does NOT index files inside folders that start
+ * with "." (e.g. ".ai-chat").  vault.getFiles(), vault.getAbstractFileByPath()
+ * and vault.create/modify all rely on the vault index, so they silently fail for
+ * hidden paths.  We bypass the vault index entirely and use DataAdapter directly.
  */
 
-import { TFile, Vault, normalizePath } from "obsidian";
+import { Vault, normalizePath } from "obsidian";
 
 export const DEFAULT_CHAT_FOLDER = ".ai-chat";
 
@@ -35,30 +40,16 @@ export function titleFromMessages(messages: PersistedMessage[]): string {
 	return t.slice(0, 30) + "…";
 }
 
-/**
- * Ensure each path segment exists. Uses {@link DataAdapter.mkdir} + {@link DataAdapter.exists},
- * not {@link Vault.createFolder}, which throws when the folder already exists and can disagree
- * with the filesystem (e.g. dot folders, sync, cache).
- */
-export async function ensureChatFolder(
-	vault: Vault,
-	folderPath: string
-): Promise<void> {
-	const full = normalizePath(folderPath);
-	const segments = full.split("/").filter(Boolean);
+async function ensureFolderAdapter(vault: Vault, folderPath: string): Promise<void> {
+	const p = normalizePath(folderPath);
+	const segments = p.split("/").filter(Boolean);
 	let acc = "";
 	for (const seg of segments) {
 		acc = acc ? `${acc}/${seg}` : seg;
-		if (await vault.adapter.exists(acc)) {
-			const st = await vault.adapter.stat(acc);
-			if (st?.type === "file") {
-				throw new Error(
-					`无法存档：路径「${acc}」已存在且为文件，请更换设置中的「对话存档目录」或移除该文件`
-				);
-			}
-			continue;
+		const exists = await vault.adapter.exists(acc);
+		if (!exists) {
+			await vault.adapter.mkdir(acc);
 		}
-		await vault.adapter.mkdir(acc);
 	}
 }
 
@@ -67,23 +58,9 @@ export async function saveChatSession(
 	folderPath: string,
 	session: ChatSessionFile
 ): Promise<void> {
-	await ensureChatFolder(vault, folderPath);
+	await ensureFolderAdapter(vault, folderPath);
 	const path = normalizePath(`${folderPath}/${session.id}.json`);
-	const data = JSON.stringify(session, null, 2);
-	const existing = vault.getAbstractFileByPath(path);
-	if (existing instanceof TFile) {
-		try {
-			await vault.modify(existing, data);
-		} catch {
-			await vault.adapter.write(path, data);
-		}
-	} else {
-		try {
-			await vault.create(path, data);
-		} catch {
-			await vault.adapter.write(path, data);
-		}
-	}
+	await vault.adapter.write(path, JSON.stringify(session, null, 2));
 }
 
 export async function loadChatSession(
@@ -92,10 +69,9 @@ export async function loadChatSession(
 	id: string
 ): Promise<ChatSessionFile | null> {
 	const path = normalizePath(`${folderPath}/${id}.json`);
-	const f = vault.getAbstractFileByPath(path);
-	if (!f || !(f instanceof TFile)) return null;
 	try {
-		const raw = await vault.read(f);
+		if (!(await vault.adapter.exists(path))) return null;
+		const raw = await vault.adapter.read(path);
 		return JSON.parse(raw) as ChatSessionFile;
 	} catch {
 		return null;
@@ -106,27 +82,25 @@ export async function listChatSessions(
 	vault: Vault,
 	folderPath: string
 ): Promise<ChatSessionFile[]> {
-	const prefix = normalizePath(folderPath);
-	const prefixSlash = prefix + "/";
-	const files = vault
-		.getFiles()
-		.filter(
-			(f) =>
-				f.path.startsWith(prefixSlash) &&
-				f.extension === "json" &&
-				!f.path.slice(prefixSlash.length).includes("/")
-		);
-	const out: ChatSessionFile[] = [];
-	for (const f of files) {
-		try {
-			const raw = await vault.read(f);
-			out.push(JSON.parse(raw) as ChatSessionFile);
-		} catch {
-			/* skip corrupt */
+	const p = normalizePath(folderPath);
+	try {
+		if (!(await vault.adapter.exists(p))) return [];
+		const listed = await vault.adapter.list(p);
+		const out: ChatSessionFile[] = [];
+		for (const filePath of listed.files) {
+			if (!filePath.endsWith(".json")) continue;
+			try {
+				const raw = await vault.adapter.read(filePath);
+				out.push(JSON.parse(raw) as ChatSessionFile);
+			} catch {
+				/* skip corrupt */
+			}
 		}
+		out.sort((a, b) => (a.updated < b.updated ? 1 : -1));
+		return out;
+	} catch {
+		return [];
 	}
-	out.sort((a, b) => (a.updated < b.updated ? 1 : -1));
-	return out;
 }
 
 export async function deleteChatSessionFile(
@@ -135,8 +109,13 @@ export async function deleteChatSessionFile(
 	id: string
 ): Promise<void> {
 	const path = normalizePath(`${folderPath}/${id}.json`);
-	const f = vault.getAbstractFileByPath(path);
-	if (f instanceof TFile) await vault.delete(f, true);
+	try {
+		if (await vault.adapter.exists(path)) {
+			await vault.adapter.remove(path);
+		}
+	} catch {
+		/* ignore */
+	}
 }
 
 /** Remove sessions older than `retentionDays` (by `updated`). */

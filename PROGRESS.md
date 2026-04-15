@@ -34,6 +34,11 @@
 - **压缩上下文**: 估算 tokens 超阈值时用一次无 tools 的 API 调用生成摘要，再截断早期消息
 - **教训**: 勿在 `initClient` 用 UI 消息 `setHistoryFromStrings` 后又 `chat()` 推同一用户句，会重复；仅在「恢复历史」后注入客户端历史
 
+## 2026-04-14 — 历史记录 + 流式两项根因修复
+
+- **历史记录读不到**：根本原因是默认目录 `.ai-chat` 以 `.` 开头，Obsidian vault **不索引隐藏目录**，`vault.getFiles()` / `getAbstractFileByPath()` 永远返回空；彻底改用 `vault.adapter.read/write/list/remove/exists` 直接操作文件系统，绕过索引。
+- **无流式效果**：delta 回调里用了 120ms 防抖 timer，两个 delta 间隔只有 14ms，防抖不断被重置，等所有 delta 发完才渲染一次，看起来整段出现。改为：流式过程中每次 delta 直接 `setText(accumulated)`，结束后做一次完整 Markdown 渲染。
+
 ## 待解决
 
 - [ ] 测试覆盖：目前无任何测试文件

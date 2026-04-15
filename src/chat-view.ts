@@ -49,9 +49,6 @@ export class ChatView extends ItemView {
 	private isLoading = false;
 	/** Current vault session file id (filename stem). */
 	private sessionId: string | null = null;
-	private streamRenderTimer: number | null = null;
-	private pendingStreamText = "";
-	private pendingStreamEl: HTMLElement | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AIDailyChat) {
 		super(leaf);
@@ -226,88 +223,58 @@ export class ChatView extends ItemView {
 		});
 		loadingEl.setText("思考中...");
 
-		const useStream =
-			this.plugin.settings.chatStreaming &&
-			typeof fetch === "function";
+		const useStream = this.plugin.settings.chatStreaming;
 
 		let assistantEl: HTMLElement | null = null;
 		if (useStream) {
 			assistantEl = this.messagesEl.createDiv({
 				cls: "ai-daily-msg ai-daily-msg-assistant ai-daily-msg-streaming",
 			});
-			this.pendingStreamEl = assistantEl;
-			this.pendingStreamText = "";
 		}
-
-		const flushStreamMarkdown = async () => {
-			if (!this.pendingStreamEl) return;
-			const t = this.pendingStreamText;
-			this.pendingStreamEl.empty();
-			await MarkdownRenderer.render(
-				this.app,
-				t,
-				this.pendingStreamEl,
-				"",
-				this.plugin
-			);
-			this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
-		};
-
-		const scheduleStreamRender = () => {
-			if (!useStream) return;
-			if (this.streamRenderTimer != null) {
-				window.clearTimeout(this.streamRenderTimer);
-			}
-			this.streamRenderTimer = window.setTimeout(() => {
-				this.streamRenderTimer = null;
-				void flushStreamMarkdown();
-			}, 120);
-		};
 
 		try {
 			const reply = await this.client!.chat(
 				text,
 				(name, input) => this.vaultTools!.execute(name, input),
-				useStream
+				useStream && assistantEl
 					? (_delta, accumulated) => {
 							loadingEl.remove();
-							this.pendingStreamText = accumulated;
-							scheduleStreamRender();
+							// Show plain text while streaming; full Markdown rendered at the end.
+							assistantEl!.setText(accumulated);
+							this.messagesEl.scrollTop =
+								this.messagesEl.scrollHeight;
 						}
 					: undefined
 			);
 
 			loadingEl.remove();
-			if (this.streamRenderTimer != null) {
-				window.clearTimeout(this.streamRenderTimer);
-				this.streamRenderTimer = null;
-			}
 
 			if (useStream && assistantEl) {
-				this.pendingStreamText = reply;
-				await flushStreamMarkdown();
+				// Final render as Markdown.
+				assistantEl.empty();
+				await MarkdownRenderer.render(
+					this.app,
+					reply,
+					assistantEl,
+					"",
+					this.plugin
+				);
 				assistantEl.removeClass("ai-daily-msg-streaming");
 				this.messages.push({ role: "assistant", content: reply });
 			} else {
 				this.addMessage("assistant", reply);
 			}
-			this.pendingStreamEl = null;
 			this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
 
 			await this.persistSession();
 			this.updateTokenBar();
 		} catch (e) {
 			loadingEl.remove();
-			if (this.streamRenderTimer != null) {
-				window.clearTimeout(this.streamRenderTimer);
-				this.streamRenderTimer = null;
-			}
 			if (assistantEl) assistantEl.remove();
 			const msg = e instanceof Error ? e.message : String(e);
 			this.addMessage("assistant", `出错了: ${msg}`);
 		} finally {
 			this.isLoading = false;
-			this.pendingStreamEl = null;
 			this.updateTokenBar();
 		}
 	}
@@ -566,8 +533,6 @@ export class ChatView extends ItemView {
 	}
 
 	async onClose(): Promise<void> {
-		if (this.streamRenderTimer != null) {
-			window.clearTimeout(this.streamRenderTimer);
-		}
+		// nothing to clean up
 	}
 }

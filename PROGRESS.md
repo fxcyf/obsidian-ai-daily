@@ -24,7 +24,7 @@
 
 - **问题**: 侧栏「历史」为空、流式无感 — SSE 事件以 `\r\n\r\n` 分隔时用 `\n\n` 切分永远得不到完整事件，增量解析不触发；`adapter.write` 不落 vault 索引，`getFiles`/列表不可靠。
 - **修复**: `consumeOneSseEvent` 同时识别 `\r\n\r\n` 与 `\n\n`；`fetch` 失败或 CORS 时用 `requestUrl` 拉取完整 SSE 正文再走同一解析器（仍会触发 `text_delta` 回调）；存档改用 `vault.create`/`modify` + `normalizePath`，列表用 `vault.getFiles()` 前缀过滤。
-- **Commit**: `429c706`
+- **Commit**: `2eb571c`
 
 ## 2026-04-14 — 对话体验：流式、存档、token 与摘要 (`fc03352`)
 

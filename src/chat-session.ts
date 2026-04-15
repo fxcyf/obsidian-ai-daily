@@ -35,28 +35,30 @@ export function titleFromMessages(messages: PersistedMessage[]): string {
 	return t.slice(0, 30) + "…";
 }
 
+/**
+ * Ensure each path segment exists. Uses {@link DataAdapter.mkdir} + {@link DataAdapter.exists},
+ * not {@link Vault.createFolder}, which throws when the folder already exists and can disagree
+ * with the filesystem (e.g. dot folders, sync, cache).
+ */
 export async function ensureChatFolder(
 	vault: Vault,
 	folderPath: string
 ): Promise<void> {
-	const p = normalizePath(folderPath);
-	if (vault.getFolderByPath(p)) return;
-
-	const stat = await vault.adapter.stat(p);
-	if (stat?.type === "folder") return;
-	if (stat?.type === "file") {
-		throw new Error(
-			`无法存档：路径「${p}」已存在且为文件，请更换设置中的「对话存档目录」或移除该文件`
-		);
-	}
-
-	try {
-		await vault.createFolder(p);
-	} catch (e) {
-		// TOCTOU: folder appeared between stat() and create (sync / other pane / OS).
-		const after = await vault.adapter.stat(p);
-		if (after?.type === "folder") return;
-		throw e;
+	const full = normalizePath(folderPath);
+	const segments = full.split("/").filter(Boolean);
+	let acc = "";
+	for (const seg of segments) {
+		acc = acc ? `${acc}/${seg}` : seg;
+		if (await vault.adapter.exists(acc)) {
+			const st = await vault.adapter.stat(acc);
+			if (st?.type === "file") {
+				throw new Error(
+					`无法存档：路径「${acc}」已存在且为文件，请更换设置中的「对话存档目录」或移除该文件`
+				);
+			}
+			continue;
+		}
+		await vault.adapter.mkdir(acc);
 	}
 }
 
@@ -70,9 +72,17 @@ export async function saveChatSession(
 	const data = JSON.stringify(session, null, 2);
 	const existing = vault.getAbstractFileByPath(path);
 	if (existing instanceof TFile) {
-		await vault.modify(existing, data);
+		try {
+			await vault.modify(existing, data);
+		} catch {
+			await vault.adapter.write(path, data);
+		}
 	} else {
-		await vault.create(path, data);
+		try {
+			await vault.create(path, data);
+		} catch {
+			await vault.adapter.write(path, data);
+		}
 	}
 }
 

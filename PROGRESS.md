@@ -20,6 +20,14 @@
 - 新增 Raw/Wiki 文件夹支持，自动加载知识库文件作为上下文
 - **经验**: 上下文窗口管理很重要，需要控制加载的文件数量避免超出 token 限制
 
+## 2026-04-14 — 对话体验：流式、存档、token 与摘要 (`fc03352`)
+
+- **流式输出**: 使用 `fetch` + SSE 解析 Anthropic 流；失败时回退到 `requestUrl` 非流式（与既有 CORS 策略兼容）
+- **多轮工具**: 流式回调按轮次累加 `priorAssistantText`，避免仅显示最后一轮模型输出
+- **持久化**: `src/chat-session.ts` 将 `ChatSessionFile` 写入 vault；标题取首条用户消息前 30 字
+- **压缩上下文**: 估算 tokens 超阈值时用一次无 tools 的 API 调用生成摘要，再截断早期消息
+- **教训**: 勿在 `initClient` 用 UI 消息 `setHistoryFromStrings` 后又 `chat()` 推同一用户句，会重复；仅在「恢复历史」后注入客户端历史
+
 ## 待解决
 
 - [ ] 测试覆盖：目前无任何测试文件

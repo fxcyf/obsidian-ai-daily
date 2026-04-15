@@ -361,7 +361,10 @@ export class ChatView extends ItemView {
 	}
 
 	private async persistSession(): Promise<void> {
-		if (!this.sessionId) return;
+		if (!this.sessionId) {
+			console.debug("[ai-daily] persist skipped (no sessionId)");
+			return;
+		}
 		const { chatHistoryFolder, model } = this.plugin.settings;
 		const now = new Date().toISOString();
 		const persisted: PersistedMessage[] = this.messages.map((m) => ({
@@ -381,10 +384,14 @@ export class ChatView extends ItemView {
 			updated: now,
 			messages: persisted,
 		};
+		const relPath = `${chatHistoryFolder}/${this.sessionId}.json`;
 		try {
 			await saveChatSession(this.app.vault, chatHistoryFolder, file);
+			console.info(
+				`[ai-daily] chat session saved (${persisted.length} messages) → ${relPath}`
+			);
 		} catch (e) {
-			console.warn("[ai-daily] persist session failed", e);
+			console.error("[ai-daily] persist session failed", e);
 			new Notice(
 				`对话存档失败: ${e instanceof Error ? e.message : String(e)}`,
 				6000

@@ -42,7 +42,16 @@ export async function ensureChatFolder(
 	const p = normalizePath(folderPath);
 	const existing = vault.getAbstractFileByPath(p);
 	if (existing) return;
-	await vault.createFolder(p);
+	try {
+		await vault.createFolder(p);
+	} catch (e) {
+		const msg = e instanceof Error ? e.message : String(e);
+		// Race or filesystem folder exists before vault cache lists it (e.g. sync/git).
+		if (/already exists|folder already exist/i.test(msg)) {
+			return;
+		}
+		throw e;
+	}
 }
 
 export async function saveChatSession(

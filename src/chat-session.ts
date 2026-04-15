@@ -40,16 +40,22 @@ export async function ensureChatFolder(
 	folderPath: string
 ): Promise<void> {
 	const p = normalizePath(folderPath);
-	const existing = vault.getAbstractFileByPath(p);
-	if (existing) return;
+	if (vault.getFolderByPath(p)) return;
+
+	const stat = await vault.adapter.stat(p);
+	if (stat?.type === "folder") return;
+	if (stat?.type === "file") {
+		throw new Error(
+			`无法存档：路径「${p}」已存在且为文件，请更换设置中的「对话存档目录」或移除该文件`
+		);
+	}
+
 	try {
 		await vault.createFolder(p);
 	} catch (e) {
-		const msg = e instanceof Error ? e.message : String(e);
-		// Race or filesystem folder exists before vault cache lists it (e.g. sync/git).
-		if (/already exists|folder already exist/i.test(msg)) {
-			return;
-		}
+		// TOCTOU: folder appeared between stat() and create (sync / other pane / OS).
+		const after = await vault.adapter.stat(p);
+		if (after?.type === "folder") return;
 		throw e;
 	}
 }

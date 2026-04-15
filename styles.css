@@ -10,6 +10,7 @@
 /* ── Messages ──────────────────────────────────────────── */
 
 .ai-daily-messages {
+	position: relative;
 	flex: 1;
 	overflow-y: auto;
 	padding: 12px;
@@ -190,4 +191,126 @@
 	width: 100%;
 	font-family: var(--font-monospace);
 	font-size: 13px;
+}
+
+/* ── Token usage bar ───────────────────────────────────── */
+
+.ai-daily-token-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 12px;
+	border-top: 1px solid var(--background-modifier-border);
+	font-size: 11px;
+	color: var(--text-muted);
+	flex-shrink: 0;
+	background: var(--background-primary);
+}
+
+.ai-daily-token-bar-inner {
+	height: 4px;
+	flex: 1;
+	min-width: 40px;
+	border-radius: 2px;
+	background: linear-gradient(
+		to right,
+		var(--interactive-accent) 0,
+		var(--interactive-accent) var(--ai-token-pct, 0%),
+		var(--background-modifier-border) var(--ai-token-pct, 0%),
+		var(--background-modifier-border) 100%
+	);
+}
+
+.ai-daily-token-bar-label {
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+/* ── History overlay ───────────────────────────────────── */
+
+.ai-daily-history-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 10;
+	display: flex;
+	flex-direction: column;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	margin: 8px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.ai-daily-history-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.ai-daily-history-title {
+	font-weight: 600;
+	font-size: 14px;
+}
+
+.ai-daily-history-close {
+	cursor: pointer;
+	padding: 4px 8px;
+	color: var(--text-muted);
+	font-size: 16px;
+	line-height: 1;
+}
+
+.ai-daily-history-close:hover {
+	color: var(--text-normal);
+}
+
+.ai-daily-history-search {
+	margin: 8px 12px;
+	padding: 8px 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	font-size: 13px;
+	background: var(--background-secondary);
+}
+
+.ai-daily-history-list {
+	flex: 1;
+	overflow-y: auto;
+	padding: 0 8px 12px;
+	-webkit-overflow-scrolling: touch;
+}
+
+.ai-daily-history-row {
+	padding: 10px 12px;
+	border-radius: 8px;
+	cursor: pointer;
+	margin-bottom: 4px;
+}
+
+.ai-daily-history-row:hover {
+	background: var(--background-modifier-hover);
+}
+
+.ai-daily-history-row-title {
+	font-size: 13px;
+	font-weight: 500;
+}
+
+.ai-daily-history-row-meta {
+	font-size: 11px;
+	color: var(--text-muted);
+	margin-top: 4px;
+}
+
+.ai-daily-history-empty {
+	padding: 24px;
+	text-align: center;
+	color: var(--text-muted);
+	font-size: 13px;
+}
+
+.ai-daily-msg-streaming {
+	min-height: 1.5em;
 }

@@ -2,16 +2,39 @@
  * Chat sidebar view — mobile-first UI.
  */
 
-import { ItemView, WorkspaceLeaf, MarkdownRenderer, setIcon, Platform } from "obsidian";
+import {
+	ItemView,
+	WorkspaceLeaf,
+	MarkdownRenderer,
+	setIcon,
+	Platform,
+	Notice,
+} from "obsidian";
 import type AIDailyChat from "./main";
-import { ClaudeClient } from "./claude";
+import { ClaudeClient, estimateTextTokens } from "./claude";
 import { VaultTools } from "./vault-tools";
+import {
+	newSessionId,
+	titleFromMessages,
+	saveChatSession,
+	loadChatSession,
+	listChatSessions,
+	pruneOldSessions,
+	type ChatSessionFile,
+	type PersistedMessage,
+} from "./chat-session";
 
 export const VIEW_TYPE = "ai-daily-chat";
 
 interface ChatMessage {
 	role: "user" | "assistant";
 	content: string;
+}
+
+function formatTokenK(n: number): string {
+	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+	if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+	return String(Math.round(n));
 }
 
 export class ChatView extends ItemView {
@@ -21,7 +44,14 @@ export class ChatView extends ItemView {
 	private vaultTools: VaultTools | null = null;
 	private messagesEl: HTMLElement = null!;
 	private inputEl: HTMLTextAreaElement = null!;
+	private tokenBarEl: HTMLElement = null!;
+	private historyOverlay: HTMLElement | null = null;
 	private isLoading = false;
+	/** Current vault session file id (filename stem). */
+	private sessionId: string | null = null;
+	private streamRenderTimer: number | null = null;
+	private pendingStreamText = "";
+	private pendingStreamEl: HTMLElement | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AIDailyChat) {
 		super(leaf);
@@ -41,25 +71,43 @@ export class ChatView extends ItemView {
 	}
 
 	async onOpen(): Promise<void> {
+		const {
+			chatHistoryFolder,
+			chatHistoryRetentionDays,
+		} = this.plugin.settings;
+		try {
+			await pruneOldSessions(
+				this.app.vault,
+				chatHistoryFolder,
+				chatHistoryRetentionDays
+			);
+		} catch {
+			/* ignore */
+		}
+
 		const container = this.containerEl.children[1] as HTMLElement;
 		container.empty();
 		container.addClass("ai-daily-chat-container");
 
-		// Header with buttons
 		const header = container.createDiv({ cls: "ai-daily-header" });
 
 		const feedBtn = header.createDiv({ cls: "ai-daily-header-btn" });
 		feedBtn.setText("生成 Feed");
 		feedBtn.addEventListener("click", () => this.plugin.generateFeed());
 
+		const historyBtn = header.createDiv({ cls: "ai-daily-header-btn" });
+		historyBtn.setText("历史");
+		historyBtn.addEventListener("click", () => this.openHistoryPanel());
+
 		const newChatBtn = header.createDiv({ cls: "ai-daily-header-btn" });
 		newChatBtn.setText("新对话");
 		newChatBtn.addEventListener("click", () => this.clearChat());
 
-		// Messages area
 		this.messagesEl = container.createDiv({ cls: "ai-daily-messages" });
 
-		// Input area
+		this.tokenBarEl = container.createDiv({ cls: "ai-daily-token-bar" });
+		this.updateTokenBar();
+
 		const inputArea = container.createDiv({ cls: "ai-daily-input-area" });
 
 		this.inputEl = inputArea.createEl("textarea", {
@@ -72,15 +120,10 @@ export class ChatView extends ItemView {
 		});
 		setIcon(sendBtn, "send");
 
-		// Events
 		sendBtn.addEventListener("click", () => this.handleSend());
 		this.inputEl.addEventListener("keydown", (e) => {
 			if (e.key === "Enter") {
-				if (Platform.isMobile) {
-					// Mobile: Enter = newline, only button sends
-					return;
-				}
-				// PC: Enter sends, Shift+Enter = newline
+				if (Platform.isMobile) return;
 				if (!e.shiftKey) {
 					e.preventDefault();
 					this.handleSend();
@@ -91,6 +134,30 @@ export class ChatView extends ItemView {
 		this.showWelcome();
 	}
 
+	private updateTokenBar(): void {
+		const budget = this.plugin.settings.chatContextBudgetTokens;
+		let used = 0;
+		if (this.client) {
+			used = this.client.estimateContextTokens();
+		} else {
+			for (const m of this.messages) {
+				used += estimateTextTokens(m.content);
+			}
+		}
+		const pct = Math.min(100, budget > 0 ? (used / budget) * 100 : 0);
+		this.tokenBarEl.empty();
+		this.tokenBarEl.createDiv({
+			cls: "ai-daily-token-bar-inner",
+			attr: {
+				style: `--ai-token-pct:${pct}%;`,
+			},
+		});
+		this.tokenBarEl.createSpan({
+			cls: "ai-daily-token-bar-label",
+			text: `约 ${formatTokenK(used)} / ${formatTokenK(budget)} tokens（估算）`,
+		});
+	}
+
 	private showWelcome(): void {
 		const activeFile = this.app.workspace.getActiveFile();
 		const { dailyFolder, knowledgeFolders } = this.plugin.settings;
@@ -98,7 +165,9 @@ export class ChatView extends ItemView {
 
 		let hint = "打开任意笔记，或直接提问来探索你的知识库。";
 		if (activeFile) {
-			const inKnowledge = allFolders.some((f) => activeFile.path.startsWith(f));
+			const inKnowledge = allFolders.some((f) =>
+				activeFile.path.startsWith(f)
+			);
 			if (inKnowledge) {
 				hint = `已加载: ${activeFile.basename}。直接提问吧！`;
 			} else {
@@ -119,13 +188,13 @@ export class ChatView extends ItemView {
 			</div>
 		`;
 
-		// Clickable examples
 		welcomeEl.querySelectorAll(".ai-daily-example").forEach((el) => {
 			el.addEventListener("click", () => {
 				this.inputEl.value = el.textContent || "";
 				this.handleSend();
 			});
 		});
+		this.updateTokenBar();
 	}
 
 	private async handleSend(): Promise<void> {
@@ -143,7 +212,10 @@ export class ChatView extends ItemView {
 		this.inputEl.value = "";
 		this.addMessage("user", text);
 
-		// Initialize client on first message
+		if (!this.sessionId) {
+			this.sessionId = newSessionId();
+		}
+
 		if (!this.client) {
 			await this.initClient();
 		}
@@ -154,33 +226,107 @@ export class ChatView extends ItemView {
 		});
 		loadingEl.setText("思考中...");
 
+		const useStream =
+			this.plugin.settings.chatStreaming &&
+			typeof fetch === "function";
+
+		let assistantEl: HTMLElement | null = null;
+		if (useStream) {
+			assistantEl = this.messagesEl.createDiv({
+				cls: "ai-daily-msg ai-daily-msg-assistant ai-daily-msg-streaming",
+			});
+			this.pendingStreamEl = assistantEl;
+			this.pendingStreamText = "";
+		}
+
+		const flushStreamMarkdown = async () => {
+			if (!this.pendingStreamEl) return;
+			const t = this.pendingStreamText;
+			this.pendingStreamEl.empty();
+			await MarkdownRenderer.render(
+				this.app,
+				t,
+				this.pendingStreamEl,
+				"",
+				this.plugin
+			);
+			this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+		};
+
+		const scheduleStreamRender = () => {
+			if (!useStream) return;
+			if (this.streamRenderTimer != null) {
+				window.clearTimeout(this.streamRenderTimer);
+			}
+			this.streamRenderTimer = window.setTimeout(() => {
+				this.streamRenderTimer = null;
+				void flushStreamMarkdown();
+			}, 120);
+		};
+
 		try {
 			const reply = await this.client!.chat(
 				text,
-				(name, input) => this.vaultTools!.execute(name, input)
+				(name, input) => this.vaultTools!.execute(name, input),
+				useStream
+					? (_delta, accumulated) => {
+							loadingEl.remove();
+							this.pendingStreamText = accumulated;
+							scheduleStreamRender();
+						}
+					: undefined
 			);
+
 			loadingEl.remove();
-			this.addMessage("assistant", reply);
+			if (this.streamRenderTimer != null) {
+				window.clearTimeout(this.streamRenderTimer);
+				this.streamRenderTimer = null;
+			}
+
+			if (useStream && assistantEl) {
+				this.pendingStreamText = reply;
+				await flushStreamMarkdown();
+				assistantEl.removeClass("ai-daily-msg-streaming");
+				this.messages.push({ role: "assistant", content: reply });
+			} else {
+				this.addMessage("assistant", reply);
+			}
+			this.pendingStreamEl = null;
+			this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+
+			await this.persistSession();
+			this.updateTokenBar();
 		} catch (e) {
 			loadingEl.remove();
+			if (this.streamRenderTimer != null) {
+				window.clearTimeout(this.streamRenderTimer);
+				this.streamRenderTimer = null;
+			}
+			if (assistantEl) assistantEl.remove();
 			const msg = e instanceof Error ? e.message : String(e);
 			this.addMessage("assistant", `出错了: ${msg}`);
 		} finally {
 			this.isLoading = false;
+			this.pendingStreamEl = null;
+			this.updateTokenBar();
 		}
 	}
 
 	private async initClient(): Promise<void> {
-		const { apiKey, model, dailyFolder, knowledgeFolders, contextDays } =
-			this.plugin.settings;
+		const {
+			apiKey,
+			model,
+			dailyFolder,
+			knowledgeFolders,
+			contextDays,
+			chatStreaming,
+			chatCompressThresholdEst,
+		} = this.plugin.settings;
 
 		this.vaultTools = new VaultTools(this.app, dailyFolder, knowledgeFolders);
 
-		// Load contexts
-		const recentContext =
-			await this.vaultTools.loadRecentContext(contextDays);
-		const knowledgeContext =
-			await this.vaultTools.loadKnowledgeContext(5);
+		const recentContext = await this.vaultTools.loadRecentContext(contextDays);
+		const knowledgeContext = await this.vaultTools.loadKnowledgeContext(5);
 
 		const activeFile = this.app.workspace.getActiveFile();
 		let currentNote = "";
@@ -199,21 +345,50 @@ export class ChatView extends ItemView {
 			currentNote
 				? `## 当前打开的笔记\n\n文件: ${activeFile!.path}\n\n${currentNote}`
 				: "",
-			recentContext
-				? `## 最近的日报\n\n${recentContext}`
-				: "",
-			knowledgeContext
-				? `## 最近的知识库笔记\n\n${knowledgeContext}`
-				: "",
+			recentContext ? `## 最近的日报\n\n${recentContext}` : "",
+			knowledgeContext ? `## 最近的知识库笔记\n\n${knowledgeContext}` : "",
 		]
 			.filter(Boolean)
 			.join("\n\n");
 
-		this.client = new ClaudeClient(apiKey, model, systemPrompt);
+		this.client = new ClaudeClient(apiKey, model, systemPrompt, {
+			stream: chatStreaming,
+			compressThresholdEst: chatCompressThresholdEst,
+			onCompress: (detail) => {
+				new Notice(detail, 6000);
+			},
+		});
+	}
+
+	private async persistSession(): Promise<void> {
+		if (!this.sessionId) return;
+		const { chatHistoryFolder, model } = this.plugin.settings;
+		const now = new Date().toISOString();
+		const persisted: PersistedMessage[] = this.messages.map((m) => ({
+			role: m.role,
+			content: m.content,
+		}));
+		const existing = await loadChatSession(
+			this.app.vault,
+			chatHistoryFolder,
+			this.sessionId
+		);
+		const file: ChatSessionFile = {
+			id: this.sessionId,
+			title: titleFromMessages(persisted),
+			model,
+			created: existing?.created ?? now,
+			updated: now,
+			messages: persisted,
+		};
+		try {
+			await saveChatSession(this.app.vault, chatHistoryFolder, file);
+		} catch (e) {
+			console.warn("[ai-daily] persist session failed", e);
+		}
 	}
 
 	private addMessage(role: "user" | "assistant", content: string): void {
-		// Remove welcome if present
 		const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
 		if (welcome) welcome.remove();
 
@@ -224,7 +399,7 @@ export class ChatView extends ItemView {
 		});
 
 		if (role === "assistant") {
-			MarkdownRenderer.render(
+			void MarkdownRenderer.render(
 				this.app,
 				content,
 				msgEl,
@@ -236,22 +411,152 @@ export class ChatView extends ItemView {
 		}
 
 		this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+		this.updateTokenBar();
 	}
 
-	/** Programmatically send a message (used by commands). */
 	sendMessage(text: string): void {
 		this.inputEl.value = text;
-		this.handleSend();
+		void this.handleSend();
 	}
 
 	private clearChat(): void {
+		this.sessionId = null;
 		this.messages = [];
 		this.client = null;
+		this.vaultTools = null;
 		this.messagesEl.empty();
 		this.showWelcome();
 	}
 
+	private async openHistoryPanel(): Promise<void> {
+		if (this.historyOverlay) {
+			this.historyOverlay.remove();
+			this.historyOverlay = null;
+		}
+		const { chatHistoryFolder } = this.plugin.settings;
+		let sessions = await listChatSessions(this.app.vault, chatHistoryFolder);
+
+		const overlay = this.messagesEl.createDiv({ cls: "ai-daily-history-overlay" });
+		this.historyOverlay = overlay;
+
+		const head = overlay.createDiv({ cls: "ai-daily-history-head" });
+		head.createEl("span", { text: "历史对话", cls: "ai-daily-history-title" });
+		const closeBtn = head.createSpan({ cls: "ai-daily-history-close", text: "✕" });
+		closeBtn.addEventListener("click", () => {
+			overlay.remove();
+			this.historyOverlay = null;
+		});
+
+		const search = overlay.createEl("input", {
+			cls: "ai-daily-history-search",
+			type: "search",
+			attr: { placeholder: "搜索标题…" },
+		});
+
+		const listEl = overlay.createDiv({ cls: "ai-daily-history-list" });
+
+		const renderList = (items: ChatSessionFile[]) => {
+			listEl.empty();
+			for (const s of items) {
+				const row = listEl.createDiv({ cls: "ai-daily-history-row" });
+				row.createDiv({
+					cls: "ai-daily-history-row-title",
+					text: s.title || s.id,
+				});
+				row.createDiv({
+					cls: "ai-daily-history-row-meta",
+					text: `${s.updated?.slice(0, 16) ?? ""} · ${s.model}`,
+				});
+				row.addEventListener("click", () => {
+					void this.loadSession(s.id);
+					overlay.remove();
+					this.historyOverlay = null;
+				});
+			}
+			if (items.length === 0) {
+				listEl.createDiv({
+					cls: "ai-daily-history-empty",
+					text: "暂无历史会话",
+				});
+			}
+		};
+
+		renderList(sessions);
+
+		search.addEventListener("input", () => {
+			const q = search.value.trim().toLowerCase();
+			if (!q) {
+				renderList(sessions);
+				return;
+			}
+			renderList(
+				sessions.filter(
+					(s) =>
+						s.title.toLowerCase().includes(q) ||
+						s.id.toLowerCase().includes(q)
+				)
+			);
+		});
+
+		overlay.addEventListener("click", (ev) => {
+			if (ev.target === overlay) {
+				overlay.remove();
+				this.historyOverlay = null;
+			}
+		});
+
+		sessions = await listChatSessions(this.app.vault, chatHistoryFolder);
+		renderList(sessions);
+	}
+
+	private async loadSession(id: string): Promise<void> {
+		const { chatHistoryFolder } = this.plugin.settings;
+		const data = await loadChatSession(this.app.vault, chatHistoryFolder, id);
+		if (!data || !data.messages?.length) {
+			new Notice("无法加载该会话");
+			return;
+		}
+		this.sessionId = data.id;
+		this.messages = data.messages.map((m) => ({
+			role: m.role,
+			content: m.content,
+		}));
+		this.client = null;
+		this.vaultTools = null;
+		this.messagesEl.empty();
+		const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
+		if (welcome) welcome.remove();
+		for (const m of this.messages) {
+			const msgEl = this.messagesEl.createDiv({
+				cls: `ai-daily-msg ai-daily-msg-${m.role}`,
+			});
+			if (m.role === "assistant") {
+				await MarkdownRenderer.render(
+					this.app,
+					m.content,
+					msgEl,
+					"",
+					this.plugin
+				);
+			} else {
+				msgEl.setText(m.content);
+			}
+		}
+		await this.initClient();
+		this.client!.setHistoryFromStrings(
+			this.messages.map((m) => ({
+				role: m.role,
+				content: m.content,
+			}))
+		);
+		this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+		this.updateTokenBar();
+		new Notice("已恢复历史对话", 3000);
+	}
+
 	async onClose(): Promise<void> {
-		// cleanup
+		if (this.streamRenderTimer != null) {
+			window.clearTimeout(this.streamRenderTimer);
+		}
 	}
 }

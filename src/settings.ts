@@ -8,6 +8,16 @@ export interface AIDailyChatSettings {
 	knowledgeFolders: string[];
 	contextDays: number;
 	model: string;
+	/** Vault folder for persisted chats (hidden folder recommended). */
+	chatHistoryFolder: string;
+	/** Delete chat JSON files not updated within this many days (0 = never auto-delete). */
+	chatHistoryRetentionDays: number;
+	/** Use SSE streaming when supported (falls back automatically). */
+	chatStreaming: boolean;
+	/** Estimated token threshold to trigger automatic history summarization (0 = off). */
+	chatCompressThresholdEst: number;
+	/** Displayed context budget for the token bar (informational). */
+	chatContextBudgetTokens: number;
 	// Feed settings
 	feedFolder: string;
 	feedTopics: string[];
@@ -21,6 +31,11 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	knowledgeFolders: ["Raw", "Wiki"],
 	contextDays: 7,
 	model: "claude-haiku-4-5",
+	chatHistoryFolder: ".ai-chat",
+	chatHistoryRetentionDays: 30,
+	chatStreaming: true,
+	chatCompressThresholdEst: 90_000,
+	chatContextBudgetTokens: 200_000,
 	feedFolder: "Feed",
 	feedTopics: [],
 	feedSources: DEFAULT_FEEDS,
@@ -106,6 +121,81 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.model)
 					.onChange(async (value) => {
 						this.plugin.settings.model = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		containerEl.createEl("h3", { text: "对话与历史" });
+
+		new Setting(containerEl)
+			.setName("对话存档目录")
+			.setDesc("会话 JSON 保存在该文件夹（可与笔记一并同步）")
+			.addText((text) =>
+				text
+					.setPlaceholder(".ai-chat")
+					.setValue(this.plugin.settings.chatHistoryFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.chatHistoryFolder = value.trim() || ".ai-chat";
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("历史保留天数")
+			.setDesc("超过该天数未更新的会话文件会被自动删除；0 表示不自动清理")
+			.addSlider((slider) =>
+				slider
+					.setLimits(0, 365, 1)
+					.setValue(this.plugin.settings.chatHistoryRetentionDays)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.chatHistoryRetentionDays = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("流式输出")
+			.setDesc("开启后逐字显示回复；不支持时会自动回退为整段返回")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.chatStreaming)
+					.onChange(async (value) => {
+						this.plugin.settings.chatStreaming = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("自动摘要阈值（估算 tokens）")
+			.setDesc(
+				"当估算上下文超过该值时，自动用一次 API 调用压缩更早的对话；0 关闭"
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("90000")
+					.setValue(String(this.plugin.settings.chatCompressThresholdEst))
+					.onChange(async (value) => {
+						const n = parseInt(value.replace(/\s/g, ""), 10);
+						this.plugin.settings.chatCompressThresholdEst = Number.isFinite(n)
+							? Math.max(0, n)
+							: 90_000;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("上下文预算（展示用）")
+			.setDesc("底部用量条的总参考值，与模型实际上下文窗口大致对应")
+			.addText((text) =>
+				text
+					.setPlaceholder("200000")
+					.setValue(String(this.plugin.settings.chatContextBudgetTokens))
+					.onChange(async (value) => {
+						const n = parseInt(value.replace(/\s/g, ""), 10);
+						this.plugin.settings.chatContextBudgetTokens = Number.isFinite(n)
+							? Math.max(1000, n)
+							: 200_000;
 						await this.plugin.saveSettings();
 					})
 			);

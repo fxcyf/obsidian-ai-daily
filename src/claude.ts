@@ -131,6 +131,21 @@ type StreamBlock =
 	| { kind: "text"; text: string }
 	| { kind: "tool_use"; id: string; name: string; inputJson: string };
 
+/** Split on the first complete SSE event boundary (\r\n\r\n or \n\n). */
+function consumeOneSseEvent(
+	buffer: string
+): { event: string; rest: string } | null {
+	const rn = buffer.indexOf("\r\n\r\n");
+	const nn = buffer.indexOf("\n\n");
+	const candidates: { i: number; len: number }[] = [];
+	if (rn !== -1) candidates.push({ i: rn, len: 4 });
+	if (nn !== -1) candidates.push({ i: nn, len: 2 });
+	if (candidates.length === 0) return null;
+	candidates.sort((a, b) => a.i - b.i);
+	const { i, len } = candidates[0];
+	return { event: buffer.slice(0, i), rest: buffer.slice(i + len) };
+}
+
 /** Rough token estimate (≈ chars / 4), for UI and compression heuristics. */
 export function estimateTextTokens(text: string): number {
 	if (!text) return 0;
@@ -447,57 +462,35 @@ export class ClaudeClient {
 		onTextDelta?: (s: string) => void
 	): Promise<ApiResponse> {
 		const body = { ...this.buildRequestBody(), stream: true };
-		const res = await fetch(API_URL, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"x-api-key": this.apiKey,
-				"anthropic-version": "2023-06-01",
-			},
-			body: JSON.stringify(body),
-		});
+		const jsonBody = JSON.stringify(body);
 
-		if (!res.ok) {
-			const errText = await res.text();
-			throw new Error(`Claude API error ${res.status}: ${errText}`);
-		}
+		try {
+			const res = await fetch(API_URL, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"x-api-key": this.apiKey,
+					"anthropic-version": "2023-06-01",
+				},
+				body: jsonBody,
+			});
 
-		const reader = res.body?.getReader();
-		if (!reader) throw new Error("No response body");
-
-		const decoder = new TextDecoder();
-		let buffer = "";
-
-		const blocks: (StreamBlock | undefined)[] = [];
-		let stopReason = "end_turn";
-		let inputTokens = 0;
-		let outputTokens = 0;
-
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			buffer += decoder.decode(value, { stream: true });
-
-			let sep: number;
-			while ((sep = buffer.indexOf("\n\n")) !== -1) {
-				const rawEvent = buffer.slice(0, sep);
-				buffer = buffer.slice(sep + 2);
-				this.parseSseEvent(rawEvent, {
-					onTextDelta,
-					blocks,
-					setStop: (r: string) => {
-						stopReason = r;
-					},
-					addUsage: (i: number, o: number) => {
-						inputTokens = i;
-						outputTokens = o;
-					},
-				});
+			if (!res.ok) {
+				const errText = await res.text();
+				throw new Error(`Claude API error ${res.status}: ${errText}`);
 			}
-		}
 
-		if (buffer.trim()) {
-			this.parseSseEvent(buffer, {
+			const reader = res.body?.getReader();
+			if (!reader) throw new Error("No response body");
+
+			const decoder = new TextDecoder();
+			let buffer = "";
+
+			const blocks: (StreamBlock | undefined)[] = [];
+			let stopReason = "end_turn";
+			let inputTokens = 0;
+			let outputTokens = 0;
+			const handlers = {
 				onTextDelta,
 				blocks,
 				setStop: (r: string) => {
@@ -507,9 +500,102 @@ export class ClaudeClient {
 					inputTokens = i;
 					outputTokens = o;
 				},
+			};
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				buffer += decoder.decode(value, { stream: true });
+
+				let consumed: ReturnType<typeof consumeOneSseEvent>;
+				while ((consumed = consumeOneSseEvent(buffer))) {
+					buffer = consumed.rest;
+					if (consumed.event.trim()) {
+						this.parseSseEvent(consumed.event, handlers);
+					}
+				}
+			}
+
+			if (buffer.trim()) {
+				this.parseSseEvent(buffer, handlers);
+			}
+
+			return this.streamAccumulatorsToResponse(
+				blocks,
+				stopReason,
+				inputTokens,
+				outputTokens
+			);
+		} catch (e) {
+			console.warn(
+				"[ai-daily] fetch SSE failed; using requestUrl (full body) + same parser",
+				e
+			);
+			const resp = await requestUrl({
+				url: API_URL,
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"x-api-key": this.apiKey,
+					"anthropic-version": "2023-06-01",
+				},
+				body: jsonBody,
 			});
+
+			if (resp.status >= 400) {
+				throw new Error(`Claude API error ${resp.status}: ${resp.text}`);
+			}
+
+			return this.parseSsePlainText(resp.text, onTextDelta);
+		}
+	}
+
+	private parseSsePlainText(
+		raw: string,
+		onTextDelta?: (s: string) => void
+	): ApiResponse {
+		const blocks: (StreamBlock | undefined)[] = [];
+		let stopReason = "end_turn";
+		let inputTokens = 0;
+		let outputTokens = 0;
+		const handlers = {
+			onTextDelta,
+			blocks,
+			setStop: (r: string) => {
+				stopReason = r;
+			},
+			addUsage: (i: number, o: number) => {
+				inputTokens = i;
+				outputTokens = o;
+			},
+		};
+
+		let buffer = raw;
+		let consumed: ReturnType<typeof consumeOneSseEvent>;
+		while ((consumed = consumeOneSseEvent(buffer))) {
+			buffer = consumed.rest;
+			if (consumed.event.trim()) {
+				this.parseSseEvent(consumed.event, handlers);
+			}
+		}
+		if (buffer.trim()) {
+			this.parseSseEvent(buffer, handlers);
 		}
 
+		return this.streamAccumulatorsToResponse(
+			blocks,
+			stopReason,
+			inputTokens,
+			outputTokens
+		);
+	}
+
+	private streamAccumulatorsToResponse(
+		blocks: (StreamBlock | undefined)[],
+		stopReason: string,
+		inputTokens: number,
+		outputTokens: number
+	): ApiResponse {
 		const content: ContentBlock[] = [];
 		for (const b of blocks) {
 			if (!b) continue;
@@ -613,12 +699,20 @@ export class ClaudeClient {
 
 			if (type === "message_delta") {
 				const d = data.delta as
-					| { stop_reason?: string; stop_sequence?: string | null }
+					| {
+							stop_reason?: string;
+							stop_sequence?: string | null;
+							usage?: {
+								input_tokens?: number;
+								output_tokens?: number;
+							};
+					  }
 					| undefined;
 				if (d?.stop_reason) ctx.setStop(d.stop_reason);
-				const usage = data.usage as
+				let usage = data.usage as
 					| { input_tokens?: number; output_tokens?: number }
 					| undefined;
+				if (!usage && d?.usage) usage = d.usage;
 				if (usage) {
 					ctx.addUsage(
 						usage.input_tokens ?? 0,

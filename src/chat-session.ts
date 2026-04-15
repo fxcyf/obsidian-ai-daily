@@ -2,7 +2,7 @@
  * Persisted chat session (stored under `.ai-chat/` in the vault).
  */
 
-import { TFile, Vault } from "obsidian";
+import { TFile, Vault, normalizePath } from "obsidian";
 
 export const DEFAULT_CHAT_FOLDER = ".ai-chat";
 
@@ -39,9 +39,10 @@ export async function ensureChatFolder(
 	vault: Vault,
 	folderPath: string
 ): Promise<void> {
-	const existing = vault.getAbstractFileByPath(folderPath);
+	const p = normalizePath(folderPath);
+	const existing = vault.getAbstractFileByPath(p);
 	if (existing) return;
-	await vault.createFolder(folderPath);
+	await vault.createFolder(p);
 }
 
 export async function saveChatSession(
@@ -50,8 +51,14 @@ export async function saveChatSession(
 	session: ChatSessionFile
 ): Promise<void> {
 	await ensureChatFolder(vault, folderPath);
-	const path = `${folderPath}/${session.id}.json`;
-	await vault.adapter.write(path, JSON.stringify(session, null, 2));
+	const path = normalizePath(`${folderPath}/${session.id}.json`);
+	const data = JSON.stringify(session, null, 2);
+	const existing = vault.getAbstractFileByPath(path);
+	if (existing instanceof TFile) {
+		await vault.modify(existing, data);
+	} else {
+		await vault.create(path, data);
+	}
 }
 
 export async function loadChatSession(
@@ -59,7 +66,7 @@ export async function loadChatSession(
 	folderPath: string,
 	id: string
 ): Promise<ChatSessionFile | null> {
-	const path = `${folderPath}/${id}.json`;
+	const path = normalizePath(`${folderPath}/${id}.json`);
 	const f = vault.getAbstractFileByPath(path);
 	if (!f || !(f instanceof TFile)) return null;
 	try {
@@ -74,14 +81,20 @@ export async function listChatSessions(
 	vault: Vault,
 	folderPath: string
 ): Promise<ChatSessionFile[]> {
-	const folder = vault.getAbstractFileByPath(folderPath);
-	if (!folder || !("children" in folder) || !folder.children) return [];
+	const prefix = normalizePath(folderPath);
+	const prefixSlash = prefix + "/";
+	const files = vault
+		.getFiles()
+		.filter(
+			(f) =>
+				f.path.startsWith(prefixSlash) &&
+				f.extension === "json" &&
+				!f.path.slice(prefixSlash.length).includes("/")
+		);
 	const out: ChatSessionFile[] = [];
-	for (const child of folder.children) {
-		if (!(child instanceof TFile) || child.extension !== "json") continue;
-		const tf = child;
+	for (const f of files) {
 		try {
-			const raw = await vault.read(tf);
+			const raw = await vault.read(f);
 			out.push(JSON.parse(raw) as ChatSessionFile);
 		} catch {
 			/* skip corrupt */
@@ -96,7 +109,7 @@ export async function deleteChatSessionFile(
 	folderPath: string,
 	id: string
 ): Promise<void> {
-	const path = `${folderPath}/${id}.json`;
+	const path = normalizePath(`${folderPath}/${id}.json`);
 	const f = vault.getAbstractFileByPath(path);
 	if (f instanceof TFile) await vault.delete(f, true);
 }

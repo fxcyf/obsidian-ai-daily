@@ -385,6 +385,10 @@ export class ChatView extends ItemView {
 			await saveChatSession(this.app.vault, chatHistoryFolder, file);
 		} catch (e) {
 			console.warn("[ai-daily] persist session failed", e);
+			new Notice(
+				`对话存档失败: ${e instanceof Error ? e.message : String(e)}`,
+				6000
+			);
 		}
 	}
 

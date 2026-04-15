@@ -20,6 +20,12 @@
 - 新增 Raw/Wiki 文件夹支持，自动加载知识库文件作为上下文
 - **经验**: 上下文窗口管理很重要，需要控制加载的文件数量避免超出 token 限制
 
+## 2026-04-14 — 流式与历史记录修复（SSE CRLF + vault.create）
+
+- **问题**: 侧栏「历史」为空、流式无感 — SSE 事件以 `\r\n\r\n` 分隔时用 `\n\n` 切分永远得不到完整事件，增量解析不触发；`adapter.write` 不落 vault 索引，`getFiles`/列表不可靠。
+- **修复**: `consumeOneSseEvent` 同时识别 `\r\n\r\n` 与 `\n\n`；`fetch` 失败或 CORS 时用 `requestUrl` 拉取完整 SSE 正文再走同一解析器（仍会触发 `text_delta` 回调）；存档改用 `vault.create`/`modify` + `normalizePath`，列表用 `vault.getFiles()` 前缀过滤。
+- **Commit**: `429c706`
+
 ## 2026-04-14 — 对话体验：流式、存档、token 与摘要 (`fc03352`)
 
 - **流式输出**: 使用 `fetch` + SSE 解析 Anthropic 流；失败时回退到 `requestUrl` 非流式（与既有 CORS 策略兼容）

@@ -1,9 +1,14 @@
 /**
  * Claude API client with tool_use support and optional SSE streaming.
- * Uses Obsidian's requestUrl to bypass CORS; streaming uses fetch when available.
+ * Uses Obsidian's requestUrl for all HTTP (including stream: true) — native fetch
+ * is blocked by CORS from app://obsidian.md. Text deltas are replayed with short
+ * delays so the UI still feels streamed.
  */
 
 import { requestUrl } from "obsidian";
+
+/** Delay between replayed SSE text deltas when using buffered stream (ms). */
+const STREAM_DELTA_REPLAY_MS = 14;
 
 const API_URL = "https://api.anthropic.com/v1/messages";
 
@@ -411,19 +416,8 @@ export class ClaudeClient {
 	private async callApi(
 		onTextDelta?: (s: string) => void
 	): Promise<ApiResponse> {
-		if (this.stream && typeof fetch === "function" && onTextDelta) {
-			try {
-				return await this.callApiStreaming(onTextDelta);
-			} catch (e) {
-				console.warn("[ai-daily] streaming failed, using non-streaming", e);
-			}
-		}
-		if (this.stream && typeof fetch === "function") {
-			try {
-				return await this.callApiStreaming(undefined);
-			} catch (e) {
-				console.warn("[ai-daily] streaming failed, using non-streaming", e);
-			}
+		if (this.stream) {
+			return this.callApiStreaming(onTextDelta);
 		}
 		return this.callApiNonStreaming();
 	}
@@ -462,104 +456,37 @@ export class ClaudeClient {
 		onTextDelta?: (s: string) => void
 	): Promise<ApiResponse> {
 		const body = { ...this.buildRequestBody(), stream: true };
-		const jsonBody = JSON.stringify(body);
+		const resp = await requestUrl({
+			url: API_URL,
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"x-api-key": this.apiKey,
+				"anthropic-version": "2023-06-01",
+			},
+			body: JSON.stringify(body),
+		});
 
-		try {
-			const res = await fetch(API_URL, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"x-api-key": this.apiKey,
-					"anthropic-version": "2023-06-01",
-				},
-				body: jsonBody,
-			});
-
-			if (!res.ok) {
-				const errText = await res.text();
-				throw new Error(`Claude API error ${res.status}: ${errText}`);
-			}
-
-			const reader = res.body?.getReader();
-			if (!reader) throw new Error("No response body");
-
-			const decoder = new TextDecoder();
-			let buffer = "";
-
-			const blocks: (StreamBlock | undefined)[] = [];
-			let stopReason = "end_turn";
-			let inputTokens = 0;
-			let outputTokens = 0;
-			const handlers = {
-				onTextDelta,
-				blocks,
-				setStop: (r: string) => {
-					stopReason = r;
-				},
-				addUsage: (i: number, o: number) => {
-					inputTokens = i;
-					outputTokens = o;
-				},
-			};
-
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
-				buffer += decoder.decode(value, { stream: true });
-
-				let consumed: ReturnType<typeof consumeOneSseEvent>;
-				while ((consumed = consumeOneSseEvent(buffer))) {
-					buffer = consumed.rest;
-					if (consumed.event.trim()) {
-						this.parseSseEvent(consumed.event, handlers);
-					}
-				}
-			}
-
-			if (buffer.trim()) {
-				this.parseSseEvent(buffer, handlers);
-			}
-
-			return this.streamAccumulatorsToResponse(
-				blocks,
-				stopReason,
-				inputTokens,
-				outputTokens
-			);
-		} catch (e) {
-			console.warn(
-				"[ai-daily] fetch SSE failed; using requestUrl (full body) + same parser",
-				e
-			);
-			const resp = await requestUrl({
-				url: API_URL,
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"x-api-key": this.apiKey,
-					"anthropic-version": "2023-06-01",
-				},
-				body: jsonBody,
-			});
-
-			if (resp.status >= 400) {
-				throw new Error(`Claude API error ${resp.status}: ${resp.text}`);
-			}
-
-			return this.parseSsePlainText(resp.text, onTextDelta);
+		if (resp.status >= 400) {
+			throw new Error(`Claude API error ${resp.status}: ${resp.text}`);
 		}
+
+		return this.parseSsePlainText(resp.text, onTextDelta);
 	}
 
-	private parseSsePlainText(
+	private async parseSsePlainText(
 		raw: string,
 		onTextDelta?: (s: string) => void
-	): ApiResponse {
+	): Promise<ApiResponse> {
 		const blocks: (StreamBlock | undefined)[] = [];
 		let stopReason = "end_turn";
 		let inputTokens = 0;
 		let outputTokens = 0;
+		const deltaQueue: string[] = [];
 		const handlers = {
-			onTextDelta,
+			onTextDelta: (s: string) => {
+				if (onTextDelta) deltaQueue.push(s);
+			},
 			blocks,
 			setStop: (r: string) => {
 				stopReason = r;
@@ -582,12 +509,25 @@ export class ClaudeClient {
 			this.parseSseEvent(buffer, handlers);
 		}
 
-		return this.streamAccumulatorsToResponse(
+		const result = this.streamAccumulatorsToResponse(
 			blocks,
 			stopReason,
 			inputTokens,
 			outputTokens
 		);
+
+		if (onTextDelta && deltaQueue.length > 0) {
+			for (let i = 0; i < deltaQueue.length; i++) {
+				onTextDelta(deltaQueue[i]);
+				if (i < deltaQueue.length - 1) {
+					await new Promise((r) =>
+						setTimeout(r, STREAM_DELTA_REPLAY_MS)
+					);
+				}
+			}
+		}
+
+		return result;
 	}
 
 	private streamAccumulatorsToResponse(

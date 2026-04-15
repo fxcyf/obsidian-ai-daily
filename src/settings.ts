@@ -156,7 +156,9 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("流式输出")
-			.setDesc("开启后逐字显示回复；不支持时会自动回退为整段返回")
+			.setDesc(
+				"开启后按 SSE 分段重播显示（Obsidian 内用 requestUrl 拉流，再逐段渲染，避免 fetch 的 CORS）；关闭则整段返回"
+			)
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.chatStreaming)

@@ -283,9 +283,11 @@
 }
 
 .ai-daily-history-row {
-	padding: 10px 12px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 12px;
 	border-radius: 8px;
-	cursor: pointer;
 	margin-bottom: 4px;
 }
 
@@ -293,15 +295,44 @@
 	background: var(--background-modifier-hover);
 }
 
+.ai-daily-history-row-info {
+	flex: 1;
+	min-width: 0;
+	cursor: pointer;
+}
+
 .ai-daily-history-row-title {
 	font-size: 13px;
 	font-weight: 500;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ai-daily-history-row-meta {
 	font-size: 11px;
 	color: var(--text-muted);
-	margin-top: 4px;
+	margin-top: 3px;
+}
+
+.ai-daily-history-row-del {
+	flex-shrink: 0;
+	padding: 4px 6px;
+	border-radius: 4px;
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 0.15s;
+	font-size: 14px;
+	line-height: 1;
+}
+
+.ai-daily-history-row:hover .ai-daily-history-row-del {
+	opacity: 0.55;
+}
+
+.ai-daily-history-row-del:hover {
+	opacity: 1 !important;
+	background: var(--background-modifier-error);
 }
 
 .ai-daily-history-empty {

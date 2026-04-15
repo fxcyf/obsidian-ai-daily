@@ -1,14 +1,16 @@
 /**
- * Claude API client with tool_use support and optional SSE streaming.
- * Uses Obsidian's requestUrl for all HTTP (including stream: true) — native fetch
- * is blocked by CORS from app://obsidian.md. Text deltas are replayed with short
- * delays so the UI still feels streamed.
+ * Claude API client with tool_use support.
+ * Uses Obsidian's requestUrl (bypass CORS). Streaming is simulated client-side:
+ * we get the full JSON response then replay the text in character-chunks with a
+ * small delay, which is more reliable than SSE parsing in Obsidian's sandboxed env.
  */
 
 import { requestUrl } from "obsidian";
 
-/** Delay between replayed SSE text deltas when using buffered stream (ms). */
-const STREAM_DELTA_REPLAY_MS = 14;
+/** Characters per visual update chunk for the typewriter animation. */
+const STREAM_CHUNK_SIZE = 6;
+/** Delay between animation chunks (ms). Adjust for faster/slower effect. */
+const STREAM_CHUNK_DELAY_MS = 22;
 
 const API_URL = "https://api.anthropic.com/v1/messages";
 
@@ -131,25 +133,6 @@ export type ToolExecutor = (
 	name: string,
 	input: Record<string, unknown>
 ) => Promise<string>;
-
-type StreamBlock =
-	| { kind: "text"; text: string }
-	| { kind: "tool_use"; id: string; name: string; inputJson: string };
-
-/** Split on the first complete SSE event boundary (\r\n\r\n or \n\n). */
-function consumeOneSseEvent(
-	buffer: string
-): { event: string; rest: string } | null {
-	const rn = buffer.indexOf("\r\n\r\n");
-	const nn = buffer.indexOf("\n\n");
-	const candidates: { i: number; len: number }[] = [];
-	if (rn !== -1) candidates.push({ i: rn, len: 4 });
-	if (nn !== -1) candidates.push({ i: nn, len: 2 });
-	if (candidates.length === 0) return null;
-	candidates.sort((a, b) => a.i - b.i);
-	const { i, len } = candidates[0];
-	return { event: buffer.slice(0, i), rest: buffer.slice(i + len) };
-}
 
 /** Rough token estimate (≈ chars / 4), for UI and compression heuristics. */
 export function estimateTextTokens(text: string): number {
@@ -416,10 +399,30 @@ export class ClaudeClient {
 	private async callApi(
 		onTextDelta?: (s: string) => void
 	): Promise<ApiResponse> {
-		if (this.stream) {
-			return this.callApiStreaming(onTextDelta);
+		const response = await this.callApiNonStreaming();
+
+		if (this.stream && onTextDelta) {
+			// Typewriter animation: replay response text in small chunks with delays.
+			const fullText = (response.content as ContentBlock[])
+				.filter((b): b is TextBlock => b.type === "text")
+				.map((b) => b.text)
+				.join("");
+			if (fullText) {
+				let pos = 0;
+				while (pos < fullText.length) {
+					const chunk = fullText.slice(pos, pos + STREAM_CHUNK_SIZE);
+					onTextDelta(chunk);
+					pos += STREAM_CHUNK_SIZE;
+					if (pos < fullText.length) {
+						await new Promise((r) =>
+							setTimeout(r, STREAM_CHUNK_DELAY_MS)
+						);
+					}
+				}
+			}
 		}
-		return this.callApiNonStreaming();
+
+		return response;
 	}
 
 	private buildRequestBody(): Record<string, unknown> {
@@ -452,214 +455,4 @@ export class ClaudeClient {
 		return resp.json as ApiResponse;
 	}
 
-	private async callApiStreaming(
-		onTextDelta?: (s: string) => void
-	): Promise<ApiResponse> {
-		const body = { ...this.buildRequestBody(), stream: true };
-		const resp = await requestUrl({
-			url: API_URL,
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"x-api-key": this.apiKey,
-				"anthropic-version": "2023-06-01",
-			},
-			body: JSON.stringify(body),
-		});
-
-		if (resp.status >= 400) {
-			throw new Error(`Claude API error ${resp.status}: ${resp.text}`);
-		}
-
-		return this.parseSsePlainText(resp.text, onTextDelta);
-	}
-
-	private async parseSsePlainText(
-		raw: string,
-		onTextDelta?: (s: string) => void
-	): Promise<ApiResponse> {
-		const blocks: (StreamBlock | undefined)[] = [];
-		let stopReason = "end_turn";
-		let inputTokens = 0;
-		let outputTokens = 0;
-		const deltaQueue: string[] = [];
-		const handlers = {
-			onTextDelta: (s: string) => {
-				if (onTextDelta) deltaQueue.push(s);
-			},
-			blocks,
-			setStop: (r: string) => {
-				stopReason = r;
-			},
-			addUsage: (i: number, o: number) => {
-				inputTokens = i;
-				outputTokens = o;
-			},
-		};
-
-		let buffer = raw;
-		let consumed: ReturnType<typeof consumeOneSseEvent>;
-		while ((consumed = consumeOneSseEvent(buffer))) {
-			buffer = consumed.rest;
-			if (consumed.event.trim()) {
-				this.parseSseEvent(consumed.event, handlers);
-			}
-		}
-		if (buffer.trim()) {
-			this.parseSseEvent(buffer, handlers);
-		}
-
-		const result = this.streamAccumulatorsToResponse(
-			blocks,
-			stopReason,
-			inputTokens,
-			outputTokens
-		);
-
-		if (onTextDelta && deltaQueue.length > 0) {
-			for (let i = 0; i < deltaQueue.length; i++) {
-				onTextDelta(deltaQueue[i]);
-				if (i < deltaQueue.length - 1) {
-					await new Promise((r) =>
-						setTimeout(r, STREAM_DELTA_REPLAY_MS)
-					);
-				}
-			}
-		}
-
-		return result;
-	}
-
-	private streamAccumulatorsToResponse(
-		blocks: (StreamBlock | undefined)[],
-		stopReason: string,
-		inputTokens: number,
-		outputTokens: number
-	): ApiResponse {
-		const content: ContentBlock[] = [];
-		for (const b of blocks) {
-			if (!b) continue;
-			if (b.kind === "text") {
-				content.push({ type: "text", text: b.text });
-			} else {
-				let input: Record<string, unknown> = {};
-				try {
-					input = JSON.parse(b.inputJson || "{}") as Record<
-						string,
-						unknown
-					>;
-				} catch {
-					input = {};
-				}
-				content.push({
-					type: "tool_use",
-					id: b.id,
-					name: b.name,
-					input,
-				});
-			}
-		}
-
-		return {
-			content,
-			stop_reason: stopReason,
-			usage: {
-				input_tokens: inputTokens,
-				output_tokens: outputTokens,
-			},
-		};
-	}
-
-	private parseSseEvent(
-		raw: string,
-		ctx: {
-			onTextDelta?: (s: string) => void;
-			blocks: (StreamBlock | undefined)[];
-			setStop: (r: string) => void;
-			addUsage: (i: number, o: number) => void;
-		}
-	): void {
-		const lines = raw.split("\n");
-		for (const line of lines) {
-			if (!line.startsWith("data:")) continue;
-			const payload = line.slice(5).trim();
-			if (!payload || payload === "[DONE]") continue;
-			let data: Record<string, unknown>;
-			try {
-				data = JSON.parse(payload) as Record<string, unknown>;
-			} catch {
-				continue;
-			}
-
-			const type = data.type as string;
-
-			if (type === "error") {
-				const err = data.error as { message?: string } | undefined;
-				throw new Error(err?.message ?? "Stream error");
-			}
-
-			if (type === "content_block_start") {
-				const index = data.index as number;
-				const cb = data.content_block as
-					| { type: string; id?: string; name?: string }
-					| undefined;
-				if (!cb) continue;
-				if (cb.type === "text") {
-					ctx.blocks[index] = { kind: "text", text: "" };
-				} else if (cb.type === "tool_use") {
-					ctx.blocks[index] = {
-						kind: "tool_use",
-						id: cb.id ?? "",
-						name: cb.name ?? "",
-						inputJson: "",
-					};
-				}
-			}
-
-			if (type === "content_block_delta") {
-				const index = data.index as number;
-				const delta = data.delta as Record<string, unknown> | undefined;
-				if (!delta) continue;
-				const dt = delta.type as string;
-				if (dt === "text_delta") {
-					const text = (delta.text as string) ?? "";
-					const blk = ctx.blocks[index];
-					if (blk && blk.kind === "text") {
-						blk.text += text;
-						ctx.onTextDelta?.(text);
-					}
-				} else if (dt === "input_json_delta") {
-					const partial = (delta.partial_json as string) ?? "";
-					const blk = ctx.blocks[index];
-					if (blk && blk.kind === "tool_use") {
-						blk.inputJson += partial;
-					}
-				}
-			}
-
-			if (type === "message_delta") {
-				const d = data.delta as
-					| {
-							stop_reason?: string;
-							stop_sequence?: string | null;
-							usage?: {
-								input_tokens?: number;
-								output_tokens?: number;
-							};
-					  }
-					| undefined;
-				if (d?.stop_reason) ctx.setStop(d.stop_reason);
-				let usage = data.usage as
-					| { input_tokens?: number; output_tokens?: number }
-					| undefined;
-				if (!usage && d?.usage) usage = d.usage;
-				if (usage) {
-					ctx.addUsage(
-						usage.input_tokens ?? 0,
-						usage.output_tokens ?? 0
-					);
-				}
-			}
-		}
-	}
 }

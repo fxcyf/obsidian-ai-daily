@@ -19,6 +19,7 @@ import {
 	saveChatSession,
 	loadChatSession,
 	listChatSessions,
+	deleteChatSessionFile,
 	pruneOldSessions,
 	type ChatSessionFile,
 	type PersistedMessage,
@@ -437,18 +438,42 @@ export class ChatView extends ItemView {
 			listEl.empty();
 			for (const s of items) {
 				const row = listEl.createDiv({ cls: "ai-daily-history-row" });
-				row.createDiv({
+				const info = row.createDiv({ cls: "ai-daily-history-row-info" });
+				info.createDiv({
 					cls: "ai-daily-history-row-title",
 					text: s.title || s.id,
 				});
-				row.createDiv({
+				info.createDiv({
 					cls: "ai-daily-history-row-meta",
 					text: `${s.updated?.slice(0, 16) ?? ""} · ${s.model}`,
 				});
-				row.addEventListener("click", () => {
+				info.addEventListener("click", () => {
 					void this.loadSession(s.id);
 					overlay.remove();
 					this.historyOverlay = null;
+				});
+
+				const delBtn = row.createSpan({ cls: "ai-daily-history-row-del", text: "🗑" });
+				delBtn.setAttribute("title", "删除");
+				delBtn.addEventListener("click", async (ev) => {
+					ev.stopPropagation();
+					const { chatHistoryFolder } = this.plugin.settings;
+					await deleteChatSessionFile(
+						this.app.vault,
+						chatHistoryFolder,
+						s.id
+					);
+					sessions = sessions.filter((x) => x.id !== s.id);
+					renderList(
+						sessions.filter((x) =>
+							search.value
+								? x.title
+										.toLowerCase()
+										.includes(search.value.toLowerCase()) ||
+								  x.id.toLowerCase().includes(search.value.toLowerCase())
+								: true
+						)
+					);
 				});
 			}
 			if (items.length === 0) {

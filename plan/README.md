@@ -15,3 +15,4 @@
 ## 功能规划
 
 - ⬜ [个人信息 Feed 流](feature-info-feed.md) — AI 根据关注主题自动搜集信息，构建个人信息流（构思中）
+- ⬜ [真流式输出](feature-real-streaming.md) — 桌面端接通 Anthropic SSE 真流式（带 `dangerous-direct-browser-access` 头），移动端按"通则真流、不通则伪流"降级；吸取 `ce3e360` 回滚教训

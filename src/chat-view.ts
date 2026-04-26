@@ -193,6 +193,30 @@ export class ChatView extends ItemView {
 			this.inputEl.addEventListener("blur", () => {
 				container.removeClass("ai-daily-keyboard-open");
 			});
+
+			const debugEl = container.createDiv();
+			debugEl.style.cssText = "position:fixed;top:0;left:0;right:0;background:rgba(255,0,0,0.9);color:#fff;font-size:10px;padding:4px 6px;z-index:9999;font-family:monospace;white-space:pre;";
+			const showDebug = () => {
+				const cr = container.getBoundingClientRect();
+				const hr = this.headerEl.getBoundingClientRect();
+				const mr = this.messagesEl.getBoundingClientRect();
+				const tr = this.tokenBarEl.getBoundingClientRect();
+				const ir = this.inputAreaEl.getBoundingClientRect();
+				const pr = container.parentElement!.getBoundingClientRect();
+				const cs = getComputedStyle(container);
+				const ps = getComputedStyle(container.parentElement!);
+				debugEl.textContent = [
+					`parent: h=${pr.height.toFixed(0)} pb=${ps.paddingBottom}`,
+					`cont: h=${cr.height.toFixed(0)} t=${cr.top.toFixed(0)} b=${cr.bottom.toFixed(0)} pb=${cs.paddingBottom}`,
+					`head: h=${hr.height.toFixed(0)} msg: h=${mr.height.toFixed(0)}`,
+					`tok: h=${tr.height.toFixed(0)} b=${tr.bottom.toFixed(0)}`,
+					`input: h=${ir.height.toFixed(0)} b=${ir.bottom.toFixed(0)}`,
+					`sum: ${(hr.height+mr.height+tr.height+ir.height).toFixed(0)} vs cont: ${cr.height.toFixed(0)}`,
+				].join("\n");
+			};
+			setTimeout(showDebug, 500);
+			this.inputEl.addEventListener("focus", () => setTimeout(showDebug, 500));
+			this.inputEl.addEventListener("blur", () => setTimeout(showDebug, 300));
 		}
 	}
 
@@ -242,7 +266,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.2.7</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.2.8</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">总结一下这篇文章的要点</div>

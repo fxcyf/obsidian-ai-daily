@@ -90,7 +90,6 @@ export class ChatView extends ItemView {
 	private isLoading = false;
 	/** Current vault session file id (filename stem). */
 	private sessionId: string | null = null;
-	private viewportHandler: (() => void) | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AIDailyChat) {
 		super(leaf);
@@ -188,42 +187,12 @@ export class ChatView extends ItemView {
 		this.showWelcome();
 
 		if (Platform.isMobile) {
-			const debugEl = container.createDiv();
-			debugEl.style.cssText = "position:fixed;top:0;left:0;right:0;background:rgba(255,0,0,0.85);color:#fff;font-size:11px;padding:4px 8px;z-index:9999;font-family:monospace;white-space:pre-wrap;";
-			const showDebug = () => {
-				const vv = window.visualViewport;
-				const rect = container.getBoundingClientRect();
-				const parentRect = container.parentElement?.getBoundingClientRect();
-				const leafRect = this.containerEl.getBoundingClientRect();
-				const lines = [
-					`innerH: ${window.innerHeight}`,
-					`vv: ${vv ? `h=${vv.height} w=${vv.width} offT=${vv.offsetTop} offL=${vv.offsetLeft}` : "null"}`,
-					`container: t=${rect.top.toFixed(0)} h=${rect.height.toFixed(0)} style.h=${container.style.height}`,
-					`parent: t=${parentRect?.top.toFixed(0)} h=${parentRect?.height.toFixed(0)}`,
-					`leaf: t=${leafRect.top.toFixed(0)} h=${leafRect.height.toFixed(0)}`,
-					`container.className: ${container.className}`,
-					`parent.className: ${container.parentElement?.className}`,
-				];
-				debugEl.textContent = lines.join("\n");
-			};
-			if (window.visualViewport) {
-				const applyViewportHeight = () => {
-					const vv = window.visualViewport!;
-					const rect = container.getBoundingClientRect();
-					const h = vv.height - rect.top;
-					container.style.setProperty("height", `${h}px`, "important");
-					container.style.setProperty("max-height", `${h}px`, "important");
-					const keyboardOpen = window.innerHeight - vv.height > 100;
-					container.toggleClass("ai-daily-keyboard-open", keyboardOpen);
-					showDebug();
-				};
-				this.viewportHandler = applyViewportHeight;
-				window.visualViewport.addEventListener("resize", this.viewportHandler);
-				window.visualViewport.addEventListener("scroll", this.viewportHandler);
-				applyViewportHeight();
-			} else {
-				showDebug();
-			}
+			this.inputEl.addEventListener("focus", () => {
+				container.addClass("ai-daily-keyboard-open");
+			});
+			this.inputEl.addEventListener("blur", () => {
+				container.removeClass("ai-daily-keyboard-open");
+			});
 		}
 	}
 
@@ -273,7 +242,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.2.6</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.2.7</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">总结一下这篇文章的要点</div>
@@ -772,12 +741,5 @@ export class ChatView extends ItemView {
 
 	async onClose(): Promise<void> {
 		this.closeHistoryOverlay();
-		if (this.viewportHandler && window.visualViewport) {
-			window.visualViewport.removeEventListener("resize", this.viewportHandler);
-			window.visualViewport.removeEventListener("scroll", this.viewportHandler);
-			this.chatContainerEl.style.removeProperty("height");
-			this.chatContainerEl.style.removeProperty("max-height");
-			this.viewportHandler = null;
-		}
 	}
 }

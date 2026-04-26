@@ -6,6 +6,7 @@ import {
 } from "./settings";
 import { ChatView, VIEW_TYPE } from "./chat-view";
 import { generateFeed } from "./feed-generator";
+import { runProbeAndReport } from "./streaming-probe";
 
 export default class AIDailyChat extends Plugin {
 	settings: AIDailyChatSettings = DEFAULT_SETTINGS;
@@ -46,6 +47,26 @@ export default class AIDailyChat extends Plugin {
 			id: "generate-feed",
 			name: "生成 AI Feed",
 			callback: () => this.generateFeed(),
+		});
+
+		// [Phase 0 / plan/feature-real-streaming.md] 探测真流式连通性。
+		// 通过后会被合并进 ClaudeClient，本命令将随 src/streaming-probe.ts 一并删除。
+		this.addCommand({
+			id: "probe-streaming",
+			name: "[Debug] 探测真流式连通性",
+			callback: async () => {
+				if (!this.settings.apiKey) {
+					new Notice("先在设置里填好 Anthropic API Key");
+					return;
+				}
+				try {
+					await runProbeAndReport(this.settings.apiKey, this.settings.model);
+				} catch (e) {
+					const msg = e instanceof Error ? e.message : String(e);
+					new Notice(`探测崩溃: ${msg}`, 10_000);
+					console.error("[ai-daily streaming-probe] crashed", e);
+				}
+			},
 		});
 
 		// Settings tab

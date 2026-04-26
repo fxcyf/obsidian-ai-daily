@@ -44,8 +44,20 @@ export const DEFAULT_FEEDS: FeedSource[] = [
 		type: "hn",
 	},
 	{
+		name: "HN Best of Week",
+		url: "hn-weekly",
+		category: "community",
+		type: "hn",
+	},
+	{
 		name: "Reddit r/MachineLearning",
 		url: "https://www.reddit.com/r/MachineLearning/hot.json?limit=25",
+		category: "community",
+		type: "reddit",
+	},
+	{
+		name: "Reddit r/MachineLearning Top/Week",
+		url: "https://www.reddit.com/r/MachineLearning/top.json?t=week&limit=15",
 		category: "community",
 		type: "reddit",
 	},
@@ -55,10 +67,22 @@ export const DEFAULT_FEEDS: FeedSource[] = [
 		category: "community",
 		type: "reddit",
 	},
+	{
+		name: "Reddit r/LocalLLaMA Top/Week",
+		url: "https://www.reddit.com/r/LocalLLaMA/top.json?t=week&limit=15",
+		category: "community",
+		type: "reddit",
+	},
 	// GitHub Trending
 	{
 		name: "GitHub Trending",
 		url: "https://github.com/trending?since=daily&spoken_language_code=en",
+		category: "tools",
+		type: "github-trending",
+	},
+	{
+		name: "GitHub Trending Weekly",
+		url: "https://github.com/trending?since=weekly&spoken_language_code=en",
 		category: "tools",
 		type: "github-trending",
 	},
@@ -216,11 +240,19 @@ async function fetchRssFeed(feed: FeedSource): Promise<Article[]> {
 
 // ── Hacker News Algolia API ───────────────────────────────────────
 
+function resolveHnUrl(feed: FeedSource): string {
+	if (feed.url === "hn-weekly") {
+		const weekAgo = Math.floor(Date.now() / 1000) - 7 * 86400;
+		return `https://hn.algolia.com/api/v1/search?tags=story&query=AI+LLM+GPT+agent+Claude+machine+learning&hitsPerPage=20&numericFilters=points>100,created_at_i>${weekAgo}`;
+	}
+	return feed.url;
+}
+
 async function fetchHnFeed(feed: FeedSource): Promise<Article[]> {
 	const articles: Article[] = [];
 	try {
 		const resp = await requestUrl({
-			url: feed.url,
+			url: resolveHnUrl(feed),
 			headers: { "User-Agent": "obsidian-ai-daily/0.1" },
 		});
 		const data = resp.json;
@@ -340,14 +372,21 @@ async function fetchFeed(feed: FeedSource): Promise<Article[]> {
 
 // ── Time decay ────────────────────────────────────────────────────
 
-function timeDecay(published: Date | null): number {
+function timeDecay(published: Date | null, engagement: number = 0): number {
 	if (!published) return 0.6;
 	const hoursAgo = (Date.now() - published.getTime()) / (1000 * 60 * 60);
 	if (hoursAgo <= 12) return 1.5;
 	if (hoursAgo <= 24) return 1.3;
 	if (hoursAgo <= 48) return 1.0;
 	if (hoursAgo <= 72) return 0.7;
-	return 0.4;
+	if (hoursAgo <= 168) {
+		if (engagement >= 500) return 0.8;
+		if (engagement >= 200) return 0.6;
+		return 0.4;
+	}
+	if (engagement >= 500) return 0.6;
+	if (engagement >= 200) return 0.5;
+	return 0.3;
 }
 
 // ── Social score normalization ────────────────────────────────────
@@ -439,8 +478,9 @@ function scoreRelevance(
 	// [A] Social engagement boost
 	score *= socialBoost(article);
 
-	// [B] Time decay — fresher content scores higher
-	score *= timeDecay(article.published);
+	// [B] Time decay — fresher content scores higher, high-engagement content decays slower
+	const engagement = article.socialScore + article.commentCount * 2;
+	score *= timeDecay(article.published, engagement);
 
 	// [B] Burst detection — topics discussed across multiple sources get boosted
 	let maxBurst = 1.0;

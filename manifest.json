@@ -1,7 +1,7 @@
 {
 	"id": "ai-daily-chat",
 	"name": "AI Knowledge Chat",
-	"version": "0.4.9",
+	"version": "0.5.0",
 	"minAppVersion": "1.0.0",
 	"description": "Personal knowledge base companion for Obsidian. Chat with Claude about your collected articles, wiki entries, and daily notes.",
 	"author": "Elena C.",

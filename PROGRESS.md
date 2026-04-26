@@ -1,5 +1,28 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-04-25 — 真流式回归 + 三态降级 (`8df25da`, `b068131`, `ee2fc02`)
+
+- **背景**：上次（`fc03352` → `ce3e360`）真流式 fetch 实现因 CORS 全量回滚到伪流，并在
+  `de1c9c0` 改用纯 `requestUrl` + 客户端切片。当时的代码注释直接判定"fetch 在
+  `app://obsidian.md` 下被 CORS 拦截"，但**没追到真正的根因**。
+- **本次根因**：上次的 fetch 头**缺了 `anthropic-dangerous-direct-browser-access: true`**。
+  没这个头时 Anthropic 不会发回浏览器友好的 CORS 响应头，预检自然挂。Anthropic 官方
+  浏览器 SDK 也是用同一个开关。
+- **验证流程**（避免再次踩同一坑）：
+  - Phase 0（`8df25da`）先单独写一个 `[Debug] 探测真流式连通性` 命令，最小代价
+    在真实 Obsidian 桌面环境跑一次；只有 `firstChunkMs < totalMs` 且 `chunks > 1` 才
+    判定真流式生效。**实测 firstChunkMs ≈ 1018ms，chunks = 4**，结论确证。
+  - Phase 1（`b068131`）抽离 `src/anthropic-sse.ts` 纯函数模块 + 引入 vitest，
+    20 个单测覆盖 LF/CRLF 分隔、跨 chunk 切分、tool_use partial JSON 边界。
+  - Phase 2（`ee2fc02`）才动 ClaudeClient，`streamMode: auto/real/typewriter/off`
+    三态降级；`auto` 模式 fetch 抛错时静默退化为打字机，UI 无感。
+- **教训**：CORS 失败先排查请求头，不要立刻怀疑"Obsidian 沙箱不允许 fetch"。
+  浏览器的 CORS 错误和服务端策略错误从外观上看一模一样，根因可能在请求侧。
+- **教训**：复杂改动按 Phase 0 → 1 → 2 拆，**每个阶段都能独立验证或撤销**，避免
+  上次"一次性写完一改全挂只能整体回滚"的剧情重演。
+- **设置迁移**：`chatStreaming: boolean` → `chatStreamMode`，`loadSettings` 内做兼容映射，
+  老用户升级无配置丢失。
+
 ## 2026-04-25 — 本地图片处理方案拆分 (`9dda7a7`)
 
 - 新增 `plan/feature-local-file-image.md`，将“本地文件处理（先图片）”拆成独立 feature 文档并定义 Phase 1-4

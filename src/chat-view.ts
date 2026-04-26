@@ -76,11 +76,13 @@ class ConfirmModal extends Modal {
 export class ChatView extends ItemView {
 	plugin: AIDailyChat;
 	private chatContainerEl: HTMLElement = null!;
+	private headerEl: HTMLElement = null!;
 	private messages: ChatMessage[] = [];
 	private client: ClaudeClient | null = null;
 	private vaultTools: VaultTools | null = null;
 	private webTools: WebTools = new WebTools();
 	private messagesEl: HTMLElement = null!;
+	private inputAreaEl: HTMLElement = null!;
 	private inputEl: HTMLTextAreaElement = null!;
 	private tokenBarEl: HTMLElement = null!;
 	private historyOverlay: HTMLElement | null = null;
@@ -126,23 +128,23 @@ export class ChatView extends ItemView {
 		container.addClass("ai-daily-chat-container");
 		this.chatContainerEl = container;
 
-		const header = container.createDiv({ cls: "ai-daily-header" });
+		this.headerEl = container.createDiv({ cls: "ai-daily-header" });
 
-		const feedBtn = header.createDiv({
+		const feedBtn = this.headerEl.createDiv({
 			cls: "ai-daily-header-btn ai-daily-header-btn-primary",
 			attr: { "aria-label": "生成 Feed", title: "生成 Feed" },
 		});
 		setIcon(feedBtn, "rss");
 		feedBtn.addEventListener("click", () => this.plugin.generateFeed());
 
-		const historyBtn = header.createDiv({
+		const historyBtn = this.headerEl.createDiv({
 			cls: "ai-daily-header-btn",
 			attr: { "aria-label": "历史", title: "历史" },
 		});
 		setIcon(historyBtn, "history");
 		historyBtn.addEventListener("click", () => this.openHistoryPanel());
 
-		const newChatBtn = header.createDiv({
+		const newChatBtn = this.headerEl.createDiv({
 			cls: "ai-daily-header-btn",
 			attr: { "aria-label": "新对话", title: "新对话" },
 		});
@@ -154,14 +156,14 @@ export class ChatView extends ItemView {
 		this.tokenBarEl = container.createDiv({ cls: "ai-daily-token-bar" });
 		this.updateTokenBar();
 
-		const inputArea = container.createDiv({ cls: "ai-daily-input-area" });
+		this.inputAreaEl = container.createDiv({ cls: "ai-daily-input-area" });
 
-		this.inputEl = inputArea.createEl("textarea", {
+		this.inputEl = this.inputAreaEl.createEl("textarea", {
 			cls: "ai-daily-input",
 			attr: { placeholder: "问点什么...", rows: "1" },
 		});
 
-		const sendBtn = inputArea.createEl("button", {
+		const sendBtn = this.inputAreaEl.createEl("button", {
 			cls: "ai-daily-send-btn",
 		});
 		setIcon(sendBtn, "send");
@@ -511,15 +513,9 @@ export class ChatView extends ItemView {
 
 	private updateHistoryOverlayInset(): void {
 		if (!this.historyOverlay || !this.chatContainerEl) return;
-		const headerEl =
-			this.chatContainerEl.querySelector<HTMLElement>(".ai-daily-header");
-		const tokenBarEl =
-			this.chatContainerEl.querySelector<HTMLElement>(".ai-daily-token-bar");
-		const inputAreaEl =
-			this.chatContainerEl.querySelector<HTMLElement>(".ai-daily-input-area");
-		const topInset = headerEl?.offsetHeight ?? 0;
+		const topInset = this.headerEl?.offsetHeight ?? 0;
 		const bottomInset =
-			(tokenBarEl?.offsetHeight ?? 0) + (inputAreaEl?.offsetHeight ?? 0);
+			(this.tokenBarEl?.offsetHeight ?? 0) + (this.inputAreaEl?.offsetHeight ?? 0);
 		this.historyOverlay.setAttribute(
 			"style",
 			`inset:${topInset}px 0 ${bottomInset}px 0;`

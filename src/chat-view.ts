@@ -88,6 +88,7 @@ export class ChatView extends ItemView {
 	private historyOverlay: HTMLElement | null = null;
 	private historyOverlayResizeCleanup: (() => void) | null = null;
 	private isLoading = false;
+	private userScrolledUp = false;
 	/** Current vault session file id (filename stem). */
 	private sessionId: string | null = null;
 
@@ -154,6 +155,10 @@ export class ChatView extends ItemView {
 		newChatBtn.addEventListener("click", () => this.clearChat());
 
 		this.messagesEl = container.createDiv({ cls: "ai-daily-messages" });
+		this.messagesEl.addEventListener("scroll", () => {
+			const el = this.messagesEl;
+			this.userScrolledUp = el.scrollHeight - el.scrollTop - el.clientHeight > 50;
+		});
 
 		this.tokenBarEl = container.createDiv({ cls: "ai-daily-token-bar" });
 		this.updateTokenBar();
@@ -321,7 +326,8 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.3.11</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.4.0</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.4.0</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">总结一下这篇文章的要点</div>
@@ -390,7 +396,7 @@ export class ChatView extends ItemView {
 				"",
 				this.plugin
 			);
-			this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+			this.scrollToBottomIfFollowing();
 		};
 		const scheduleStreamingMarkdown = (content: string) => {
 			latestStreamingMarkdown = content;
@@ -448,7 +454,7 @@ export class ChatView extends ItemView {
 			} else {
 				this.addMessage("assistant", reply);
 			}
-			this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+			this.scrollToBottomIfFollowing();
 
 			await this.persistSession();
 			this.updateTokenBar();
@@ -555,6 +561,12 @@ export class ChatView extends ItemView {
 		}
 	}
 
+	private scrollToBottomIfFollowing(): void {
+		if (!this.userScrolledUp) {
+			this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+		}
+	}
+
 	private addMessage(role: "user" | "assistant", content: string): void {
 		const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
 		if (welcome) welcome.remove();
@@ -577,7 +589,12 @@ export class ChatView extends ItemView {
 			msgEl.setText(content);
 		}
 
-		this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+		if (role === "user") {
+			this.userScrolledUp = false;
+			this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+		} else {
+			this.scrollToBottomIfFollowing();
+		}
 		this.updateTokenBar();
 	}
 

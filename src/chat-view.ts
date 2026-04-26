@@ -192,6 +192,11 @@ export class ChatView extends ItemView {
 				const vv = window.visualViewport!;
 				const keyboardOpen = window.innerHeight - vv.height > 100;
 				container.toggleClass("ai-daily-keyboard-open", keyboardOpen);
+				if (keyboardOpen) {
+					container.style.height = `${vv.height - vv.offsetTop}px`;
+				} else {
+					container.style.height = "";
+				}
 			};
 			window.visualViewport.addEventListener("resize", this.viewportHandler);
 		}

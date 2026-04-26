@@ -3,7 +3,7 @@
  * to produce a daily feed note in the vault.
  */
 
-import { App, TFile, TFolder, requestUrl } from "obsidian";
+import { App, TFile, requestUrl } from "obsidian";
 import { fetchAllFeeds, type Article, type FeedSource } from "./feeds";
 import type { AIDailyChatSettings } from "./settings";
 
@@ -127,12 +127,38 @@ async function callClaude(
 	return "Feed 生成失败。";
 }
 
+// ── Existing feed check ───────────────────────────────────────────
+
+export interface ExistingFeedInfo {
+	file: TFile;
+	content: string;
+}
+
+export function getTodayFeedPath(feedFolder: string): string {
+	const today = new Date().toISOString().slice(0, 10);
+	return `${feedFolder}/Feed-${today}.md`;
+}
+
+export async function checkExistingFeed(
+	app: App,
+	feedFolder: string
+): Promise<ExistingFeedInfo | null> {
+	const filePath = getTodayFeedPath(feedFolder);
+	const existing = app.vault.getAbstractFileByPath(filePath);
+	if (existing instanceof TFile) {
+		const content = await app.vault.read(existing);
+		return { file: existing, content };
+	}
+	return null;
+}
+
 // ── Main generator ─────────────────────────────────────────────────
 
 export async function generateFeed(
 	app: App,
 	settings: AIDailyChatSettings,
-	onProgress?: (progress: FeedProgress) => void
+	onProgress?: (progress: FeedProgress) => void,
+	existingContent?: string
 ): Promise<TFile> {
 	const { apiKey, model, feedFolder, feedTopics, feedSources, feedMaxArticles, knowledgeFolders } = settings;
 
@@ -178,8 +204,17 @@ export async function generateFeed(
 		? `用户关注的主题: ${feedTopics.join(", ")}\n\n`
 		: "";
 
+	let deduplicationNote = "";
+	if (existingContent) {
+		deduplicationNote =
+			`## ⚠️ 重要：以下是今天已生成的 Feed 内容，请勿重复报道相同的文章或主题\n\n` +
+			`${existingContent}\n\n` +
+			`请只关注上面尚未覆盖的新内容。如果所有文章都已在上次 Feed 中报道过，请明确告知"本次无新增内容"。\n\n`;
+	}
+
 	const userMessage =
 		`${topicsStr}` +
+		`${deduplicationNote}` +
 		`## 用户笔记库中的相关内容\n\n${vaultContext}\n\n` +
 		`## RSS 抓取到的文章（共 ${articles.length} 篇）\n\n${articlesText}`;
 
@@ -198,9 +233,8 @@ export async function generateFeed(
 		? `topics: [${feedTopics.join(", ")}]\n`
 		: "";
 
-	const noteContent =
-		`---\ntype: feed\n${topicsYaml}date: ${today}\n---\n\n` +
-		`# AI Feed - ${today}\n\n${aiContent}\n`;
+	const filePath = `${feedFolder}/Feed-${today}.md`;
+	const existingFile = app.vault.getAbstractFileByPath(filePath);
 
 	// Ensure feed folder exists
 	const folderExists = app.vault.getAbstractFileByPath(feedFolder);
@@ -208,14 +242,24 @@ export async function generateFeed(
 		await app.vault.createFolder(feedFolder);
 	}
 
-	const filePath = `${feedFolder}/Feed-${today}.md`;
-	const existingFile = app.vault.getAbstractFileByPath(filePath);
-
 	let file: TFile;
-	if (existingFile instanceof TFile) {
+	if (existingFile instanceof TFile && existingContent) {
+		const now = new Date();
+		const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+		const appendContent = `\n\n---\n\n# AI Feed 更新 - ${today} ${timeStr}\n\n${aiContent}\n`;
+		const updatedContent = existingContent + appendContent;
+		await app.vault.modify(existingFile, updatedContent);
+		file = existingFile;
+	} else if (existingFile instanceof TFile) {
+		const noteContent =
+			`---\ntype: feed\n${topicsYaml}date: ${today}\n---\n\n` +
+			`# AI Feed - ${today}\n\n${aiContent}\n`;
 		await app.vault.modify(existingFile, noteContent);
 		file = existingFile;
 	} else {
+		const noteContent =
+			`---\ntype: feed\n${topicsYaml}date: ${today}\n---\n\n` +
+			`# AI Feed - ${today}\n\n${aiContent}\n`;
 		file = await app.vault.create(filePath, noteContent);
 	}
 

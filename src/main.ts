@@ -1,11 +1,59 @@
-import { Notice, Plugin } from "obsidian";
+import { App, Modal, Notice, Plugin } from "obsidian";
 import {
 	AIDailyChatSettings,
 	DEFAULT_SETTINGS,
 	AIDailyChatSettingTab,
 } from "./settings";
 import { ChatView, VIEW_TYPE } from "./chat-view";
-import { generateFeed } from "./feed-generator";
+import { generateFeed, checkExistingFeed } from "./feed-generator";
+
+class FeedConfirmModal extends Modal {
+	private resolved = false;
+	private resolve: (value: boolean) => void = () => {};
+
+	constructor(app: App) {
+		super(app);
+	}
+
+	open(): Promise<boolean> {
+		return new Promise((resolve) => {
+			this.resolve = resolve;
+			super.open();
+		});
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		contentEl.createEl("p", {
+			text: "今天已经生成过 Feed，再次生成会将新内容追加到现有文件中（不会覆盖）。AI 会自动避免重复已有的内容。",
+		});
+		contentEl.createEl("p", {
+			text: "是否继续生成？",
+			cls: "ai-daily-confirm-question",
+		});
+		const btnRow = contentEl.createDiv({ cls: "ai-daily-confirm-btns" });
+		const confirmBtn = btnRow.createEl("button", {
+			text: "继续生成",
+			cls: "mod-cta",
+		});
+		const cancelBtn = btnRow.createEl("button", { text: "取消" });
+		confirmBtn.addEventListener("click", () => {
+			this.resolved = true;
+			this.resolve(true);
+			this.close();
+		});
+		cancelBtn.addEventListener("click", () => {
+			this.resolved = true;
+			this.resolve(false);
+			this.close();
+		});
+	}
+
+	onClose(): void {
+		if (!this.resolved) this.resolve(false);
+		this.contentEl.empty();
+	}
+}
 
 export default class AIDailyChat extends Plugin {
 	settings: AIDailyChatSettings = DEFAULT_SETTINGS;
@@ -80,14 +128,23 @@ export default class AIDailyChat extends Plugin {
 	}
 
 	async generateFeed(): Promise<void> {
+		const existing = await checkExistingFeed(this.app, this.settings.feedFolder);
+
+		if (existing) {
+			const confirmed = await new FeedConfirmModal(this.app).open();
+			if (!confirmed) return;
+		}
+
 		const notice = new Notice("正在生成 AI Feed...", 0);
 		try {
-			const file = await generateFeed(this.app, this.settings, (progress) => {
-				notice.setMessage(progress.message);
-			});
+			const file = await generateFeed(
+				this.app,
+				this.settings,
+				(progress) => { notice.setMessage(progress.message); },
+				existing?.content
+			);
 			notice.hide();
 			new Notice(`Feed 已生成: ${file.path}`, 5000);
-			// Open the generated file
 			const leaf = this.app.workspace.getLeaf(false);
 			await leaf.openFile(file);
 		} catch (e) {

@@ -4,7 +4,7 @@
 
 ## Git 信息
 
-- Remote: git@github.com:fxcyf/obsidian-ai-daily.git
+- Remote: git@github-fxcyf.com:fxcyf/obsidian-ai-daily.git
 - 默认分支: main
 
 ## 任务生命周期

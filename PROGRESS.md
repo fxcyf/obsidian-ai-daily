@@ -1,5 +1,18 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-04-25 — 移动端 UI 改进 (`409c0aa`)
+
+- **问题**: 移动端多处 UI 问题——历史列表的删除按钮用 `opacity: 0` + `:hover` 显示，触屏设备无 hover 状态导致按钮完全不可见；header 按钮文字小(12px)、tap target 不足；loading 状态仅静态文本
+- **修复**:
+  - 删除按钮改为 `opacity: 0.4` 常态可见，hover 时增亮到 0.7
+  - Header 从文字按钮改为 icon 按钮(rss/history/plus)，40x40 tap target，主操作用 accent 色区分
+  - Loading 改为三点弹跳动画(CSS `@keyframes`)
+  - Token bar 紧凑化：低使用率(<10%)时隐藏文字标签
+  - 输入框从 `rows=2` 固定高度改为 `rows=1` + JS auto-grow，pill 形圆角，send 按钮改圆形
+  - 历史面板去掉 margin/border-radius，全宽覆盖
+  - 全局收紧 padding/margin，messages 区增加 `scroll-behavior: smooth`
+- **教训**: 移动端不能依赖 `:hover` 状态控制可见性，所有可交互元素必须始终可见；icon 比文字在窄屏上更节省空间且 tap target 更大
+
 ## 2026-04-25 — 真流式回归 + 三态降级 (`8df25da`, `b068131`, `ee2fc02`)
 
 - **背景**：上次（`fc03352` → `ce3e360`）真流式 fetch 实现因 CORS 全量回滚到伪流，并在

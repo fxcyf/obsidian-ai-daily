@@ -1,11 +1,25 @@
 /**
  * Claude API client with tool_use support.
- * Uses Obsidian's requestUrl (bypass CORS). Streaming is simulated client-side:
- * we get the full JSON response then replay the text in character-chunks with a
- * small delay, which is more reliable than SSE parsing in Obsidian's sandboxed env.
+ *
+ * 三种数据源（按 streamMode 调度）：
+ *   real       — 浏览器原生 fetch + SSE，Phase 0 已验证桌面可行；
+ *                需要 anthropic-dangerous-direct-browser-access 头才能过 CORS
+ *                （上次 ce3e360 回滚的根因）。
+ *   typewriter — 用 requestUrl 一次拿完整响应，再客户端切片回放；
+ *                兼容性最好，移动端 fetch CORS 不通时的兜底。
+ *   off        — 一次性返回整段，不打字机动画。
+ *
+ * auto = 真流→打字机的自动降级链；任何 throw 都不冒泡到 UI。
  */
 
 import { requestUrl } from "obsidian";
+import {
+	AnthropicStreamAssembler,
+	type ApiResponse,
+	type ContentBlock,
+	type TextBlock,
+	type ToolUseBlock,
+} from "./anthropic-sse";
 
 /** Characters per visual update chunk for the typewriter animation. */
 const STREAM_CHUNK_SIZE = 6;
@@ -13,6 +27,7 @@ const STREAM_CHUNK_SIZE = 6;
 const STREAM_CHUNK_DELAY_MS = 22;
 
 const API_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_VERSION = "2023-06-01";
 
 // ── Tool definitions ────────────────────────────────────────────────
 
@@ -119,29 +134,11 @@ export const VAULT_TOOLS = [
 
 // ── Types ───────────────────────────────────────────────────────────
 
-interface TextBlock {
-	type: "text";
-	text: string;
-}
-
-interface ToolUseBlock {
-	type: "tool_use";
-	id: string;
-	name: string;
-	input: Record<string, unknown>;
-}
-
-type ContentBlock = TextBlock | ToolUseBlock;
+export type { ApiResponse, ContentBlock, TextBlock, ToolUseBlock };
 
 export interface ClaudeMessage {
 	role: "user" | "assistant";
 	content: string | ContentBlock[];
-}
-
-interface ApiResponse {
-	content: ContentBlock[];
-	stop_reason: string;
-	usage: { input_tokens: number; output_tokens: number };
 }
 
 export interface ToolResult {
@@ -155,6 +152,8 @@ export type ToolExecutor = (
 	name: string,
 	input: Record<string, unknown>
 ) => Promise<string>;
+
+export type StreamMode = "auto" | "real" | "typewriter" | "off";
 
 /** Rough token estimate (≈ chars / 4), for UI and compression heuristics. */
 export function estimateTextTokens(text: string): number {
@@ -189,8 +188,14 @@ export function buildToolsArray(enableWebSearch: boolean): Record<string, unknow
 }
 
 export interface ClaudeClientOptions {
-	/** Use SSE streaming when fetch is available (falls back on failure). */
-	stream?: boolean;
+	/**
+	 * Streaming mode：
+	 *   - auto       (默认) 真流→打字机自动降级
+	 *   - real       仅真流，失败直接报错（仅调试）
+	 *   - typewriter 用 requestUrl 拉整段再切片回放（兼容性最好）
+	 *   - off        一次性返回整段，无动画
+	 */
+	streamMode?: StreamMode;
 	/** Enable web search and web fetch tools. */
 	enableWebSearch?: boolean;
 	/** Estimated token budget before compressing older turns (0 = disable). */
@@ -199,6 +204,8 @@ export interface ClaudeClientOptions {
 	compressKeepMessages?: number;
 	/** Called when history was summarized for context. */
 	onCompress?: (detail: string) => void;
+	/** Called once per chat() when real-stream fell back to typewriter. */
+	onStreamFallback?: (reason: string) => void;
 }
 
 export class ClaudeClient {
@@ -206,11 +213,12 @@ export class ClaudeClient {
 	private model: string;
 	private messages: ClaudeMessage[] = [];
 	private systemPrompt: string;
-	private stream: boolean;
+	private streamMode: StreamMode;
 	private enableWebSearch: boolean;
 	private compressThresholdEst: number;
 	private compressKeepMessages: number;
 	private onCompress?: (detail: string) => void;
+	private onStreamFallback?: (reason: string) => void;
 
 	constructor(
 		apiKey: string,
@@ -221,7 +229,7 @@ export class ClaudeClient {
 		this.apiKey = apiKey;
 		this.model = model;
 		this.systemPrompt = systemPrompt;
-		this.stream = options?.stream !== false;
+		this.streamMode = options?.streamMode ?? "auto";
 		this.enableWebSearch = options?.enableWebSearch ?? false;
 		this.compressThresholdEst =
 			options?.compressThresholdEst ?? 90_000;
@@ -230,6 +238,7 @@ export class ClaudeClient {
 			options?.compressKeepMessages ?? 8
 		);
 		this.onCompress = options?.onCompress;
+		this.onStreamFallback = options?.onStreamFallback;
 	}
 
 	getModel(): string {
@@ -290,8 +299,8 @@ export class ClaudeClient {
 			let roundText = "";
 			for (const block of response.content) {
 				if (block.type === "text") {
-					collectedText.push(block.text);
-					roundText += block.text;
+					collectedText.push((block as TextBlock).text);
+					roundText += (block as TextBlock).text;
 				}
 			}
 			priorAssistantText += roundText;
@@ -414,7 +423,7 @@ export class ClaudeClient {
 			headers: {
 				"Content-Type": "application/json",
 				"x-api-key": this.apiKey,
-				"anthropic-version": "2023-06-01",
+				"anthropic-version": ANTHROPIC_VERSION,
 			},
 			body: JSON.stringify(body),
 		});
@@ -430,33 +439,99 @@ export class ClaudeClient {
 		return texts.join("\n").trim() || "（摘要为空）";
 	}
 
+	// ── Streaming dispatch ──────────────────────────────────────────
+
 	private async callApi(
 		onTextDelta?: (s: string) => void
 	): Promise<ApiResponse> {
-		const response = await this.callApiNonStreaming();
+		if (this.streamMode === "off") {
+			return this.callApiNonStreaming();
+		}
 
-		if (this.stream && onTextDelta) {
-			// Typewriter animation: replay response text in small chunks with delays.
-			const fullText = (response.content as ContentBlock[])
-				.filter((b): b is TextBlock => b.type === "text")
-				.map((b) => b.text)
-				.join("");
-			if (fullText) {
-				let pos = 0;
-				while (pos < fullText.length) {
-					const chunk = fullText.slice(pos, pos + STREAM_CHUNK_SIZE);
-					onTextDelta(chunk);
-					pos += STREAM_CHUNK_SIZE;
-					if (pos < fullText.length) {
-						await new Promise((r) =>
-							setTimeout(r, STREAM_CHUNK_DELAY_MS)
-						);
-					}
+		if (this.streamMode === "auto" || this.streamMode === "real") {
+			try {
+				return await this.callApiRealStream(onTextDelta);
+			} catch (e) {
+				if (this.streamMode === "real") {
+					// 显式选了 real 时不掩盖错误——便于调试。
+					throw e;
 				}
+				const msg = e instanceof Error ? e.message : String(e);
+				console.warn(
+					"[ai-daily] real stream failed, falling back to typewriter:",
+					msg
+				);
+				this.onStreamFallback?.(msg);
+				// 落到下面 typewriter 路径。
 			}
 		}
 
-		return response;
+		return this.callApiTypewriter(onTextDelta);
+	}
+
+	/**
+	 * 真流式：fetch + SSE。
+	 *
+	 * 关键头：anthropic-dangerous-direct-browser-access: true。
+	 * 没有这个头时浏览器直连会被 CORS 拦截（fc03352 → ce3e360 的根因）。
+	 */
+	private async callApiRealStream(
+		onTextDelta?: (s: string) => void
+	): Promise<ApiResponse> {
+		const body = { ...this.buildRequestBody(), stream: true };
+		const res = await fetch(API_URL, {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				"x-api-key": this.apiKey,
+				"anthropic-version": ANTHROPIC_VERSION,
+				"anthropic-dangerous-direct-browser-access": "true",
+			},
+			body: JSON.stringify(body),
+		});
+
+		if (!res.ok) {
+			let errText = "";
+			try {
+				errText = await res.text();
+			} catch {
+				/* ignore */
+			}
+			throw new Error(
+				`Claude API stream HTTP ${res.status}: ${errText.slice(0, 500)}`
+			);
+		}
+
+		if (!res.body) {
+			throw new Error(
+				"Claude API stream: response has no body (no ReadableStream)"
+			);
+		}
+
+		const assembler = new AnthropicStreamAssembler({
+			onTextDelta,
+		});
+		const reader = res.body.getReader();
+		const decoder = new TextDecoder();
+		try {
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				const text = decoder.decode(value, { stream: true });
+				if (text) assembler.push(text);
+			}
+			// flush decoder tail
+			const tail = decoder.decode();
+			if (tail) assembler.push(tail);
+		} finally {
+			try {
+				reader.releaseLock();
+			} catch {
+				/* ignore */
+			}
+		}
+
+		return assembler.finalize();
 	}
 
 	private buildRequestBody(): Record<string, unknown> {
@@ -477,7 +552,7 @@ export class ClaudeClient {
 			headers: {
 				"Content-Type": "application/json",
 				"x-api-key": this.apiKey,
-				"anthropic-version": "2023-06-01",
+				"anthropic-version": ANTHROPIC_VERSION,
 			},
 			body: JSON.stringify(body),
 		});
@@ -489,4 +564,35 @@ export class ClaudeClient {
 		return resp.json as ApiResponse;
 	}
 
+	/**
+	 * 伪流：拿到完整响应后客户端切片回放制造打字机效果。
+	 * 兼容性最好（仅依赖 requestUrl），用作真流失败的兜底，或用户显式选择。
+	 */
+	private async callApiTypewriter(
+		onTextDelta?: (s: string) => void
+	): Promise<ApiResponse> {
+		const response = await this.callApiNonStreaming();
+
+		if (onTextDelta) {
+			const fullText = response.content
+				.filter((b): b is TextBlock => b.type === "text")
+				.map((b) => b.text)
+				.join("");
+			if (fullText) {
+				let pos = 0;
+				while (pos < fullText.length) {
+					const chunk = fullText.slice(pos, pos + STREAM_CHUNK_SIZE);
+					onTextDelta(chunk);
+					pos += STREAM_CHUNK_SIZE;
+					if (pos < fullText.length) {
+						await new Promise((r) =>
+							setTimeout(r, STREAM_CHUNK_DELAY_MS)
+						);
+					}
+				}
+			}
+		}
+
+		return response;
+	}
 }

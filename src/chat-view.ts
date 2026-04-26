@@ -259,7 +259,7 @@ export class ChatView extends ItemView {
 		});
 		loadingEl.setText("思考中...");
 
-		const useStream = this.plugin.settings.chatStreaming;
+		const useStream = this.plugin.settings.chatStreamMode !== "off";
 
 		let assistantEl: HTMLElement | null = null;
 		if (useStream) {
@@ -325,7 +325,7 @@ export class ChatView extends ItemView {
 			dailyFolder,
 			knowledgeFolders,
 			contextDays,
-			chatStreaming,
+			chatStreamMode,
 			chatCompressThresholdEst,
 			enableWebSearch,
 		} = this.plugin.settings;
@@ -362,11 +362,14 @@ export class ChatView extends ItemView {
 			.join("\n\n");
 
 		this.client = new ClaudeClient(apiKey, model, systemPrompt, {
-			stream: chatStreaming,
+			streamMode: chatStreamMode,
 			enableWebSearch,
 			compressThresholdEst: chatCompressThresholdEst,
 			onCompress: (detail) => {
 				new Notice(detail, 6000);
+			},
+			onStreamFallback: (reason) => {
+				console.warn("[ai-daily] stream fallback:", reason);
 			},
 		});
 	}

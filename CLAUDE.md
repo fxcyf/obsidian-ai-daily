@@ -81,7 +81,9 @@ rebase 发生冲突时：
 
 - `src/main.ts` — 插件入口，注册视图、命令、设置
 - `src/chat-view.ts` — 聊天侧边栏 UI
-- `src/claude.ts` — Claude API client，支持 tool_use agentic loop
+- `src/claude.ts` — Claude API client，支持 tool_use agentic loop 和 real/typewriter/off 流式调度
+- `src/anthropic-sse.ts` — Anthropic SSE 解析与组装（纯函数，单测覆盖）
+- `src/anthropic-sse.test.ts` — `npm test` 入口（vitest）
 - `src/vault-tools.ts` — Vault 工具实现（read/search/append/list）
 - `src/web-tools.ts` — Web 工具实现（web_fetch 网页抓取）
 - `src/settings.ts` — 插件设置（含 Feed 配置）

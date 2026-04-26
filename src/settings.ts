@@ -1,6 +1,7 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type AIDailyChat from "./main";
 import { DEFAULT_FEEDS, type FeedSource } from "./feeds";
+import type { StreamMode } from "./claude";
 
 export interface AIDailyChatSettings {
 	apiKey: string;
@@ -12,8 +13,14 @@ export interface AIDailyChatSettings {
 	chatHistoryFolder: string;
 	/** Delete chat JSON files not updated within this many days (0 = never auto-delete). */
 	chatHistoryRetentionDays: number;
-	/** Use SSE streaming when supported (falls back automatically). */
-	chatStreaming: boolean;
+	/**
+	 * Streaming 调度模式：
+	 *   auto       (默认) 真流→打字机自动降级，桌面享流式、移动端兜底
+	 *   real       仅真流，失败直接报错（调试用）
+	 *   typewriter requestUrl 整段返回 + 客户端切片回放
+	 *   off        一次性返回，无动画
+	 */
+	chatStreamMode: StreamMode;
 	/** Estimated token threshold to trigger automatic history summarization (0 = off). */
 	chatCompressThresholdEst: number;
 	/** Displayed context budget for the token bar (informational). */
@@ -35,7 +42,7 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	model: "claude-haiku-4-5",
 	chatHistoryFolder: ".ai-chat",
 	chatHistoryRetentionDays: 30,
-	chatStreaming: true,
+	chatStreamMode: "auto",
 	chatCompressThresholdEst: 90_000,
 	chatContextBudgetTokens: 200_000,
 	enableWebSearch: true,
@@ -158,15 +165,20 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("流式输出")
+			.setName("流式输出模式")
 			.setDesc(
-				"开启后按 SSE 分段重播显示（Obsidian 内用 requestUrl 拉流，再逐段渲染，避免 fetch 的 CORS）；关闭则整段返回"
+				"auto: 桌面用真流(fetch+SSE)，失败时移动端自动降级为打字机。real: 仅真流(调试用)。typewriter: 整段返回+客户端打字机。off: 一次性整段。"
 			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.chatStreaming)
+			.addDropdown((dd) =>
+				dd
+					.addOption("auto", "Auto（推荐）")
+					.addOption("real", "Real（仅真流，调试）")
+					.addOption("typewriter", "Typewriter（伪流，最兼容）")
+					.addOption("off", "Off（无动画）")
+					.setValue(this.plugin.settings.chatStreamMode)
 					.onChange(async (value) => {
-						this.plugin.settings.chatStreaming = value;
+						this.plugin.settings.chatStreamMode =
+							value as typeof this.plugin.settings.chatStreamMode;
 						await this.plugin.saveSettings();
 					})
 			);

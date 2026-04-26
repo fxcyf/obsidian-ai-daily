@@ -208,16 +208,32 @@ export class ChatView extends ItemView {
 
 			container.style.setProperty("padding-bottom", "0", "important");
 
-			// Hide Obsidian chrome (view selector, doc stats) — siblings of our container
-			const parent = container.parentElement;
-			if (parent) {
-				for (let i = 0; i < parent.children.length; i++) {
-					const child = parent.children[i] as HTMLElement;
-					if (child !== container) {
-						child.style.display = "none";
+			// Debug: dump DOM tree from container up 6 levels, showing siblings at each level
+			const domLines: string[] = [];
+			let cur: HTMLElement | null = container;
+			for (let depth = 0; depth < 6 && cur; depth++) {
+				const tag = cur.tagName.toLowerCase();
+				const cls = cur.className ? `.${String(cur.className).split(/\s+/).slice(0, 3).join(".")}` : "";
+				const rect = cur.getBoundingClientRect();
+				const siblings: string[] = [];
+				if (cur.parentElement) {
+					for (let i = 0; i < cur.parentElement.children.length; i++) {
+						const sib = cur.parentElement.children[i] as HTMLElement;
+						const stag = sib.tagName.toLowerCase();
+						const scls = sib.className ? `.${String(sib.className).split(/\s+/).slice(0, 2).join(".")}` : "";
+						const vis = getComputedStyle(sib).display;
+						const sr = sib.getBoundingClientRect();
+						const marker = sib === cur ? ">>>" : "   ";
+						siblings.push(`${marker}${stag}${scls}[${vis}] h=${sr.height.toFixed(0)} y=${sr.top.toFixed(0)}`);
 					}
 				}
+				domLines.push(`L${depth}: ${tag}${cls} h=${rect.height.toFixed(0)} y=${rect.top.toFixed(0)}`);
+				if (siblings.length > 0) domLines.push(...siblings);
+				cur = cur.parentElement;
 			}
+			const debugEl = container.createDiv();
+			debugEl.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.92);color:#0f0;font-size:9px;padding:4px 6px;z-index:9999;font-family:monospace;white-space:pre;overflow:auto;-webkit-overflow-scrolling:touch;";
+			debugEl.textContent = domLines.join("\n");
 
 			let keyboardOpen = false;
 			let recalcTimer: ReturnType<typeof setTimeout> | null = null;
@@ -309,7 +325,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.4.4</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.4.5</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">总结一下这篇文章的要点</div>

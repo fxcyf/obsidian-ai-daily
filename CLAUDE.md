@@ -90,6 +90,12 @@ rebase 发生冲突时：
 - `src/feeds.ts` — 多源抓取（RSS/HN API/Reddit/GitHub Trending）、社交热度评分、时间衰减、爆发检测
 - `src/feed-generator.ts` — Feed 生成器，编排 RSS + vault 搜索 + Claude 汇总
 
+## 版本管理
+
+- **每次 push 到远端之前，必须升级版本号**（方便在移动端验证更新是否生效）
+- 版本号需要同步更新三处：`manifest.json`、`package.json`、`src/chat-view.ts` 中的欢迎页标题
+- 使用 patch 版本递增（如 0.2.1 → 0.2.2），除非是重大功能变更
+
 ## 注意事项
 
 - 在 worktree 中工作时，不要切换到其他分支

@@ -284,17 +284,20 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 			);
 
 		const rssSetting = new Setting(containerEl)
-			.setName("RSS 订阅源")
+			.setName("订阅源")
 			.setDesc(
 				`当前 ${this.plugin.settings.feedSources.length} 个源。` +
-				"编辑格式: 名称|URL|分类，每行一个"
+				"编辑格式: 名称|URL|分类|类型，每行一个。类型可选: rss(默认), hn, reddit, github-trending"
 			)
 			.addTextArea((text) =>
 				text
-					.setPlaceholder("ArXiv CS.AI|https://rss.arxiv.org/rss/cs.AI|research")
+					.setPlaceholder("ArXiv CS.AI|https://rss.arxiv.org/rss/cs.AI|research|rss")
 					.setValue(
 						this.plugin.settings.feedSources
-							.map((s) => `${s.name}|${s.url}|${s.category}`)
+							.map((s) => {
+								const type = s.type && s.type !== "rss" ? `|${s.type}` : "";
+								return `${s.name}|${s.url}|${s.category}${type}`;
+							})
 							.join("\n")
 					)
 					.onChange(async (value) => {
@@ -303,8 +306,15 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 							.map((line) => line.trim())
 							.filter(Boolean)
 							.map((line) => {
-								const [name, url, category] = line.split("|").map((s) => s.trim());
-								return { name: name || "", url: url || "", category: category || "other" };
+								const parts = line.split("|").map((s) => s.trim());
+								const [name, url, category] = parts;
+								const type = (parts[3] as FeedSource["type"]) || "rss";
+								return {
+									name: name || "",
+									url: url || "",
+									category: category || "other",
+									...(type !== "rss" ? { type } : {}),
+								};
 							})
 							.filter((s) => s.name && s.url);
 						this.plugin.settings.feedSources = sources;
@@ -314,7 +324,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 		rssSetting.settingEl.addClass("ai-daily-setting-full");
 		const rssTextarea = rssSetting.settingEl.querySelector("textarea");
 		if (rssTextarea) {
-			rssTextarea.rows = 10;
+			rssTextarea.rows = 12;
 		}
 	}
 }

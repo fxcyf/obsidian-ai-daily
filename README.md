@@ -11,7 +11,7 @@
 - **移动端优先** — 针对 iPhone 设计的 UI，纯 HTTP 调用 Claude API
 - **知识沉淀** — 对话中的洞察一键写回 Obsidian
 - **联网搜索** — Claude 可以搜索互联网获取最新信息，抓取网页全文阅读（Anthropic 内置 web_search + web_fetch）
-- **AI Feed 生成** — 一键抓取 RSS 订阅源，结合笔记库已有知识，AI 生成主题汇总笔记
+- **AI Feed 生成** — 多源抓取（RSS、Hacker News、Reddit、GitHub Trending），基于社交热度 + 时间衰减 + 跨源爆发检测排序，结合笔记库知识，AI 生成 trending 技术 Feed
 - **流式回复** — 桌面端走原生 fetch + SSE 真流（首字节通常 < 2s）；移动端 fetch CORS 不通时自动降级为客户端打字机回放，体验略打折但绝不报错
 - **对话存档** — 会话自动保存为 vault 内 JSON（默认 `.ai-chat/`），「历史」中可搜索与恢复
 - **上下文提示** — 底部显示估算 token 用量；超出阈值时可自动摘要早期对话以腾出上下文（可在设置中调节）
@@ -74,7 +74,7 @@ Obsidian → 设置 → 第三方插件 → 启用 AI Knowledge Chat。
 | Feed 文件夹 | 生成的 Feed 笔记存放位置 | `Feed` |
 | 关注主题 | 逗号分隔的关注主题列表 | — |
 | 最大文章数 | 每次 Feed 抓取的最大文章数 | 20 |
-| RSS 订阅源 | 可自定义的 RSS 源列表 | 预置 8 个源 |
+| 订阅源 | 多类型源列表（RSS/HN/Reddit/GitHub Trending） | 预置 10 个源 |
 
 ## 流式输出模式
 

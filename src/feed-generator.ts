@@ -12,17 +12,19 @@ const API_URL = "https://api.anthropic.com/v1/messages";
 // ── Claude prompt for feed generation ──────────────────────────────
 
 const FEED_SYSTEM_PROMPT = `你是一个 AI/ML 领域的资深技术编辑，读者是有经验的开发者和研究者。
-你的任务是基于 RSS 抓取的文章和用户笔记库中的相关内容，生成一份有深度的中文技术 Feed。
+你的任务是基于多来源抓取的文章（RSS、Hacker News、Reddit、GitHub Trending）和用户笔记库中的相关内容，生成一份有深度的中文技术 Feed。
 
 ## 内容筛选原则
-- 优先选择：论文解读、技术方案、开源工具、架构设计、实验结果
+- **优先呈现正在被社区热议的内容**：关注社交热度（points、upvotes、stars today）和评论数，这些是 trending 的关键信号
+- 多个来源同时提到同一话题 = 重要趋势，必须重点报道
+- 优先选择：热门讨论、论文解读、技术方案、开源工具、架构设计、实验结果
 - 降低优先级：企业合作新闻、产品发布公告、融资消息
 - 如果一条内容只是"XX公司做了XX"而没有技术细节，可以跳过或合并到简讯中
 
 ## 输出格式
 按主题分组输出 Markdown。每个主题下分三个来源：
 
-### 📌 主题名
+### 🔥 主题名（如果是多源交叉热点，标注「Trending」）
 
 #### 来自笔记库
 - 如果有相关笔记，用 [[笔记路径]] 格式引用，简要说明关联
@@ -31,12 +33,14 @@ const FEED_SYSTEM_PROMPT = `你是一个 AI/ML 领域的资深技术编辑，读
 #### 最新动态
 - 用 3-5 句话深入解读文章技术要点
 - 标注来源链接
+- 如有社区讨论亮点（高赞评论观点等），简要提及
 
 #### AI 分析
 - 综合以上信息，分析趋势和要点
 
 ## 其他要求
 - 值得深入阅读的标注「⭐ 推荐精读」
+- 社区热度特别高（500+ points/upvotes）的标注「🔥 热门」
 - 纯行业动态放到末尾「📋 行业简讯」区域，每条一句话
 - 输出纯 Markdown 格式
 - 宁可少选几篇深入解读，也不要堆砌大量浅层摘要`;
@@ -157,9 +161,16 @@ export async function generateFeed(
 
 	const articlesText = articles
 		.map(
-			(a) =>
-				`标题: ${a.title}\n来源: ${a.source}\n类型: ${a.category}\n` +
-				`相关度: ${a.relevanceScore}\n链接: ${a.url}\n摘要: ${a.summary || "无"}`
+			(a) => {
+				let text =
+					`标题: ${a.title}\n来源: ${a.source}\n类型: ${a.category}\n` +
+					`相关度: ${a.relevanceScore}\n链接: ${a.url}`;
+				if (a.socialScore > 0 || a.commentCount > 0) {
+					text += `\n热度: ${a.socialScore} points, ${a.commentCount} comments`;
+				}
+				text += `\n摘要: ${a.summary || "无"}`;
+				return text;
+			}
 		)
 		.join("\n\n");
 

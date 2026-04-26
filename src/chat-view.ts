@@ -188,17 +188,22 @@ export class ChatView extends ItemView {
 		this.showWelcome();
 
 		if (Platform.isMobile && window.visualViewport) {
+			const leaf = this.containerEl;
 			this.viewportHandler = () => {
 				const vv = window.visualViewport!;
 				const keyboardOpen = window.innerHeight - vv.height > 100;
 				container.toggleClass("ai-daily-keyboard-open", keyboardOpen);
 				if (keyboardOpen) {
-					container.style.height = `${vv.height - vv.offsetTop}px`;
+					const h = vv.height;
+					leaf.style.height = `${h}px`;
+					leaf.style.maxHeight = `${h}px`;
 				} else {
-					container.style.height = "";
+					leaf.style.height = "";
+					leaf.style.maxHeight = "";
 				}
 			};
 			window.visualViewport.addEventListener("resize", this.viewportHandler);
+			window.visualViewport.addEventListener("scroll", this.viewportHandler);
 		}
 	}
 
@@ -749,6 +754,9 @@ export class ChatView extends ItemView {
 		this.closeHistoryOverlay();
 		if (this.viewportHandler && window.visualViewport) {
 			window.visualViewport.removeEventListener("resize", this.viewportHandler);
+			window.visualViewport.removeEventListener("scroll", this.viewportHandler);
+			this.containerEl.style.height = "";
+			this.containerEl.style.maxHeight = "";
 			this.viewportHandler = null;
 		}
 	}

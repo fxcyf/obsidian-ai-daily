@@ -16,6 +16,28 @@ const API_URL = "https://api.anthropic.com/v1/messages";
 
 // ── Tool definitions ────────────────────────────────────────────────
 
+const WEB_SEARCH_TOOL = {
+	type: "web_search_20250305" as const,
+	name: "web_search",
+	max_uses: 5,
+};
+
+const WEB_FETCH_TOOL = {
+	name: "web_fetch",
+	description:
+		"抓取指定 URL 的网页内容，返回纯文本。用于阅读搜索结果中的具体页面、文章或文档。",
+	input_schema: {
+		type: "object" as const,
+		properties: {
+			url: {
+				type: "string",
+				description: "要抓取的完整 URL",
+			},
+		},
+		required: ["url"],
+	},
+};
+
 export const VAULT_TOOLS = [
 	{
 		name: "read_note",
@@ -158,9 +180,19 @@ export function estimateMessagesTokens(
 
 // ── Client ──────────────────────────────────────────────────────────
 
+export function buildToolsArray(enableWebSearch: boolean): Record<string, unknown>[] {
+	const tools: Record<string, unknown>[] = [...VAULT_TOOLS];
+	if (enableWebSearch) {
+		tools.push(WEB_SEARCH_TOOL, WEB_FETCH_TOOL);
+	}
+	return tools;
+}
+
 export interface ClaudeClientOptions {
 	/** Use SSE streaming when fetch is available (falls back on failure). */
 	stream?: boolean;
+	/** Enable web search and web fetch tools. */
+	enableWebSearch?: boolean;
 	/** Estimated token budget before compressing older turns (0 = disable). */
 	compressThresholdEst?: number;
 	/** Keep this many recent messages when compressing (must be ≥ 2). */
@@ -175,6 +207,7 @@ export class ClaudeClient {
 	private messages: ClaudeMessage[] = [];
 	private systemPrompt: string;
 	private stream: boolean;
+	private enableWebSearch: boolean;
 	private compressThresholdEst: number;
 	private compressKeepMessages: number;
 	private onCompress?: (detail: string) => void;
@@ -189,6 +222,7 @@ export class ClaudeClient {
 		this.model = model;
 		this.systemPrompt = systemPrompt;
 		this.stream = options?.stream !== false;
+		this.enableWebSearch = options?.enableWebSearch ?? false;
 		this.compressThresholdEst =
 			options?.compressThresholdEst ?? 90_000;
 		this.compressKeepMessages = Math.max(
@@ -430,7 +464,7 @@ export class ClaudeClient {
 			model: this.model,
 			max_tokens: 4096,
 			system: this.systemPrompt,
-			tools: VAULT_TOOLS,
+			tools: buildToolsArray(this.enableWebSearch),
 			messages: this.messages,
 		};
 	}

@@ -18,6 +18,8 @@ export interface AIDailyChatSettings {
 	chatCompressThresholdEst: number;
 	/** Displayed context budget for the token bar (informational). */
 	chatContextBudgetTokens: number;
+	/** Enable web search and web fetch tools for internet access. */
+	enableWebSearch: boolean;
 	// Feed settings
 	feedFolder: string;
 	feedTopics: string[];
@@ -36,6 +38,7 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	chatStreaming: true,
 	chatCompressThresholdEst: 90_000,
 	chatContextBudgetTokens: 200_000,
+	enableWebSearch: true,
 	feedFolder: "Feed",
 	feedTopics: [],
 	feedSources: DEFAULT_FEEDS,
@@ -164,6 +167,20 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.chatStreaming)
 					.onChange(async (value) => {
 						this.plugin.settings.chatStreaming = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("联网搜索")
+			.setDesc(
+				"启用后 Claude 可以搜索互联网并抓取网页内容（使用 Anthropic 内置 web_search + web_fetch 工具）"
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enableWebSearch)
+					.onChange(async (value) => {
+						this.plugin.settings.enableWebSearch = value;
 						await this.plugin.saveSettings();
 					})
 			);

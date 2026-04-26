@@ -15,6 +15,7 @@ import {
 import type AIDailyChat from "./main";
 import { ClaudeClient, estimateTextTokens } from "./claude";
 import { VaultTools } from "./vault-tools";
+import { WebTools } from "./web-tools";
 import {
 	newSessionId,
 	titleFromMessages,
@@ -76,6 +77,7 @@ export class ChatView extends ItemView {
 	private messages: ChatMessage[] = [];
 	private client: ClaudeClient | null = null;
 	private vaultTools: VaultTools | null = null;
+	private webTools: WebTools = new WebTools();
 	private messagesEl: HTMLElement = null!;
 	private inputEl: HTMLTextAreaElement = null!;
 	private tokenBarEl: HTMLElement = null!;
@@ -269,7 +271,10 @@ export class ChatView extends ItemView {
 		try {
 			const reply = await this.client!.chat(
 				text,
-				(name, input) => this.vaultTools!.execute(name, input),
+				(name, input) => {
+					if (name === "web_fetch") return this.webTools.execute(name, input);
+					return this.vaultTools!.execute(name, input);
+				},
 				useStream && assistantEl
 					? (_delta, accumulated) => {
 							loadingEl.remove();
@@ -322,6 +327,7 @@ export class ChatView extends ItemView {
 			contextDays,
 			chatStreaming,
 			chatCompressThresholdEst,
+			enableWebSearch,
 		} = this.plugin.settings;
 
 		this.vaultTools = new VaultTools(this.app, dailyFolder, knowledgeFolders);
@@ -341,6 +347,9 @@ export class ChatView extends ItemView {
 			"你是一个个人知识库助手。用户在 Obsidian 中管理自己的知识库，包括采集的原始文章（Raw/）、整理的知识条目（Wiki/）和每日笔记。",
 			`知识库文件夹: ${allFolders}`,
 			"你可以使用工具来读取、搜索、列出和写入 vault 中的笔记。支持按文件夹和标签（frontmatter tags）筛选搜索。",
+			enableWebSearch
+				? "你还可以使用 web_search 搜索互联网获取最新信息，用 web_fetch 抓取网页全文阅读。当用户提问涉及最新动态、你不确定的事实、或需要外部资料时，主动使用联网工具。"
+				: "",
 			"回答用中文，简洁有深度。如果用户想保存洞察，用 append_to_note 工具写回笔记。",
 			"",
 			currentNote
@@ -354,6 +363,7 @@ export class ChatView extends ItemView {
 
 		this.client = new ClaudeClient(apiKey, model, systemPrompt, {
 			stream: chatStreaming,
+			enableWebSearch,
 			compressThresholdEst: chatCompressThresholdEst,
 			onCompress: (detail) => {
 				new Notice(detail, 6000);

@@ -9,6 +9,8 @@ import {
 	setIcon,
 	Platform,
 	Notice,
+	Modal,
+	App,
 } from "obsidian";
 import type AIDailyChat from "./main";
 import { ClaudeClient, estimateTextTokens } from "./claude";
@@ -36,6 +38,37 @@ function formatTokenK(n: number): string {
 	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
 	if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
 	return String(Math.round(n));
+}
+
+class ConfirmModal extends Modal {
+	private message: string;
+	private onConfirm: () => void;
+
+	constructor(app: App, message: string, onConfirm: () => void) {
+		super(app);
+		this.message = message;
+		this.onConfirm = onConfirm;
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		contentEl.createEl("p", { text: this.message });
+		const btnRow = contentEl.createDiv({ cls: "ai-daily-confirm-btns" });
+		const confirmBtn = btnRow.createEl("button", {
+			text: "删除",
+			cls: "mod-warning",
+		});
+		const cancelBtn = btnRow.createEl("button", { text: "取消" });
+		confirmBtn.addEventListener("click", () => {
+			this.onConfirm();
+			this.close();
+		});
+		cancelBtn.addEventListener("click", () => this.close());
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
 }
 
 export class ChatView extends ItemView {
@@ -420,7 +453,37 @@ export class ChatView extends ItemView {
 
 		const head = overlay.createDiv({ cls: "ai-daily-history-head" });
 		head.createEl("span", { text: "历史对话", cls: "ai-daily-history-title" });
-		const closeBtn = head.createSpan({ cls: "ai-daily-history-close", text: "✕" });
+
+		const headActions = head.createDiv({ cls: "ai-daily-history-head-actions" });
+		const clearAllBtn = headActions.createSpan({
+			cls: "ai-daily-history-clear-all",
+			text: "清空全部",
+		});
+		clearAllBtn.addEventListener("click", () => {
+			if (sessions.length === 0) return;
+			new ConfirmModal(
+				this.app,
+				`确定删除全部 ${sessions.length} 条历史对话？此操作不可撤销。`,
+				async () => {
+					const { chatHistoryFolder } = this.plugin.settings;
+					for (const s of sessions) {
+						await deleteChatSessionFile(
+							this.app.vault,
+							chatHistoryFolder,
+							s.id
+						);
+					}
+					if (this.sessionId && sessions.some((s) => s.id === this.sessionId)) {
+						this.clearChat();
+					}
+					sessions = [];
+					renderList([]);
+					new Notice("已清空所有历史对话", 3000);
+				}
+			).open();
+		});
+
+		const closeBtn = headActions.createSpan({ cls: "ai-daily-history-close", text: "✕" });
 		closeBtn.addEventListener("click", () => {
 			overlay.remove();
 			this.historyOverlay = null;
@@ -453,27 +516,38 @@ export class ChatView extends ItemView {
 					this.historyOverlay = null;
 				});
 
-				const delBtn = row.createSpan({ cls: "ai-daily-history-row-del", text: "🗑" });
+				const delBtn = row.createSpan({ cls: "ai-daily-history-row-del" });
+				setIcon(delBtn, "trash-2");
 				delBtn.setAttribute("title", "删除");
-				delBtn.addEventListener("click", async (ev) => {
+				delBtn.addEventListener("click", (ev) => {
 					ev.stopPropagation();
-					const { chatHistoryFolder } = this.plugin.settings;
-					await deleteChatSessionFile(
-						this.app.vault,
-						chatHistoryFolder,
-						s.id
-					);
-					sessions = sessions.filter((x) => x.id !== s.id);
-					renderList(
-						sessions.filter((x) =>
-							search.value
-								? x.title
-										.toLowerCase()
-										.includes(search.value.toLowerCase()) ||
-								  x.id.toLowerCase().includes(search.value.toLowerCase())
-								: true
-						)
-					);
+					new ConfirmModal(
+						this.app,
+						`确定删除对话「${s.title || s.id}」？此操作不可撤销。`,
+						async () => {
+							const { chatHistoryFolder } = this.plugin.settings;
+							await deleteChatSessionFile(
+								this.app.vault,
+								chatHistoryFolder,
+								s.id
+							);
+							if (this.sessionId === s.id) {
+								this.clearChat();
+							}
+							sessions = sessions.filter((x) => x.id !== s.id);
+							renderList(
+								sessions.filter((x) =>
+									search.value
+										? x.title
+												.toLowerCase()
+												.includes(search.value.toLowerCase()) ||
+										  x.id.toLowerCase().includes(search.value.toLowerCase())
+										: true
+								)
+							);
+							new Notice("对话已删除", 3000);
+						}
+					).open();
 				});
 			}
 			if (items.length === 0) {

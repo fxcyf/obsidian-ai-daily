@@ -254,6 +254,26 @@
 	font-size: 14px;
 }
 
+.ai-daily-history-head-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.ai-daily-history-clear-all {
+	cursor: pointer;
+	padding: 3px 8px;
+	font-size: 11px;
+	color: var(--text-error);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+}
+
+.ai-daily-history-clear-all:hover {
+	background: var(--background-modifier-error);
+	color: var(--text-on-accent);
+}
+
 .ai-daily-history-close {
 	cursor: pointer;
 	padding: 4px 8px;
@@ -322,8 +342,13 @@
 	cursor: pointer;
 	opacity: 0;
 	transition: opacity 0.15s;
-	font-size: 14px;
 	line-height: 1;
+	color: var(--text-muted);
+}
+
+.ai-daily-history-row-del svg {
+	width: 14px;
+	height: 14px;
 }
 
 .ai-daily-history-row:hover .ai-daily-history-row-del {
@@ -344,4 +369,13 @@
 
 .ai-daily-msg-streaming {
 	min-height: 1.5em;
+}
+
+/* ── Confirm modal ────────────────────────────────────── */
+
+.ai-daily-confirm-btns {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 16px;
 }

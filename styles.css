@@ -98,6 +98,10 @@
 	padding-bottom: max(8px, env(safe-area-inset-bottom));
 }
 
+.is-mobile .ai-daily-input-area {
+	padding-bottom: 48px;
+}
+
 .ai-daily-keyboard-open .ai-daily-input-area {
 	padding-bottom: 8px;
 }

@@ -131,6 +131,19 @@ export class ChatView extends ItemView {
 
 		this.headerEl = container.createDiv({ cls: "ai-daily-header" });
 
+		if (Platform.isMobile) {
+			const backBtn = this.headerEl.createDiv({
+				cls: "ai-daily-header-btn",
+				attr: { "aria-label": "返回", title: "返回" },
+			});
+			setIcon(backBtn, "arrow-left");
+			backBtn.addEventListener("click", () => {
+				this.leaf.detach();
+			});
+			const spacer = this.headerEl.createDiv();
+			spacer.style.flex = "1";
+		}
+
 		const feedBtn = this.headerEl.createDiv({
 			cls: "ai-daily-header-btn ai-daily-header-btn-primary",
 			attr: { "aria-label": "生成 Feed", title: "生成 Feed" },

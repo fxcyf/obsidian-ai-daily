@@ -37,8 +37,10 @@
 }
 
 .ai-daily-msg-assistant {
-	background: var(--background-secondary);
-	border-bottom-left-radius: 4px;
+	background: none;
+	max-width: 100%;
+	padding: 2px 0;
+	border-radius: 0;
 }
 
 .ai-daily-msg-assistant p {

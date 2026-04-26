@@ -208,8 +208,20 @@ export class ChatView extends ItemView {
 
 			container.style.setProperty("padding-bottom", "0", "important");
 
+			// Hide Obsidian chrome (view selector, doc stats) — siblings of our container
+			const parent = container.parentElement;
+			if (parent) {
+				for (let i = 0; i < parent.children.length; i++) {
+					const child = parent.children[i] as HTMLElement;
+					if (child !== container) {
+						child.style.display = "none";
+					}
+				}
+			}
+
 			let keyboardOpen = false;
 			let recalcTimer: ReturnType<typeof setTimeout> | null = null;
+			let kbPollId: ReturnType<typeof setInterval> | null = null;
 
 			const recalcPadding = () => {
 				container.style.removeProperty("padding-bottom");
@@ -235,20 +247,17 @@ export class ChatView extends ItemView {
 			resizeObs.observe(container.parentElement!);
 			this.register(() => resizeObs.disconnect());
 
-			if (window.visualViewport) {
-				const vpHandler = () => { if (keyboardOpen) scheduleRecalc(); };
-				window.visualViewport.addEventListener("resize", vpHandler);
-				this.register(() => window.visualViewport?.removeEventListener("resize", vpHandler));
-			}
-
 			this.inputEl.addEventListener("focus", () => {
 				keyboardOpen = true;
 				container.addClass("ai-daily-keyboard-open");
 				scheduleRecalc();
+				if (kbPollId) clearInterval(kbPollId);
+				kbPollId = setInterval(recalcPadding, 500);
 			});
 			this.inputEl.addEventListener("blur", () => {
 				keyboardOpen = false;
 				if (recalcTimer) { clearTimeout(recalcTimer); recalcTimer = null; }
+				if (kbPollId) { clearInterval(kbPollId); kbPollId = null; }
 				container.removeClass("ai-daily-keyboard-open");
 				container.style.setProperty("padding-bottom", "0", "important");
 			});
@@ -300,7 +309,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.4.3</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.4.4</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">总结一下这篇文章的要点</div>

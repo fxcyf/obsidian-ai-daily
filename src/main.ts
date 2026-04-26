@@ -99,6 +99,15 @@ export default class AIDailyChat extends Plugin {
 
 		// Settings tab
 		this.addSettingTab(new AIDailyChatSettingTab(this.app, this));
+
+		if (Platform.isMobile) {
+			this.app.workspace.onLayoutReady(() => {
+				const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
+				if (leaf && this.isLeafInSidebar(leaf)) {
+					leaf.detach();
+				}
+			});
+		}
 	}
 
 	async chatAboutCurrentNote(): Promise<void> {
@@ -110,10 +119,19 @@ export default class AIDailyChat extends Plugin {
 		}
 	}
 
+	private isLeafInSidebar(leaf: import("obsidian").WorkspaceLeaf): boolean {
+		return leaf.getRoot() !== this.app.workspace.rootSplit;
+	}
+
 	async activateView(): Promise<void> {
 		const { workspace } = this.app;
 
 		let leaf = workspace.getLeavesOfType(VIEW_TYPE)[0];
+
+		if (leaf && Platform.isMobile && this.isLeafInSidebar(leaf)) {
+			leaf.detach();
+			leaf = undefined as unknown as import("obsidian").WorkspaceLeaf;
+		}
 
 		if (!leaf) {
 			if (Platform.isMobile) {

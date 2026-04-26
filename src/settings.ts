@@ -3,31 +3,35 @@ import type AIDailyChat from "./main";
 import { DEFAULT_FEEDS, type FeedSource } from "./feeds";
 import type { StreamMode } from "./claude";
 
+export interface PromptTemplate {
+	name: string;
+	prompt: string;
+	builtin?: boolean;
+}
+
+export const DEFAULT_PROMPT_TEMPLATES: PromptTemplate[] = [
+	{ name: "总结要点", prompt: "总结这篇文章的要点", builtin: true },
+	{ name: "生成 Wiki 条目", prompt: "提取关键概念，生成 Wiki 条目", builtin: true },
+	{ name: "翻译为中文", prompt: "翻译为中文", builtin: true },
+	{ name: "翻译为英文", prompt: "翻译为英文", builtin: true },
+	{ name: "生成闪卡", prompt: "根据这篇笔记生成复习闪卡", builtin: true },
+	{ name: "查找相关笔记", prompt: "找出知识库中与当前笔记相关的内容", builtin: true },
+];
+
 export interface AIDailyChatSettings {
 	apiKey: string;
 	knowledgeFolders: string[];
 	model: string;
-	/** Vault folder for persisted chats (hidden folder recommended). */
 	chatHistoryFolder: string;
-	/** Delete chat JSON files not updated within this many days (0 = never auto-delete). */
 	chatHistoryRetentionDays: number;
-	/**
-	 * Streaming 调度模式：
-	 *   auto       (默认) 真流→打字机自动降级，桌面享流式、移动端兜底
-	 *   real       仅真流，失败直接报错（调试用）
-	 *   typewriter requestUrl 整段返回 + 客户端切片回放
-	 *   off        一次性返回，无动画
-	 */
 	chatStreamMode: StreamMode;
-	/** Estimated token threshold to trigger automatic history summarization (0 = off). */
 	chatCompressThresholdEst: number;
-	/** Displayed context budget for the token bar (informational). */
 	chatContextBudgetTokens: number;
-	/** Enable web search and web fetch tools for internet access. */
 	enableWebSearch: boolean;
+	promptTemplates: PromptTemplate[];
+	chatExportFolder: string;
 	// Feed settings
 	feedFolder: string;
-	/** Model used for feed generation (empty = use chat model). */
 	feedModel: string;
 	feedTopics: string[];
 	feedSources: FeedSource[];
@@ -44,6 +48,8 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	chatCompressThresholdEst: 90_000,
 	chatContextBudgetTokens: 200_000,
 	enableWebSearch: true,
+	promptTemplates: DEFAULT_PROMPT_TEMPLATES,
+	chatExportFolder: "AI Chats",
 	feedFolder: "Feed",
 	feedModel: "",
 	feedTopics: [],
@@ -205,6 +211,25 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
+		new Setting(containerEl)
+			.setName("对话导出文件夹")
+			.setDesc("导出对话为笔记时的存放位置")
+			.addText((text) =>
+				text
+					.setPlaceholder("AI Chats")
+					.setValue(this.plugin.settings.chatExportFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.chatExportFolder = value.trim() || "AI Chats";
+						await this.plugin.saveSettings();
+					})
+			);
+
+		// ── Prompt templates ───────────────────────────────────
+
+		containerEl.createEl("h3", { text: "Prompt 模板" });
+
+		this.renderPromptTemplates(containerEl);
+
 		// ── Feed settings ──────────────────────────────────────
 
 		containerEl.createEl("h3", { text: "Feed 设置" });
@@ -274,6 +299,107 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 			);
 
 		this.renderFeedSourceList(containerEl);
+	}
+
+	private renderPromptTemplates(containerEl: HTMLElement): void {
+		const wrapper = containerEl.createDiv({ cls: "ai-daily-prompt-templates" });
+
+		const desc = new Setting(wrapper)
+			.setName("在输入框中键入 / 可快速选择模板")
+			.addButton((btn) =>
+				btn.setButtonText("添加模板").setCta().onClick(async () => {
+					this.plugin.settings.promptTemplates.push({
+						name: "",
+						prompt: "",
+					});
+					await this.plugin.saveSettings();
+					this.display();
+				})
+			);
+		desc.settingEl.addClass("ai-daily-setting-desc-only");
+
+		for (let i = 0; i < this.plugin.settings.promptTemplates.length; i++) {
+			const tpl = this.plugin.settings.promptTemplates[i];
+			const s = new Setting(wrapper)
+				.setName(tpl.name || "(未命名)")
+				.setDesc(tpl.prompt.slice(0, 60) + (tpl.prompt.length > 60 ? "…" : ""));
+
+			s.addButton((btn) =>
+				btn
+					.setIcon("pencil")
+					.setTooltip("编辑")
+					.onClick(() => {
+						this.openTemplateEditor(wrapper, i);
+					})
+			);
+
+			if (!tpl.builtin) {
+				s.addButton((btn) =>
+					btn
+						.setIcon("trash-2")
+						.setTooltip("删除")
+						.onClick(async () => {
+							this.plugin.settings.promptTemplates.splice(i, 1);
+							await this.plugin.saveSettings();
+							this.display();
+						})
+				);
+			}
+		}
+	}
+
+	private openTemplateEditor(wrapper: HTMLElement, index: number): void {
+		const tpl = this.plugin.settings.promptTemplates[index];
+		if (!tpl) return;
+
+		wrapper
+			.querySelectorAll(".ai-daily-template-editor")
+			.forEach((el) => el.remove());
+
+		const editor = wrapper.createDiv({ cls: "ai-daily-template-editor ai-daily-feed-source-editor" });
+
+		const nameField = editor.createDiv({ cls: "ai-daily-feed-editor-field" });
+		nameField.createEl("label", { text: "名称" });
+		const nameInput = nameField.createEl("input", {
+			type: "text",
+			placeholder: "模板名称",
+			value: tpl.name,
+		});
+
+		const promptField = editor.createDiv({ cls: "ai-daily-feed-editor-field" });
+		promptField.createEl("label", { text: "Prompt" });
+		const promptInput = promptField.createEl("textarea", {
+			placeholder: "输入 prompt 内容…",
+		});
+		promptInput.value = tpl.prompt;
+		promptInput.rows = 3;
+		promptInput.style.width = "100%";
+		promptInput.style.resize = "vertical";
+
+		const btnRow = editor.createDiv({ cls: "ai-daily-feed-editor-btns" });
+		const saveBtn = btnRow.createEl("button", { text: "保存", cls: "mod-cta" });
+		const cancelBtn = btnRow.createEl("button", { text: "取消" });
+
+		saveBtn.addEventListener("click", async () => {
+			const name = nameInput.value.trim();
+			const prompt = promptInput.value.trim();
+			if (!name || !prompt) {
+				saveBtn.textContent = "请填写名称和内容";
+				setTimeout(() => { saveBtn.textContent = "保存"; }, 1500);
+				return;
+			}
+			tpl.name = name;
+			tpl.prompt = prompt;
+			await this.plugin.saveSettings();
+			this.display();
+		});
+
+		cancelBtn.addEventListener("click", () => {
+			if (!tpl.name && !tpl.prompt) {
+				this.plugin.settings.promptTemplates.splice(index, 1);
+			}
+			this.display();
+		});
 	}
 
 	private renderFeedSourceList(containerEl: HTMLElement): void {

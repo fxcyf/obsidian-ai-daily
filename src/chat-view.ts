@@ -16,6 +16,7 @@ import type AIDailyChat from "./main";
 import { ClaudeClient, estimateTextTokens } from "./claude";
 import { VaultTools } from "./vault-tools";
 import { WebTools } from "./web-tools";
+import type { PromptTemplate } from "./settings";
 import {
 	newSessionId,
 	titleFromMessages,
@@ -87,10 +88,10 @@ export class ChatView extends ItemView {
 	private tokenBarEl!: HTMLElement;
 	private historyOverlay: HTMLElement | null = null;
 	private historyOverlayResizeCleanup: (() => void) | null = null;
+	private templatePopupEl: HTMLElement | null = null;
 	private isLoading = false;
 	private userScrolledUp = false;
 	private cachedTokenCount = 0;
-	/** Current vault session file id (filename stem). */
 	private sessionId: string | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AIDailyChat) {
@@ -172,6 +173,13 @@ export class ChatView extends ItemView {
 		setIcon(feedBtn, "rss");
 		feedBtn.addEventListener("click", () => this.plugin.generateFeed());
 
+		const exportBtn = this.headerEl.createDiv({
+			cls: "ai-daily-header-btn",
+			attr: { "aria-label": "导出对话", title: "导出对话" },
+		});
+		setIcon(exportBtn, "download");
+		exportBtn.addEventListener("click", () => this.exportChat());
+
 		const historyBtn = this.headerEl.createDiv({
 			cls: "ai-daily-header-btn",
 			attr: { "aria-label": "历史", title: "历史" },
@@ -192,7 +200,7 @@ export class ChatView extends ItemView {
 
 		this.inputEl = this.inputAreaEl.createEl("textarea", {
 			cls: "ai-daily-input",
-			attr: { placeholder: "问点什么...", rows: "1" },
+			attr: { placeholder: "问点什么… 输入 / 选择模板", rows: "1" },
 		});
 
 		const sendBtn = this.inputAreaEl.createEl("button", {
@@ -205,8 +213,29 @@ export class ChatView extends ItemView {
 			this.inputEl.style.height = "auto";
 			this.inputEl.style.height =
 				Math.min(this.inputEl.scrollHeight, 120) + "px";
+			this.handleTemplateInput();
 		});
 		this.inputEl.addEventListener("keydown", (e) => {
+			if (this.templatePopupEl) {
+				if (e.key === "Escape") {
+					e.preventDefault();
+					this.closeTemplatePopup();
+					return;
+				}
+				if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+					e.preventDefault();
+					this.navigateTemplatePopup(e.key === "ArrowDown" ? 1 : -1);
+					return;
+				}
+				if (e.key === "Enter") {
+					const active = this.templatePopupEl.querySelector(".ai-daily-template-item-active");
+					if (active) {
+						e.preventDefault();
+						(active as HTMLElement).click();
+						return;
+					}
+				}
+			}
 			if (e.key === "Enter") {
 				if (Platform.isMobile) return;
 				if (!e.shiftKey) {
@@ -216,6 +245,221 @@ export class ChatView extends ItemView {
 			}
 		});
 	}
+
+	// ── Prompt template popup ──────────────────────────────
+
+	private handleTemplateInput(): void {
+		const value = this.inputEl.value;
+		if (value.startsWith("/")) {
+			const query = value.slice(1).toLowerCase();
+			const templates = this.plugin.settings.promptTemplates;
+			const filtered = query
+				? templates.filter(
+						(t) =>
+							t.name.toLowerCase().includes(query) ||
+							t.prompt.toLowerCase().includes(query)
+				  )
+				: templates;
+			if (filtered.length > 0) {
+				this.showTemplatePopup(filtered);
+			} else {
+				this.closeTemplatePopup();
+			}
+		} else {
+			this.closeTemplatePopup();
+		}
+	}
+
+	private showTemplatePopup(templates: PromptTemplate[]): void {
+		this.closeTemplatePopup();
+		const popup = this.inputAreaEl.createDiv({ cls: "ai-daily-template-popup" });
+		this.templatePopupEl = popup;
+
+		for (let i = 0; i < templates.length; i++) {
+			const tpl = templates[i];
+			const item = popup.createDiv({
+				cls: `ai-daily-template-item${i === 0 ? " ai-daily-template-item-active" : ""}`,
+			});
+			item.createDiv({ cls: "ai-daily-template-item-name", text: tpl.name });
+			item.createDiv({
+				cls: "ai-daily-template-item-prompt",
+				text: tpl.prompt.length > 50 ? tpl.prompt.slice(0, 50) + "…" : tpl.prompt,
+			});
+			item.addEventListener("click", () => {
+				this.inputEl.value = tpl.prompt;
+				this.inputEl.style.height = "auto";
+				this.inputEl.style.height =
+					Math.min(this.inputEl.scrollHeight, 120) + "px";
+				this.closeTemplatePopup();
+				this.inputEl.focus();
+			});
+		}
+	}
+
+	private navigateTemplatePopup(direction: number): void {
+		if (!this.templatePopupEl) return;
+		const items = Array.from(
+			this.templatePopupEl.querySelectorAll(".ai-daily-template-item")
+		);
+		const activeIndex = items.findIndex((el) =>
+			el.classList.contains("ai-daily-template-item-active")
+		);
+		items[activeIndex]?.classList.remove("ai-daily-template-item-active");
+		const next = (activeIndex + direction + items.length) % items.length;
+		items[next]?.classList.add("ai-daily-template-item-active");
+		items[next]?.scrollIntoView({ block: "nearest" });
+	}
+
+	private closeTemplatePopup(): void {
+		if (this.templatePopupEl) {
+			this.templatePopupEl.remove();
+			this.templatePopupEl = null;
+		}
+	}
+
+	// ── Post-processing: wiki-links & code copy buttons ───
+
+	private postProcessAssistantEl(el: HTMLElement): void {
+		this.processWikiLinks(el);
+		this.processCodeBlocks(el);
+	}
+
+	private processWikiLinks(el: HTMLElement): void {
+		const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+		const wikiLinkRe = /\[\[([^\]]+)\]\]/g;
+		const replacements: { node: Text; frag: DocumentFragment }[] = [];
+
+		let textNode: Text | null;
+		while ((textNode = walker.nextNode() as Text | null)) {
+			if (textNode.parentElement?.closest("pre, code, a")) continue;
+
+			const text = textNode.textContent ?? "";
+			if (!wikiLinkRe.test(text)) continue;
+			wikiLinkRe.lastIndex = 0;
+
+			const frag = document.createDocumentFragment();
+			let lastIndex = 0;
+			let match: RegExpExecArray | null;
+
+			while ((match = wikiLinkRe.exec(text)) !== null) {
+				if (match.index > lastIndex) {
+					frag.appendChild(
+						document.createTextNode(text.slice(lastIndex, match.index))
+					);
+				}
+				const linkText = match[1];
+				const resolved = this.app.metadataCache.getFirstLinkpathDest(
+					linkText,
+					""
+				);
+				const link = document.createElement("a");
+				link.className = "ai-daily-wiki-link";
+				link.textContent = linkText;
+				link.setAttribute("data-href", linkText);
+				if (resolved) {
+					link.classList.add("ai-daily-wiki-link-resolved");
+					link.addEventListener("click", (e) => {
+						e.preventDefault();
+						this.app.workspace.openLinkText(linkText, "", false);
+					});
+				} else {
+					link.classList.add("ai-daily-wiki-link-unresolved");
+				}
+				frag.appendChild(link);
+				lastIndex = match.index + match[0].length;
+			}
+			if (lastIndex < text.length) {
+				frag.appendChild(document.createTextNode(text.slice(lastIndex)));
+			}
+			replacements.push({ node: textNode, frag });
+		}
+
+		for (const { node, frag } of replacements) {
+			node.parentNode?.replaceChild(frag, node);
+		}
+	}
+
+	private processCodeBlocks(el: HTMLElement): void {
+		el.querySelectorAll("pre > code").forEach((codeEl) => {
+			const pre = codeEl.parentElement!;
+			if (pre.querySelector(".ai-daily-copy-btn")) return;
+
+			const btn = pre.createDiv({ cls: "ai-daily-copy-btn" });
+			setIcon(btn, "copy");
+			btn.setAttribute("aria-label", "复制");
+			btn.addEventListener("click", async () => {
+				const text = codeEl.textContent ?? "";
+				await navigator.clipboard.writeText(text);
+				btn.empty();
+				setIcon(btn, "check");
+				btn.classList.add("ai-daily-copy-btn-done");
+				setTimeout(() => {
+					btn.empty();
+					setIcon(btn, "copy");
+					btn.classList.remove("ai-daily-copy-btn-done");
+				}, 2000);
+			});
+		});
+	}
+
+	// ── Export conversation ────────────────────────────────
+
+	private async exportChat(): Promise<void> {
+		if (this.messages.length === 0) {
+			new Notice("没有对话内容可导出", 3000);
+			return;
+		}
+
+		const { chatExportFolder, model } = this.plugin.settings;
+		const vault = this.app.vault;
+
+		const folder = vault.getAbstractFileByPath(chatExportFolder);
+		if (!folder) {
+			await vault.createFolder(chatExportFolder);
+		}
+
+		const now = new Date();
+		const dateStr = now.toISOString().slice(0, 10);
+		const timeStr = now.toISOString().slice(11, 16).replace(":", "");
+
+		const title = titleFromMessages(
+			this.messages.map((m) => ({ role: m.role, content: m.content }))
+		);
+		const safeTitle = title
+			.replace(/[\\/:*?"<>|]/g, "")
+			.slice(0, 40)
+			.trim();
+
+		const filename = `${chatExportFolder}/${dateStr} ${safeTitle} ${timeStr}.md`;
+
+		const lines: string[] = [
+			"---",
+			"type: chat-export",
+			`date: ${dateStr}`,
+			`model: ${model}`,
+			"tags: [ai-chat]",
+			"---",
+			"",
+			`# AI 对话 - ${dateStr}`,
+			"",
+		];
+
+		for (const m of this.messages) {
+			if (m.role === "user") {
+				lines.push(`## Q: ${m.content.split("\n")[0]}`, "");
+				if (m.content.includes("\n")) {
+					lines.push(m.content.split("\n").slice(1).join("\n"), "");
+				}
+			} else {
+				lines.push(m.content, "");
+			}
+		}
+
+		const file = await vault.create(filename, lines.join("\n"));
+		new Notice(`对话已导出: ${file.path}`, 5000);
+	}
+
+	// ── Mobile keyboard ───────────────────────────────────
 
 	private setupMobileKeyboard(container: HTMLElement): void {
 		const inMainArea = this.leaf.getRoot() === this.app.workspace.rootSplit;
@@ -354,6 +598,8 @@ export class ChatView extends ItemView {
 	}
 
 	private async handleSend(): Promise<void> {
+		this.closeTemplatePopup();
+
 		const text = this.inputEl.value.trim();
 		if (!text || this.isLoading) return;
 		this.isLoading = true;
@@ -458,6 +704,7 @@ export class ChatView extends ItemView {
 
 			if (useStream && assistantEl) {
 				await flushStreamingMarkdown(reply);
+				this.postProcessAssistantEl(assistantEl);
 				assistantEl.removeClass("ai-daily-msg-streaming");
 				this.messages.push({ role: "assistant", content: reply });
 				this.cachedTokenCount += estimateTextTokens(reply);
@@ -515,6 +762,7 @@ export class ChatView extends ItemView {
 				? "你还可以使用 web_search 搜索互联网获取最新信息，用 web_fetch 抓取网页全文阅读。当用户提问涉及最新动态、你不确定的事实、或需要外部资料时，主动使用联网工具。"
 				: "",
 			"回答用中文，简洁有深度。如果用户想保存洞察，用 append_to_note 工具写回笔记。",
+			"��回复中引用笔记时，请使用 [[笔记名]] 的 wiki-link 格式，以便用户可以直接点击跳转。",
 			"",
 			currentNote
 				? `## 当前打开的笔记\n\n文件: ${activeFile!.path}\n\n${currentNote}`
@@ -593,7 +841,9 @@ export class ChatView extends ItemView {
 				msgEl,
 				"",
 				this.plugin
-			);
+			).then(() => {
+				this.postProcessAssistantEl(msgEl);
+			});
 		} else {
 			msgEl.setText(content);
 		}
@@ -828,6 +1078,7 @@ export class ChatView extends ItemView {
 					"",
 					this.plugin
 				);
+				this.postProcessAssistantEl(msgEl);
 			} else {
 				msgEl.setText(m.content);
 			}
@@ -846,5 +1097,6 @@ export class ChatView extends ItemView {
 
 	async onClose(): Promise<void> {
 		this.closeHistoryOverlay();
+		this.closeTemplatePopup();
 	}
 }

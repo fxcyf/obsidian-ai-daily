@@ -492,15 +492,15 @@
 }
 
 .ai-daily-feed-badge-type[data-type="hn"] {
-	background: #ff6600;
+	background: var(--text-warning, var(--interactive-accent));
 }
 
 .ai-daily-feed-badge-type[data-type="reddit"] {
-	background: #ff4500;
+	background: var(--text-error, var(--interactive-accent));
 }
 
 .ai-daily-feed-badge-type[data-type="github-trending"] {
-	background: #238636;
+	background: var(--interactive-success, var(--interactive-accent));
 }
 
 .ai-daily-feed-badge-cat {
@@ -606,4 +606,143 @@
 	border-radius: 6px;
 	font-size: 13px;
 	cursor: pointer;
+}
+
+/* ── Prompt template popup ───────────────────────────────── */
+
+.ai-daily-input-area {
+	position: relative;
+}
+
+.ai-daily-template-popup {
+	position: absolute;
+	bottom: 100%;
+	left: 0;
+	right: 44px;
+	max-height: 240px;
+	overflow-y: auto;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	margin-bottom: 4px;
+	box-shadow: var(--shadow-s);
+	z-index: 20;
+	-webkit-overflow-scrolling: touch;
+}
+
+.ai-daily-template-item {
+	padding: 8px 12px;
+	cursor: pointer;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.ai-daily-template-item:last-child {
+	border-bottom: none;
+}
+
+.ai-daily-template-item:hover,
+.ai-daily-template-item-active {
+	background: var(--background-modifier-hover);
+}
+
+.ai-daily-template-item-name {
+	font-size: 13px;
+	font-weight: 500;
+}
+
+.ai-daily-template-item-prompt {
+	font-size: 11px;
+	color: var(--text-muted);
+	margin-top: 2px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* ── Wiki-links in assistant replies ─────────────────────── */
+
+.ai-daily-wiki-link {
+	cursor: pointer;
+	text-decoration: none;
+	border-bottom: 1px dashed;
+}
+
+.ai-daily-wiki-link-resolved {
+	color: var(--link-color, var(--interactive-accent));
+}
+
+.ai-daily-wiki-link-resolved:hover {
+	color: var(--link-color-hover, var(--interactive-accent-hover));
+	border-bottom-style: solid;
+}
+
+.ai-daily-wiki-link-unresolved {
+	color: var(--text-faint);
+	cursor: default;
+	border-bottom-style: dotted;
+}
+
+/* ── Code block copy button ──────────────────────────────── */
+
+.ai-daily-msg-assistant pre {
+	position: relative;
+}
+
+.ai-daily-copy-btn {
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	width: 28px;
+	height: 28px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 6px;
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 0.15s;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	border: 1px solid var(--background-modifier-border);
+}
+
+.ai-daily-copy-btn svg {
+	width: 14px;
+	height: 14px;
+}
+
+.ai-daily-msg-assistant pre:hover .ai-daily-copy-btn {
+	opacity: 1;
+}
+
+.ai-daily-copy-btn:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.ai-daily-copy-btn-done {
+	color: var(--interactive-success, var(--interactive-accent));
+	opacity: 1;
+}
+
+/* ── Settings: desc-only style ───────────────────────────── */
+
+.ai-daily-setting-desc-only .setting-item-info {
+	flex: 1;
+}
+
+.ai-daily-feed-editor-field textarea {
+	width: 100%;
+	padding: 6px 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	font-size: 13px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-family: inherit;
+}
+
+.ai-daily-feed-editor-field textarea:focus {
+	border-color: var(--interactive-accent);
+	outline: none;
 }

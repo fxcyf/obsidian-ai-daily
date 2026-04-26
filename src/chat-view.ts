@@ -292,7 +292,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.3.8</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.3.9</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">总结一下这篇文章的要点</div>
@@ -397,9 +397,14 @@ export class ChatView extends ItemView {
 					if (name === "web_fetch") return this.webTools.execute(name, input);
 					return this.vaultTools!.execute(name, input);
 				},
-				useStream && assistantEl
+				useStream
 					? (_delta, accumulated) => {
 							loadingEl.remove();
+							if (!assistantEl) {
+								assistantEl = this.messagesEl.createDiv({
+									cls: "ai-daily-msg ai-daily-msg-assistant ai-daily-msg-streaming",
+								});
+							}
 							scheduleStreamingMarkdown(accumulated);
 						}
 					: undefined

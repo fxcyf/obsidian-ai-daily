@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Plugin } from "obsidian";
+import { App, Modal, Notice, Platform, Plugin } from "obsidian";
 import {
 	AIDailyChatSettings,
 	DEFAULT_SETTINGS,
@@ -116,9 +116,13 @@ export default class AIDailyChat extends Plugin {
 		let leaf = workspace.getLeavesOfType(VIEW_TYPE)[0];
 
 		if (!leaf) {
-			const rightLeaf = workspace.getRightLeaf(false);
-			if (rightLeaf) {
-				leaf = rightLeaf;
+			if (Platform.isMobile) {
+				leaf = workspace.getLeaf(true);
+			} else {
+				const rightLeaf = workspace.getRightLeaf(false);
+				if (rightLeaf) leaf = rightLeaf;
+			}
+			if (leaf) {
 				await leaf.setViewState({ type: VIEW_TYPE, active: true });
 			}
 		}

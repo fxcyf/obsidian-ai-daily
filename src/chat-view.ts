@@ -188,24 +188,19 @@ export class ChatView extends ItemView {
 		this.showWelcome();
 
 		if (Platform.isMobile && window.visualViewport) {
-			this.viewportHandler = () => {
+			const applyViewportHeight = () => {
 				const vv = window.visualViewport!;
+				const rect = container.getBoundingClientRect();
+				const h = vv.height - rect.top;
+				container.style.setProperty("height", `${h}px`, "important");
+				container.style.setProperty("max-height", `${h}px`, "important");
 				const keyboardOpen = window.innerHeight - vv.height > 100;
 				container.toggleClass("ai-daily-keyboard-open", keyboardOpen);
-				if (keyboardOpen) {
-					const rect = container.getBoundingClientRect();
-					const h = vv.height + vv.offsetTop - rect.top;
-					container.style.setProperty("height", `${h}px`, "important");
-					container.style.setProperty("max-height", `${h}px`, "important");
-					container.style.overflow = "hidden";
-				} else {
-					container.style.removeProperty("height");
-					container.style.removeProperty("max-height");
-					container.style.overflow = "";
-				}
 			};
+			this.viewportHandler = applyViewportHeight;
 			window.visualViewport.addEventListener("resize", this.viewportHandler);
 			window.visualViewport.addEventListener("scroll", this.viewportHandler);
+			applyViewportHeight();
 		}
 	}
 
@@ -255,7 +250,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.2.3</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.2.4</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">总结一下这篇文章的要点</div>
@@ -759,7 +754,6 @@ export class ChatView extends ItemView {
 			window.visualViewport.removeEventListener("scroll", this.viewportHandler);
 			this.chatContainerEl.style.removeProperty("height");
 			this.chatContainerEl.style.removeProperty("max-height");
-			this.chatContainerEl.style.overflow = "";
 			this.viewportHandler = null;
 		}
 	}

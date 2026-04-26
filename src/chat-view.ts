@@ -90,6 +90,7 @@ export class ChatView extends ItemView {
 	private isLoading = false;
 	/** Current vault session file id (filename stem). */
 	private sessionId: string | null = null;
+	private viewportHandler: (() => void) | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AIDailyChat) {
 		super(leaf);
@@ -185,6 +186,15 @@ export class ChatView extends ItemView {
 		});
 
 		this.showWelcome();
+
+		if (Platform.isMobile && window.visualViewport) {
+			this.viewportHandler = () => {
+				const vv = window.visualViewport!;
+				const keyboardOpen = window.innerHeight - vv.height > 100;
+				container.toggleClass("ai-daily-keyboard-open", keyboardOpen);
+			};
+			window.visualViewport.addEventListener("resize", this.viewportHandler);
+		}
 	}
 
 	private updateTokenBar(): void {
@@ -732,5 +742,9 @@ export class ChatView extends ItemView {
 
 	async onClose(): Promise<void> {
 		this.closeHistoryOverlay();
+		if (this.viewportHandler && window.visualViewport) {
+			window.visualViewport.removeEventListener("resize", this.viewportHandler);
+			this.viewportHandler = null;
+		}
 	}
 }

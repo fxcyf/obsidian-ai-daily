@@ -96,6 +96,10 @@
 	padding-bottom: max(8px, env(safe-area-inset-bottom));
 }
 
+.ai-daily-keyboard-open .ai-daily-input-area {
+	padding-bottom: 8px;
+}
+
 .ai-daily-input {
 	flex: 1;
 	resize: none;

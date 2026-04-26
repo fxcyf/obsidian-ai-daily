@@ -29,6 +29,7 @@ import {
 } from "./chat-session";
 
 export const VIEW_TYPE = "ai-daily-chat";
+const STREAM_MARKDOWN_RENDER_INTERVAL_MS = 120;
 
 interface ChatMessage {
 	role: "user" | "assistant";
@@ -288,6 +289,48 @@ export class ChatView extends ItemView {
 			});
 		}
 
+		let streamingRenderTimer: number | null = null;
+		let latestStreamingMarkdown = "";
+		let streamingRenderQueue = Promise.resolve();
+		const renderStreamingMarkdown = async (content: string) => {
+			if (!assistantEl) return;
+			assistantEl.empty();
+			await MarkdownRenderer.render(
+				this.app,
+				content,
+				assistantEl,
+				"",
+				this.plugin
+			);
+			this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+		};
+		const scheduleStreamingMarkdown = (content: string) => {
+			latestStreamingMarkdown = content;
+			if (streamingRenderTimer !== null) return;
+			streamingRenderTimer = window.setTimeout(() => {
+				streamingRenderTimer = null;
+				const snapshot = latestStreamingMarkdown;
+				streamingRenderQueue = streamingRenderQueue.then(() =>
+					renderStreamingMarkdown(snapshot)
+				);
+			}, STREAM_MARKDOWN_RENDER_INTERVAL_MS);
+		};
+		const flushStreamingMarkdown = async (content: string) => {
+			latestStreamingMarkdown = content;
+			if (streamingRenderTimer !== null) {
+				window.clearTimeout(streamingRenderTimer);
+				streamingRenderTimer = null;
+			}
+			await streamingRenderQueue;
+			await renderStreamingMarkdown(content);
+		};
+		const cancelStreamingMarkdown = () => {
+			if (streamingRenderTimer !== null) {
+				window.clearTimeout(streamingRenderTimer);
+				streamingRenderTimer = null;
+			}
+		};
+
 		try {
 			const reply = await this.client!.chat(
 				text,
@@ -298,10 +341,7 @@ export class ChatView extends ItemView {
 				useStream && assistantEl
 					? (_delta, accumulated) => {
 							loadingEl.remove();
-							// Show plain text while streaming; full Markdown rendered at the end.
-							assistantEl!.setText(accumulated);
-							this.messagesEl.scrollTop =
-								this.messagesEl.scrollHeight;
+							scheduleStreamingMarkdown(accumulated);
 						}
 					: undefined
 			);
@@ -309,15 +349,7 @@ export class ChatView extends ItemView {
 			loadingEl.remove();
 
 			if (useStream && assistantEl) {
-				// Final render as Markdown.
-				assistantEl.empty();
-				await MarkdownRenderer.render(
-					this.app,
-					reply,
-					assistantEl,
-					"",
-					this.plugin
-				);
+				await flushStreamingMarkdown(reply);
 				assistantEl.removeClass("ai-daily-msg-streaming");
 				this.messages.push({ role: "assistant", content: reply });
 			} else {
@@ -328,6 +360,7 @@ export class ChatView extends ItemView {
 			await this.persistSession();
 			this.updateTokenBar();
 		} catch (e) {
+			cancelStreamingMarkdown();
 			loadingEl.remove();
 			if (assistantEl) assistantEl.remove();
 			const msg = e instanceof Error ? e.message : String(e);

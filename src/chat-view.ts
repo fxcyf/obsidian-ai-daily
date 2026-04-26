@@ -89,7 +89,6 @@ export class ChatView extends ItemView {
 	private historyOverlayResizeCleanup: (() => void) | null = null;
 	private isLoading = false;
 	private userScrolledUp = false;
-	private hiddenDrawerEls: HTMLElement[] = [];
 	/** Current vault session file id (filename stem). */
 	private sessionId: string | null = null;
 
@@ -97,8 +96,6 @@ export class ChatView extends ItemView {
 		super(leaf);
 		this.plugin = plugin;
 	}
-
-	navigation = false;
 
 	getViewType(): string {
 		return VIEW_TYPE;
@@ -209,27 +206,6 @@ export class ChatView extends ItemView {
 
 			container.style.setProperty("padding-bottom", "0", "important");
 
-			// Hide Obsidian mobile drawer chrome (view selector, doc stats)
-			// These live at workspace-drawer level, 3-4 levels above our container
-			let drawerContent: HTMLElement | null = null;
-			let walk: HTMLElement | null = container;
-			for (let i = 0; i < 5 && walk; i++) {
-				if (walk.classList.contains("workspace-drawer-active-tab-content")) {
-					drawerContent = walk;
-					break;
-				}
-				walk = walk.parentElement;
-			}
-			if (drawerContent && drawerContent.parentElement) {
-				for (let i = 0; i < drawerContent.parentElement.children.length; i++) {
-					const sib = drawerContent.parentElement.children[i] as HTMLElement;
-					if (sib !== drawerContent) {
-						sib.style.setProperty("display", "none", "important");
-						this.hiddenDrawerEls.push(sib);
-					}
-				}
-			}
-
 			let keyboardOpen = false;
 			let recalcTimer: ReturnType<typeof setTimeout> | null = null;
 			let kbPollId: ReturnType<typeof setInterval> | null = null;
@@ -320,7 +296,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.4.6</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.4.7</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">总结一下这篇文章的要点</div>
@@ -826,9 +802,5 @@ export class ChatView extends ItemView {
 
 	async onClose(): Promise<void> {
 		this.closeHistoryOverlay();
-		for (const el of this.hiddenDrawerEls) {
-			el.style.removeProperty("display");
-		}
-		this.hiddenDrawerEls = [];
 	}
 }

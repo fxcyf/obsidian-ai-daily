@@ -75,6 +75,7 @@ class ConfirmModal extends Modal {
 
 export class ChatView extends ItemView {
 	plugin: AIDailyChat;
+	private chatContainerEl: HTMLElement = null!;
 	private messages: ChatMessage[] = [];
 	private client: ClaudeClient | null = null;
 	private vaultTools: VaultTools | null = null;
@@ -122,6 +123,7 @@ export class ChatView extends ItemView {
 		const container = this.containerEl.children[1] as HTMLElement;
 		container.empty();
 		container.addClass("ai-daily-chat-container");
+		this.chatContainerEl = container;
 
 		const header = container.createDiv({ cls: "ai-daily-header" });
 
@@ -514,7 +516,19 @@ export class ChatView extends ItemView {
 		const { chatHistoryFolder } = this.plugin.settings;
 		let sessions = await listChatSessions(this.app.vault, chatHistoryFolder);
 
-		const overlay = this.messagesEl.createDiv({ cls: "ai-daily-history-overlay" });
+		const headerEl =
+			this.chatContainerEl.querySelector<HTMLElement>(".ai-daily-header");
+		const tokenBarEl =
+			this.chatContainerEl.querySelector<HTMLElement>(".ai-daily-token-bar");
+		const inputAreaEl =
+			this.chatContainerEl.querySelector<HTMLElement>(".ai-daily-input-area");
+		const topInset = headerEl?.offsetHeight ?? 0;
+		const bottomInset =
+			(tokenBarEl?.offsetHeight ?? 0) + (inputAreaEl?.offsetHeight ?? 0);
+		const overlay = this.chatContainerEl.createDiv({
+			cls: "ai-daily-history-overlay",
+			attr: { style: `inset:${topInset}px 0 ${bottomInset}px 0;` },
+		});
 		this.historyOverlay = overlay;
 
 		const head = overlay.createDiv({ cls: "ai-daily-history-head" });

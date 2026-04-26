@@ -63,15 +63,17 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Anthropic API Key")
 			.setDesc("用于调用 Claude API")
-			.addText((text) =>
+			.addText((text) => {
 				text
 					.setPlaceholder("sk-ant-...")
 					.setValue(this.plugin.settings.apiKey)
 					.onChange(async (value) => {
 						this.plugin.settings.apiKey = value;
 						await this.plugin.saveSettings();
-					})
-			);
+					});
+				text.inputEl.type = "password";
+				text.inputEl.autocomplete = "off";
+			});
 
 		new Setting(containerEl)
 			.setName("知识库文件夹")

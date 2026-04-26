@@ -20,24 +20,29 @@ export class VaultTools {
 		input: Record<string, unknown>
 	): Promise<string> {
 		switch (name) {
-			case "read_note":
-				return this.readNote(input.path as string);
-			case "search_vault":
-				return this.searchVault(
-					input.query as string,
-					input.folder as string | undefined,
-					input.tag as string | undefined
-				);
-			case "append_to_note":
-				return this.appendToNote(
-					input.path as string,
-					input.content as string
-				);
-			case "list_notes":
-				return this.listNotes(
-					input.folder as string | undefined,
-					(input.limit as number) || 20
-				);
+			case "read_note": {
+				const path = typeof input.path === "string" ? input.path : "";
+				if (!path) return "Error: path is required";
+				return this.readNote(path);
+			}
+			case "search_vault": {
+				const query = typeof input.query === "string" ? input.query : "";
+				if (!query) return "Error: query is required";
+				const folder = typeof input.folder === "string" ? input.folder : undefined;
+				const tag = typeof input.tag === "string" ? input.tag : undefined;
+				return this.searchVault(query, folder, tag);
+			}
+			case "append_to_note": {
+				const path = typeof input.path === "string" ? input.path : "";
+				const content = typeof input.content === "string" ? input.content : "";
+				if (!path || !content) return "Error: path and content are required";
+				return this.appendToNote(path, content);
+			}
+			case "list_notes": {
+				const folder = typeof input.folder === "string" ? input.folder : undefined;
+				const limit = typeof input.limit === "number" ? input.limit : 20;
+				return this.listNotes(folder, limit);
+			}
 			default:
 				return `Unknown tool: ${name}`;
 		}

@@ -372,7 +372,7 @@ async function fetchFeed(feed: FeedSource): Promise<Article[]> {
 
 // ── Time decay ────────────────────────────────────────────────────
 
-function timeDecay(published: Date | null, engagement: number = 0): number {
+export function timeDecay(published: Date | null, engagement: number = 0): number {
 	if (!published) return 0.6;
 	const hoursAgo = (Date.now() - published.getTime()) / (1000 * 60 * 60);
 	if (hoursAgo <= 12) return 1.5;
@@ -391,7 +391,7 @@ function timeDecay(published: Date | null, engagement: number = 0): number {
 
 // ── Social score normalization ────────────────────────────────────
 
-function socialBoost(article: Article): number {
+export function socialBoost(article: Article): number {
 	const { socialScore, commentCount } = article;
 	if (socialScore === 0 && commentCount === 0) return 1.0;
 
@@ -407,7 +407,7 @@ function socialBoost(article: Article): number {
 
 // ── Burst detection ───────────────────────────────────────────────
 
-function detectBursts(articles: Article[]): Map<string, number> {
+export function detectBursts(articles: Article[]): Map<string, number> {
 	const topicSourceCount = new Map<string, Set<string>>();
 
 	for (const article of articles) {
@@ -433,7 +433,7 @@ function detectBursts(articles: Article[]): Map<string, number> {
 
 // ── Relevance scoring ──────────────────────────────────────────────
 
-function scoreRelevance(
+export function scoreRelevance(
 	article: Article,
 	userTopics: string[],
 	burstTopics: Map<string, number>
@@ -514,12 +514,17 @@ export async function fetchAllFeeds(options: FetchOptions = {}): Promise<Article
 		onProgress,
 	} = options;
 
-	const allArticles: Article[] = [];
+	onProgress?.(`正在并发抓取 ${feeds.length} 个源...`);
 
-	for (const feed of feeds) {
-		onProgress?.(`正在抓取: ${feed.name}...`);
-		const articles = await fetchFeed(feed);
-		allArticles.push(...articles);
+	const results = await Promise.allSettled(
+		feeds.map((feed) => fetchFeed(feed))
+	);
+
+	const allArticles: Article[] = [];
+	for (const result of results) {
+		if (result.status === "fulfilled") {
+			allArticles.push(...result.value);
+		}
 	}
 
 	onProgress?.(`共抓取 ${allArticles.length} 篇文章，正在评分筛选...`);

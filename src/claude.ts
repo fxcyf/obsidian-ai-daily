@@ -381,7 +381,7 @@ export class ClaudeClient {
 				}
 			}
 
-			this.messages.push({ role: "user", content: results as any });
+			this.messages.push({ role: "user", content: results as unknown as ContentBlock[] });
 		}
 
 		return collectedText.join("");

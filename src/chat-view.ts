@@ -336,15 +336,16 @@ export class ChatView extends ItemView {
 		const welcomeEl = this.messagesEl.createDiv({
 			cls: "ai-daily-welcome",
 		});
-		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.5.3</div>
-			<div class="ai-daily-welcome-hint">${hint}</div>
-			<div class="ai-daily-welcome-examples">
-				<div class="ai-daily-example">总结一下这篇文章的要点</div>
-				<div class="ai-daily-example">帮我在知识库里搜索 RAG 相关内容</div>
-				<div class="ai-daily-example">最近收藏了哪些文章？</div>
-			</div>
-		`;
+		welcomeEl.createDiv({ cls: "ai-daily-welcome-title", text: "AI Knowledge Chat v0.5.4" });
+		welcomeEl.createDiv({ cls: "ai-daily-welcome-hint", text: hint });
+		const examplesEl = welcomeEl.createDiv({ cls: "ai-daily-welcome-examples" });
+		for (const example of [
+			"总结一下这篇文章的要点",
+			"帮我在知识库里搜索 RAG 相关内容",
+			"最近收藏了哪些文章？",
+		]) {
+			examplesEl.createDiv({ cls: "ai-daily-example", text: example });
+		}
 
 		welcomeEl.querySelectorAll(".ai-daily-example").forEach((el) => {
 			el.addEventListener("click", () => {
@@ -358,8 +359,10 @@ export class ChatView extends ItemView {
 	private async handleSend(): Promise<void> {
 		const text = this.inputEl.value.trim();
 		if (!text || this.isLoading) return;
+		this.isLoading = true;
 
 		if (!this.plugin.settings.apiKey) {
+			this.isLoading = false;
 			this.addMessage(
 				"assistant",
 				"请先在插件设置中配置 Anthropic API Key。"
@@ -379,7 +382,6 @@ export class ChatView extends ItemView {
 			await this.initClient();
 		}
 
-		this.isLoading = true;
 		const loadingEl = this.messagesEl.createDiv({
 			cls: "ai-daily-loading",
 		});

@@ -211,6 +211,11 @@ export class ChatView extends ItemView {
 		this.showWelcome();
 
 		if (Platform.isMobile) {
+			const navbar = document.querySelector<HTMLElement>(".mobile-navbar");
+			const navbarH = navbar ? navbar.getBoundingClientRect().height : 48;
+
+			this.inputAreaEl.style.setProperty("padding-bottom", navbarH + "px", "important");
+
 			const initialPb = parseFloat(getComputedStyle(container).paddingBottom) || 0;
 			const containerTop = container.getBoundingClientRect().top;
 			const initialParentH = container.parentElement!.getBoundingClientRect().height;
@@ -250,6 +255,7 @@ export class ChatView extends ItemView {
 			this.inputEl.addEventListener("focus", () => {
 				keyboardOpen = true;
 				container.addClass("ai-daily-keyboard-open");
+				this.inputAreaEl.style.setProperty("padding-bottom", "8px", "important");
 				scheduleRecalc();
 				if (kbPollId) clearInterval(kbPollId);
 				kbPollId = setInterval(recalcPadding, 500);
@@ -259,6 +265,7 @@ export class ChatView extends ItemView {
 				if (recalcTimer) { clearTimeout(recalcTimer); recalcTimer = null; }
 				if (kbPollId) { clearInterval(kbPollId); kbPollId = null; }
 				container.removeClass("ai-daily-keyboard-open");
+				this.inputAreaEl.style.setProperty("padding-bottom", navbarH + "px", "important");
 				container.style.setProperty("padding-bottom", "0", "important");
 			});
 		}

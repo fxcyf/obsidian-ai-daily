@@ -206,7 +206,7 @@ export class ChatView extends ItemView {
 					const contH = container.getBoundingClientRect().height;
 					let appliedPb: number;
 					if (obsidianPb > 50) {
-						appliedPb = Math.max(8, obsidianPb - tabBarH);
+						appliedPb = Math.max(8, obsidianPb - Math.floor(tabBarH / 2));
 						container.style.setProperty("padding-bottom", appliedPb + "px", "important");
 					} else {
 						appliedPb = 0;
@@ -276,7 +276,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.3.3</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.3.4</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">总结一下这篇文章的要点</div>

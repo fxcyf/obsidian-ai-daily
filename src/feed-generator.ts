@@ -3,11 +3,10 @@
  * to produce a daily feed note in the vault.
  */
 
-import { App, TFile, requestUrl } from "obsidian";
+import { App, TFile } from "obsidian";
 import { fetchAllFeeds, type Article, type FeedSource } from "./feeds";
 import type { AIDailyChatSettings } from "./settings";
-
-const API_URL = "https://api.anthropic.com/v1/messages";
+import { callClaudeSimple } from "./claude";
 
 // ── Claude prompt for feed generation ──────────────────────────────
 
@@ -93,38 +92,20 @@ async function searchVaultForTopics(
 		.join("\n\n");
 }
 
-// ── Claude API call (simple, no tool use) ──────────────────────────
+// ── Claude API call (delegates to shared helper) ─────────────────────
 
 async function callClaude(
 	apiKey: string,
 	model: string,
 	userMessage: string
 ): Promise<string> {
-	const resp = await requestUrl({
-		url: API_URL,
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			"x-api-key": apiKey,
-			"anthropic-version": "2023-06-01",
-		},
-		body: JSON.stringify({
-			model,
-			max_tokens: 4096,
-			system: FEED_SYSTEM_PROMPT,
-			messages: [{ role: "user", content: userMessage }],
-		}),
+	const result = await callClaudeSimple({
+		apiKey,
+		model,
+		systemPrompt: FEED_SYSTEM_PROMPT,
+		userMessage,
 	});
-
-	if (resp.status >= 400) {
-		throw new Error(`Claude API error ${resp.status}: ${resp.text}`);
-	}
-
-	const data = resp.json;
-	for (const block of data.content) {
-		if (block.type === "text") return block.text;
-	}
-	return "Feed 生成失败。";
+	return result || "Feed 生成失败。";
 }
 
 // ── Existing feed check ───────────────────────────────────────────
@@ -160,7 +141,8 @@ export async function generateFeed(
 	onProgress?: (progress: FeedProgress) => void,
 	existingContent?: string
 ): Promise<TFile> {
-	const { apiKey, model, feedFolder, feedTopics, feedSources, feedMaxArticles, knowledgeFolders } = settings;
+	const { apiKey, model, feedModel, feedFolder, feedTopics, feedSources, feedMaxArticles, knowledgeFolders } = settings;
+	const effectiveModel = feedModel || model;
 
 	if (!apiKey) throw new Error("请先在设置中配置 API Key");
 
@@ -222,7 +204,7 @@ export async function generateFeed(
 	if (articles.length === 0 && vaultContext === "未找到相关笔记。") {
 		aiContent = "今天暂无新的 Feed 内容。请检查 RSS 源配置或网络连接。";
 	} else {
-		aiContent = await callClaude(apiKey, model, userMessage);
+		aiContent = await callClaude(apiKey, effectiveModel, userMessage);
 	}
 
 	// Step 4: Write to vault

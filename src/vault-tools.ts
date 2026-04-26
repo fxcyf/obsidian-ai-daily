@@ -1,9 +1,7 @@
-/**
- * Vault tool implementations — the "hands" of the agent.
- * Executes tool calls from Claude against the Obsidian vault.
- */
-
 import { App, TFile, TFolder } from "obsidian";
+
+const MAX_SEARCH_RESULTS = 10;
+const KNOWLEDGE_CONTEXT_TRUNCATE = 2000;
 
 export class VaultTools {
 	private app: App;
@@ -14,7 +12,6 @@ export class VaultTools {
 		this.knowledgeFolders = knowledgeFolders;
 	}
 
-	/** Route a tool call to the right handler. */
 	async execute(
 		name: string,
 		input: Record<string, unknown>
@@ -23,6 +20,7 @@ export class VaultTools {
 			case "read_note": {
 				const path = typeof input.path === "string" ? input.path : "";
 				if (!path) return "Error: path is required";
+				if (containsTraversal(path)) return "Error: invalid path";
 				return this.readNote(path);
 			}
 			case "search_vault": {
@@ -36,6 +34,7 @@ export class VaultTools {
 				const path = typeof input.path === "string" ? input.path : "";
 				const content = typeof input.content === "string" ? input.content : "";
 				if (!path || !content) return "Error: path and content are required";
+				if (containsTraversal(path)) return "Error: invalid path";
 				return this.appendToNote(path, content);
 			}
 			case "list_notes": {
@@ -56,34 +55,17 @@ export class VaultTools {
 		return this.app.vault.cachedRead(file);
 	}
 
-	/** Parse YAML frontmatter tags from note content. */
-	private parseTags(content: string): string[] {
-		const match = content.match(/^---\n([\s\S]*?)\n---/);
-		if (!match) return [];
-		const yaml = match[1];
-		// Match tags: [a, b] or tags:\n- a\n- b
-		const tagsMatch = yaml.match(/^tags:\s*\[([^\]]*)\]/m);
-		if (tagsMatch) {
-			return tagsMatch[1].split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+	private getTagsFromCache(file: TFile): string[] {
+		const cache = this.app.metadataCache.getFileCache(file);
+		if (!cache?.frontmatter?.tags) return [];
+		const raw = cache.frontmatter.tags;
+		if (Array.isArray(raw)) {
+			return raw.map((t: string) => String(t).toLowerCase().replace(/^#/, ""));
 		}
-		const listTags: string[] = [];
-		const lines = yaml.split("\n");
-		let inTags = false;
-		for (const line of lines) {
-			if (/^tags:\s*$/.test(line)) {
-				inTags = true;
-				continue;
-			}
-			if (inTags) {
-				const item = line.match(/^\s*-\s+(.+)/);
-				if (item) {
-					listTags.push(item[1].trim().toLowerCase());
-				} else {
-					break;
-				}
-			}
+		if (typeof raw === "string") {
+			return raw.split(",").map((t: string) => t.trim().toLowerCase().replace(/^#/, "")).filter(Boolean);
 		}
-		return listTags;
+		return [];
 	}
 
 	private async searchVault(
@@ -99,14 +81,12 @@ export class VaultTools {
 		for (const file of files) {
 			if (folder && !file.path.startsWith(folder)) continue;
 
-			const content = await this.app.vault.cachedRead(file);
-
-			// Tag filter
 			if (lowerTag) {
-				const tags = this.parseTags(content);
+				const tags = this.getTagsFromCache(file);
 				if (!tags.includes(lowerTag)) continue;
 			}
 
+			const content = await this.app.vault.cachedRead(file);
 			const lowerContent = content.toLowerCase();
 			const idx = lowerContent.indexOf(lowerQuery);
 
@@ -117,7 +97,7 @@ export class VaultTools {
 				results.push({ path: file.path, snippet: `...${snippet}...` });
 			}
 
-			if (results.length >= 10) break;
+			if (results.length >= MAX_SEARCH_RESULTS) break;
 		}
 
 		if (results.length === 0) return `No results for "${query}"${tag ? ` with tag #${lowerTag}` : ""}`;
@@ -139,22 +119,14 @@ export class VaultTools {
 		return `Content appended to ${path}`;
 	}
 
-	/** List notes in a specific folder, or all knowledge folders if not specified. */
 	private async listNotes(folder?: string, limit: number = 20): Promise<string> {
 		const foldersToList = folder
 			? [folder]
 			: [...this.knowledgeFolders];
 
-		const allFiles: TFile[] = [];
-
-		for (const folderPath of foldersToList) {
-			const f = this.app.vault.getAbstractFileByPath(folderPath);
-			if (!(f instanceof TFolder)) continue;
-			const mdFiles = f.children.filter(
-				(c): c is TFile => c instanceof TFile && c.extension === "md"
-			);
-			allFiles.push(...mdFiles);
-		}
+		const allFiles = this.app.vault.getMarkdownFiles().filter((f) =>
+			foldersToList.some((dir) => f.path.startsWith(dir + "/") || f.path.startsWith(dir))
+		);
 
 		if (allFiles.length === 0) {
 			return folder
@@ -169,18 +141,10 @@ export class VaultTools {
 		return sorted.map((f) => f.path).join("\n");
 	}
 
-	/** Load recent notes from knowledge folders as context. */
 	async loadKnowledgeContext(limit: number = 5): Promise<string> {
-		const allFiles: TFile[] = [];
-
-		for (const folderPath of this.knowledgeFolders) {
-			const folder = this.app.vault.getAbstractFileByPath(folderPath);
-			if (!(folder instanceof TFolder)) continue;
-			const mdFiles = folder.children.filter(
-				(c): c is TFile => c instanceof TFile && c.extension === "md"
-			);
-			allFiles.push(...mdFiles);
-		}
+		const allFiles = this.app.vault.getMarkdownFiles().filter((f) =>
+			this.knowledgeFolders.some((dir) => f.path.startsWith(dir + "/") || f.path.startsWith(dir))
+		);
 
 		if (allFiles.length === 0) return "";
 
@@ -191,13 +155,17 @@ export class VaultTools {
 		const parts: string[] = [];
 		for (const file of recent) {
 			const content = await this.app.vault.cachedRead(file);
-			// Truncate long articles to keep context manageable
-			const truncated = content.length > 2000
-				? content.slice(0, 2000) + "\n\n...(truncated)"
+			const truncated = content.length > KNOWLEDGE_CONTEXT_TRUNCATE
+				? content.slice(0, KNOWLEDGE_CONTEXT_TRUNCATE) + "\n\n...(truncated)"
 				: content;
 			parts.push(`# ${file.path}\n\n${truncated}`);
 		}
 
 		return parts.join("\n\n---\n\n");
 	}
+}
+
+function containsTraversal(path: string): boolean {
+	const segments = path.split(/[\\/]/);
+	return segments.some((s) => s === ".." || s === ".");
 }

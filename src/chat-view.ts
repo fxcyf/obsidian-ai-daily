@@ -75,20 +75,21 @@ class ConfirmModal extends Modal {
 
 export class ChatView extends ItemView {
 	plugin: AIDailyChat;
-	private chatContainerEl: HTMLElement = null!;
-	private headerEl: HTMLElement = null!;
+	private chatContainerEl!: HTMLElement;
+	private headerEl!: HTMLElement;
 	private messages: ChatMessage[] = [];
 	private client: ClaudeClient | null = null;
 	private vaultTools: VaultTools | null = null;
 	private webTools: WebTools = new WebTools();
-	private messagesEl: HTMLElement = null!;
-	private inputAreaEl: HTMLElement = null!;
-	private inputEl: HTMLTextAreaElement = null!;
-	private tokenBarEl: HTMLElement = null!;
+	private messagesEl!: HTMLElement;
+	private inputAreaEl!: HTMLElement;
+	private inputEl!: HTMLTextAreaElement;
+	private tokenBarEl!: HTMLElement;
 	private historyOverlay: HTMLElement | null = null;
 	private historyOverlayResizeCleanup: (() => void) | null = null;
 	private isLoading = false;
 	private userScrolledUp = false;
+	private cachedTokenCount = 0;
 	/** Current vault session file id (filename stem). */
 	private sessionId: string | null = null;
 
@@ -129,6 +130,26 @@ export class ChatView extends ItemView {
 		container.addClass("ai-daily-chat-container");
 		this.chatContainerEl = container;
 
+		this.buildHeader(container);
+
+		this.messagesEl = container.createDiv({ cls: "ai-daily-messages" });
+		this.messagesEl.addEventListener("scroll", () => {
+			const el = this.messagesEl;
+			this.userScrolledUp = el.scrollHeight - el.scrollTop - el.clientHeight > 50;
+		});
+
+		this.tokenBarEl = container.createDiv({ cls: "ai-daily-token-bar" });
+		this.updateTokenBar();
+
+		this.buildInputArea(container);
+		this.showWelcome();
+
+		if (Platform.isMobile) {
+			this.setupMobileKeyboard(container);
+		}
+	}
+
+	private buildHeader(container: HTMLElement): void {
 		this.headerEl = container.createDiv({ cls: "ai-daily-header" });
 
 		if (Platform.isMobile) {
@@ -164,16 +185,9 @@ export class ChatView extends ItemView {
 		});
 		setIcon(newChatBtn, "plus");
 		newChatBtn.addEventListener("click", () => this.clearChat());
+	}
 
-		this.messagesEl = container.createDiv({ cls: "ai-daily-messages" });
-		this.messagesEl.addEventListener("scroll", () => {
-			const el = this.messagesEl;
-			this.userScrolledUp = el.scrollHeight - el.scrollTop - el.clientHeight > 50;
-		});
-
-		this.tokenBarEl = container.createDiv({ cls: "ai-daily-token-bar" });
-		this.updateTokenBar();
-
+	private buildInputArea(container: HTMLElement): void {
 		this.inputAreaEl = container.createDiv({ cls: "ai-daily-input-area" });
 
 		this.inputEl = this.inputAreaEl.createEl("textarea", {
@@ -187,12 +201,6 @@ export class ChatView extends ItemView {
 		setIcon(sendBtn, "send");
 
 		sendBtn.addEventListener("click", () => this.handleSend());
-		if (Platform.isMobile) {
-			sendBtn.addEventListener("touchstart", (e) => {
-				e.preventDefault();
-				this.handleSend();
-			});
-		}
 		this.inputEl.addEventListener("input", () => {
 			this.inputEl.style.height = "auto";
 			this.inputEl.style.height =
@@ -207,101 +215,90 @@ export class ChatView extends ItemView {
 				}
 			}
 		});
+	}
 
-		this.showWelcome();
+	private setupMobileKeyboard(container: HTMLElement): void {
+		const inMainArea = this.leaf.getRoot() === this.app.workspace.rootSplit;
+		const navbar = document.querySelector<HTMLElement>(".mobile-navbar");
+		const navbarH = navbar ? navbar.getBoundingClientRect().height : 48;
 
-		if (Platform.isMobile) {
-			const inMainArea = this.leaf.getRoot() === this.app.workspace.rootSplit;
-			const navbar = document.querySelector<HTMLElement>(".mobile-navbar");
-			const navbarH = navbar ? navbar.getBoundingClientRect().height : 48;
+		this.inputAreaEl.style.setProperty("padding-bottom", navbarH + "px", "important");
 
-			this.inputAreaEl.style.setProperty("padding-bottom", navbarH + "px", "important");
-
-			if (inMainArea) {
-				const killObsidianPadding = new MutationObserver(() => {
-					if (container.style.getPropertyValue("padding-bottom") !== "0px") {
-						container.style.setProperty("padding-bottom", "0", "important");
-					}
-				});
-				this.register(() => killObsidianPadding.disconnect());
-
-				this.inputEl.addEventListener("focus", () => {
-					this.inputAreaEl.style.setProperty("padding-bottom", "8px", "important");
+		if (inMainArea) {
+			const killObsidianPadding = new MutationObserver(() => {
+				if (container.style.getPropertyValue("padding-bottom") !== "0px") {
 					container.style.setProperty("padding-bottom", "0", "important");
-					killObsidianPadding.observe(container, { attributes: true, attributeFilter: ["style"] });
-				});
-				this.inputEl.addEventListener("blur", () => {
-					killObsidianPadding.disconnect();
-					this.inputAreaEl.style.setProperty("padding-bottom", navbarH + "px", "important");
-					container.style.removeProperty("padding-bottom");
-				});
-			} else {
-				const initialPb = parseFloat(getComputedStyle(container).paddingBottom) || 0;
-				const containerTop = container.getBoundingClientRect().top;
-				const initialParentH = container.parentElement!.getBoundingClientRect().height;
-				const tabBarH = window.innerHeight - containerTop - initialParentH;
-				const tabBarUiH = Math.max(0, tabBarH - initialPb);
+				}
+			});
+			this.register(() => killObsidianPadding.disconnect());
 
+			this.inputEl.addEventListener("focus", () => {
+				this.inputAreaEl.style.setProperty("padding-bottom", "8px", "important");
 				container.style.setProperty("padding-bottom", "0", "important");
+				killObsidianPadding.observe(container, { attributes: true, attributeFilter: ["style"] });
+			});
+			this.inputEl.addEventListener("blur", () => {
+				killObsidianPadding.disconnect();
+				this.inputAreaEl.style.setProperty("padding-bottom", navbarH + "px", "important");
+				container.style.removeProperty("padding-bottom");
+			});
+		} else {
+			const initialPb = parseFloat(getComputedStyle(container).paddingBottom) || 0;
+			const containerTop = container.getBoundingClientRect().top;
+			const initialParentH = container.parentElement!.getBoundingClientRect().height;
+			const tabBarH = window.innerHeight - containerTop - initialParentH;
+			const tabBarUiH = Math.max(0, tabBarH - initialPb);
 
-				let keyboardOpen = false;
-				let recalcTimer: ReturnType<typeof setTimeout> | null = null;
-				let kbPollId: ReturnType<typeof setInterval> | null = null;
+			container.style.setProperty("padding-bottom", "0", "important");
 
-				const recalcPadding = () => {
-					container.style.removeProperty("padding-bottom");
-					void container.offsetHeight;
-					const obsidianPb = parseFloat(getComputedStyle(container).paddingBottom) || 0;
-					let appliedPb: number;
-					if (obsidianPb > 50) {
-						appliedPb = Math.max(8, obsidianPb - tabBarUiH);
-					} else {
-						appliedPb = 0;
-					}
-					container.style.setProperty("padding-bottom", appliedPb + "px", "important");
-				};
+			let keyboardOpen = false;
+			let recalcTimer: ReturnType<typeof setTimeout> | null = null;
 
-				const scheduleRecalc = () => {
-					if (recalcTimer) clearTimeout(recalcTimer);
-					recalcTimer = setTimeout(recalcPadding, 300);
-				};
+			const recalcPadding = () => {
+				container.style.removeProperty("padding-bottom");
+				void container.offsetHeight;
+				const obsidianPb = parseFloat(getComputedStyle(container).paddingBottom) || 0;
+				let appliedPb: number;
+				if (obsidianPb > 50) {
+					appliedPb = Math.max(8, obsidianPb - tabBarUiH);
+				} else {
+					appliedPb = 0;
+				}
+				container.style.setProperty("padding-bottom", appliedPb + "px", "important");
+			};
 
-				const resizeObs = new ResizeObserver(() => {
-					if (keyboardOpen) scheduleRecalc();
-				});
-				resizeObs.observe(container.parentElement!);
-				this.register(() => resizeObs.disconnect());
+			const scheduleRecalc = () => {
+				if (recalcTimer) clearTimeout(recalcTimer);
+				recalcTimer = setTimeout(recalcPadding, 300);
+			};
 
-				this.inputEl.addEventListener("focus", () => {
-					keyboardOpen = true;
-					container.addClass("ai-daily-keyboard-open");
-					this.inputAreaEl.style.setProperty("padding-bottom", "8px", "important");
-					scheduleRecalc();
-					if (kbPollId) clearInterval(kbPollId);
-					kbPollId = setInterval(recalcPadding, 500);
-				});
-				this.inputEl.addEventListener("blur", () => {
-					keyboardOpen = false;
-					if (recalcTimer) { clearTimeout(recalcTimer); recalcTimer = null; }
-					if (kbPollId) { clearInterval(kbPollId); kbPollId = null; }
-					container.removeClass("ai-daily-keyboard-open");
-					this.inputAreaEl.style.setProperty("padding-bottom", navbarH + "px", "important");
-					container.style.setProperty("padding-bottom", "0", "important");
-				});
-			}
+			const resizeObs = new ResizeObserver(() => {
+				if (keyboardOpen) scheduleRecalc();
+			});
+			resizeObs.observe(container.parentElement!);
+			this.register(() => resizeObs.disconnect());
+
+			this.inputEl.addEventListener("focus", () => {
+				keyboardOpen = true;
+				container.addClass("ai-daily-keyboard-open");
+				this.inputAreaEl.style.setProperty("padding-bottom", "8px", "important");
+				scheduleRecalc();
+			});
+			this.inputEl.addEventListener("blur", () => {
+				keyboardOpen = false;
+				if (recalcTimer) { clearTimeout(recalcTimer); recalcTimer = null; }
+				container.removeClass("ai-daily-keyboard-open");
+				this.inputAreaEl.style.setProperty("padding-bottom", navbarH + "px", "important");
+				container.style.setProperty("padding-bottom", "0", "important");
+			});
 		}
 	}
 
 	private updateTokenBar(): void {
 		const budget = this.plugin.settings.chatContextBudgetTokens;
-		let used = 0;
-		if (this.client) {
-			used = this.client.estimateContextTokens();
-		} else {
-			for (const m of this.messages) {
-				used += estimateTextTokens(m.content);
-			}
-		}
+		const used = this.client
+			? this.client.estimateContextTokens()
+			: this.cachedTokenCount;
 		const pct = Math.min(100, budget > 0 ? (used / budget) * 100 : 0);
 		this.tokenBarEl.empty();
 		this.tokenBarEl.toggleClass("ai-daily-token-bar-low", pct < 10);
@@ -336,7 +333,7 @@ export class ChatView extends ItemView {
 		const welcomeEl = this.messagesEl.createDiv({
 			cls: "ai-daily-welcome",
 		});
-		welcomeEl.createDiv({ cls: "ai-daily-welcome-title", text: "AI Knowledge Chat v0.5.4" });
+		welcomeEl.createDiv({ cls: "ai-daily-welcome-title", text: `AI Knowledge Chat v${this.plugin.manifest.version}` });
 		welcomeEl.createDiv({ cls: "ai-daily-welcome-hint", text: hint });
 		const examplesEl = welcomeEl.createDiv({ cls: "ai-daily-welcome-examples" });
 		for (const example of [
@@ -393,7 +390,7 @@ export class ChatView extends ItemView {
 
 		const useStream = this.plugin.settings.chatStreamMode !== "off";
 
-		let assistantEl: HTMLElement | null = null;
+		let assistantEl: HTMLElement | null = null as HTMLElement | null;
 
 		let streamingRenderTimer: number | null = null;
 		let latestStreamingMarkdown = "";
@@ -463,6 +460,7 @@ export class ChatView extends ItemView {
 				await flushStreamingMarkdown(reply);
 				assistantEl.removeClass("ai-daily-msg-streaming");
 				this.messages.push({ role: "assistant", content: reply });
+				this.cachedTokenCount += estimateTextTokens(reply);
 			} else {
 				this.addMessage("assistant", reply);
 			}
@@ -473,7 +471,12 @@ export class ChatView extends ItemView {
 		} catch (e) {
 			cancelStreamingMarkdown();
 			loadingEl.remove();
-			if (assistantEl) assistantEl.remove();
+			if (assistantEl && latestStreamingMarkdown) {
+				assistantEl.removeClass("ai-daily-msg-streaming");
+				this.messages.push({ role: "assistant", content: latestStreamingMarkdown });
+			} else if (assistantEl) {
+				assistantEl.remove();
+			}
 			const msg = e instanceof Error ? e.message : String(e);
 			this.addMessage("assistant", `出错了: ${msg}`);
 		} finally {
@@ -577,6 +580,7 @@ export class ChatView extends ItemView {
 		if (welcome) welcome.remove();
 
 		this.messages.push({ role, content });
+		this.cachedTokenCount += estimateTextTokens(content);
 
 		const msgEl = this.messagesEl.createDiv({
 			cls: `ai-daily-msg ai-daily-msg-${role}`,
@@ -611,6 +615,7 @@ export class ChatView extends ItemView {
 	private clearChat(): void {
 		this.sessionId = null;
 		this.messages = [];
+		this.cachedTokenCount = 0;
 		this.client = null;
 		this.vaultTools = null;
 		this.messagesEl.empty();
@@ -803,6 +808,9 @@ export class ChatView extends ItemView {
 			role: m.role,
 			content: m.content,
 		}));
+		this.cachedTokenCount = this.messages.reduce(
+			(sum, m) => sum + estimateTextTokens(m.content), 0
+		);
 		this.client = null;
 		this.vaultTools = null;
 		this.messagesEl.empty();

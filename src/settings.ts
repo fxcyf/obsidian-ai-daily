@@ -27,6 +27,8 @@ export interface AIDailyChatSettings {
 	enableWebSearch: boolean;
 	// Feed settings
 	feedFolder: string;
+	/** Model used for feed generation (empty = use chat model). */
+	feedModel: string;
 	feedTopics: string[];
 	feedSources: FeedSource[];
 	feedMaxArticles: number;
@@ -43,6 +45,7 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	chatContextBudgetTokens: 200_000,
 	enableWebSearch: true,
 	feedFolder: "Feed",
+	feedModel: "",
 	feedTopics: [],
 	feedSources: DEFAULT_FEEDS,
 	feedMaxArticles: 20,
@@ -215,6 +218,22 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.feedFolder)
 					.onChange(async (value) => {
 						this.plugin.settings.feedFolder = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Feed 模型")
+			.setDesc("用于生成 Feed 的模型，留空则使用对话模型")
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("", "与对话模型相同")
+					.addOption("claude-haiku-4-5", "Haiku 4.5 (快速/便宜)")
+					.addOption("claude-sonnet-4-6", "Sonnet 4.6 (均衡)")
+					.addOption("claude-opus-4-6", "Opus 4.6 (最强)")
+					.setValue(this.plugin.settings.feedModel)
+					.onChange(async (value) => {
+						this.plugin.settings.feedModel = value;
 						await this.plugin.saveSettings();
 					})
 			);

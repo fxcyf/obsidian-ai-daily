@@ -1,15 +1,7 @@
-/**
- * Persisted chat session.
- *
- * Hidden-folder note: Obsidian does NOT index files inside folders that start
- * with "." (e.g. ".ai-chat").  vault.getFiles(), vault.getAbstractFileByPath()
- * and vault.create/modify all rely on the vault index, so they silently fail for
- * hidden paths.  We bypass the vault index entirely and use DataAdapter directly.
- */
-
 import { Vault, normalizePath } from "obsidian";
 
 export const DEFAULT_CHAT_FOLDER = ".ai-chat";
+const PRUNE_THROTTLE_KEY = "ai-daily-last-prune";
 
 export interface PersistedMessage {
 	role: "user" | "assistant";
@@ -38,6 +30,26 @@ export function titleFromMessages(messages: PersistedMessage[]): string {
 	const t = (first?.content ?? "新对话").trim().replace(/\s+/g, " ");
 	if (t.length <= 30) return t || "新对话";
 	return t.slice(0, 30) + "…";
+}
+
+export function isValidChatSession(data: unknown): data is ChatSessionFile {
+	if (typeof data !== "object" || data === null) return false;
+	const obj = data as Record<string, unknown>;
+	return (
+		typeof obj.id === "string" &&
+		typeof obj.title === "string" &&
+		typeof obj.model === "string" &&
+		typeof obj.created === "string" &&
+		typeof obj.updated === "string" &&
+		Array.isArray(obj.messages) &&
+		obj.messages.every(
+			(m: unknown) =>
+				typeof m === "object" &&
+				m !== null &&
+				typeof (m as Record<string, unknown>).role === "string" &&
+				typeof (m as Record<string, unknown>).content === "string"
+		)
+	);
 }
 
 async function ensureFolderAdapter(vault: Vault, folderPath: string): Promise<void> {
@@ -72,7 +84,9 @@ export async function loadChatSession(
 	try {
 		if (!(await vault.adapter.exists(path))) return null;
 		const raw = await vault.adapter.read(path);
-		return JSON.parse(raw) as ChatSessionFile;
+		const parsed: unknown = JSON.parse(raw);
+		if (!isValidChatSession(parsed)) return null;
+		return parsed;
 	} catch {
 		return null;
 	}
@@ -91,7 +105,10 @@ export async function listChatSessions(
 			if (!filePath.endsWith(".json")) continue;
 			try {
 				const raw = await vault.adapter.read(filePath);
-				out.push(JSON.parse(raw) as ChatSessionFile);
+				const parsed: unknown = JSON.parse(raw);
+				if (isValidChatSession(parsed)) {
+					out.push(parsed);
+				}
 			} catch {
 				/* skip corrupt */
 			}
@@ -118,13 +135,25 @@ export async function deleteChatSessionFile(
 	}
 }
 
-/** Remove sessions older than `retentionDays` (by `updated`). */
+export function shouldPruneToday(): boolean {
+	try {
+		const last = localStorage.getItem(PRUNE_THROTTLE_KEY);
+		const today = new Date().toISOString().slice(0, 10);
+		if (last === today) return false;
+		localStorage.setItem(PRUNE_THROTTLE_KEY, today);
+		return true;
+	} catch {
+		return true;
+	}
+}
+
 export async function pruneOldSessions(
 	vault: Vault,
 	folderPath: string,
 	retentionDays: number
 ): Promise<number> {
 	if (retentionDays <= 0) return 0;
+	if (!shouldPruneToday()) return 0;
 	const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
 	const sessions = await listChatSessions(vault, folderPath);
 	let removed = 0;

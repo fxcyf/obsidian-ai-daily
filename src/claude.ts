@@ -1,17 +1,3 @@
-/**
- * Claude API client with tool_use support.
- *
- * 三种数据源（按 streamMode 调度）：
- *   real       — 浏览器原生 fetch + SSE，Phase 0 已验证桌面可行；
- *                需要 anthropic-dangerous-direct-browser-access 头才能过 CORS
- *                （上次 ce3e360 回滚的根因）。
- *   typewriter — 用 requestUrl 一次拿完整响应，再客户端切片回放；
- *                兼容性最好，移动端 fetch CORS 不通时的兜底。
- *   off        — 一次性返回整段，不打字机动画。
- *
- * auto = 真流→打字机的自动降级链；任何 throw 都不冒泡到 UI。
- */
-
 import { requestUrl } from "obsidian";
 import {
 	AnthropicStreamAssembler,
@@ -21,13 +7,14 @@ import {
 	type ToolUseBlock,
 } from "./anthropic-sse";
 
-/** Characters per visual update chunk for the typewriter animation. */
 const STREAM_CHUNK_SIZE = 6;
-/** Delay between animation chunks (ms). Adjust for faster/slower effect. */
 const STREAM_CHUNK_DELAY_MS = 22;
 
-const API_URL = "https://api.anthropic.com/v1/messages";
-const ANTHROPIC_VERSION = "2023-06-01";
+export const API_URL = "https://api.anthropic.com/v1/messages";
+export const ANTHROPIC_VERSION = "2023-06-01";
+const MAX_TOKENS = 4096;
+const COMPRESS_MAX_OUTPUT_TOKENS = 2048;
+const COMPRESS_BLOB_MAX_CHARS = 120_000;
 
 async function emitTypewriterText(
 	text: string,
@@ -187,7 +174,6 @@ export type ToolExecutor = (
 
 export type StreamMode = "auto" | "real" | "typewriter" | "off";
 
-/** Rough token estimate (≈ chars / 4), for UI and compression heuristics. */
 export function estimateTextTokens(text: string): number {
 	if (!text) return 0;
 	return Math.ceil(text.length / 4);
@@ -209,6 +195,54 @@ export function estimateMessagesTokens(
 	return n;
 }
 
+// ── Shared simple API call ──────────────────────────────────────────
+
+interface SimpleCallOptions {
+	apiKey: string;
+	model: string;
+	systemPrompt: string;
+	userMessage: string;
+	maxTokens?: number;
+}
+
+function extractTextFromResponse(json: unknown): string {
+	if (typeof json !== "object" || json === null) return "";
+	const resp = json as Record<string, unknown>;
+	if (!Array.isArray(resp.content)) return "";
+	for (const block of resp.content) {
+		if (typeof block === "object" && block !== null) {
+			const b = block as Record<string, unknown>;
+			if (b.type === "text" && typeof b.text === "string") return b.text;
+		}
+	}
+	return "";
+}
+
+export async function callClaudeSimple(options: SimpleCallOptions): Promise<string> {
+	const { apiKey, model, systemPrompt, userMessage, maxTokens = MAX_TOKENS } = options;
+	const resp = await requestUrl({
+		url: API_URL,
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			"x-api-key": apiKey,
+			"anthropic-version": ANTHROPIC_VERSION,
+		},
+		body: JSON.stringify({
+			model,
+			max_tokens: maxTokens,
+			system: systemPrompt,
+			messages: [{ role: "user", content: userMessage }],
+		}),
+	});
+
+	if (resp.status >= 400) {
+		throw new Error(`Claude API error ${resp.status}: ${resp.text}`);
+	}
+
+	return extractTextFromResponse(resp.json) || "";
+}
+
 // ── Client ──────────────────────────────────────────────────────────
 
 export function buildToolsArray(enableWebSearch: boolean): Record<string, unknown>[] {
@@ -220,23 +254,11 @@ export function buildToolsArray(enableWebSearch: boolean): Record<string, unknow
 }
 
 export interface ClaudeClientOptions {
-	/**
-	 * Streaming mode：
-	 *   - auto       (默认) 真流→打字机自动降级
-	 *   - real       仅真流，失败直接报错（仅调试）
-	 *   - typewriter 用 requestUrl 拉整段再切片回放（兼容性最好）
-	 *   - off        一次性返回整段，无动画
-	 */
 	streamMode?: StreamMode;
-	/** Enable web search and web fetch tools. */
 	enableWebSearch?: boolean;
-	/** Estimated token budget before compressing older turns (0 = disable). */
 	compressThresholdEst?: number;
-	/** Keep this many recent messages when compressing (must be ≥ 2). */
 	compressKeepMessages?: number;
-	/** Called when history was summarized for context. */
 	onCompress?: (detail: string) => void;
-	/** Called once per chat() when real-stream fell back to typewriter. */
 	onStreamFallback?: (reason: string) => void;
 }
 
@@ -290,7 +312,6 @@ export class ClaudeClient {
 		);
 	}
 
-	/** Restore plain string-only turns (from persisted chat). */
 	setHistoryFromStrings(
 		turns: { role: "user" | "assistant"; content: string }[]
 	): void {
@@ -304,7 +325,6 @@ export class ClaudeClient {
 		return estimateMessagesTokens(this.messages, this.systemPrompt);
 	}
 
-	/** Send a user message and run the tool loop until Claude is done. */
 	async chat(
 		userMessage: string,
 		executeTool: ToolExecutor,
@@ -413,7 +433,15 @@ export class ClaudeClient {
 
 		let summary: string;
 		try {
-			summary = await this.summarizeConversationBlob(blob);
+			summary = await callClaudeSimple({
+				apiKey: this.apiKey,
+				model: this.model,
+				systemPrompt: "",
+				userMessage:
+					"请将以下对话压缩为简洁的中文摘要，保留关键事实、决定与待办，省略寒暄。不超过 900 字。\n\n" +
+					blob.slice(0, COMPRESS_BLOB_MAX_CHARS),
+				maxTokens: COMPRESS_MAX_OUTPUT_TOKENS,
+			});
 		} catch (e) {
 			this.onCompress?.(
 				`摘要失败，已截断最早 ${toCompress.length} 条消息: ${e instanceof Error ? e.message : String(e)}`
@@ -435,42 +463,6 @@ export class ClaudeClient {
 		);
 	}
 
-	private async summarizeConversationBlob(blob: string): Promise<string> {
-		const body = {
-			model: this.model,
-			max_tokens: 2048,
-			messages: [
-				{
-					role: "user" as const,
-					content:
-						"请将以下对话压缩为简洁的中文摘要，保留关键事实、决定与待办，省略寒暄。不超过 900 字。\n\n" +
-						blob.slice(0, 120_000),
-				},
-			],
-		};
-
-		const resp = await requestUrl({
-			url: API_URL,
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"x-api-key": this.apiKey,
-				"anthropic-version": ANTHROPIC_VERSION,
-			},
-			body: JSON.stringify(body),
-		});
-
-		if (resp.status >= 400) {
-			throw new Error(`Claude API error ${resp.status}: ${resp.text}`);
-		}
-
-		const json = resp.json as { content?: Array<{ type: string; text?: string }> };
-		const texts = (json.content ?? [])
-			.filter((c) => c.type === "text")
-			.map((c) => c.text ?? "");
-		return texts.join("\n").trim() || "（摘要为空）";
-	}
-
 	// ── Streaming dispatch ──────────────────────────────────────────
 
 	private async callApi(
@@ -485,7 +477,6 @@ export class ClaudeClient {
 				return await this.callApiRealStream(onTextDelta);
 			} catch (e) {
 				if (this.streamMode === "real") {
-					// 显式选了 real 时不掩盖错误——便于调试。
 					throw e;
 				}
 				const msg = e instanceof Error ? e.message : String(e);
@@ -494,19 +485,12 @@ export class ClaudeClient {
 					msg
 				);
 				this.onStreamFallback?.(msg);
-				// 落到下面 typewriter 路径。
 			}
 		}
 
 		return this.callApiTypewriter(onTextDelta);
 	}
 
-	/**
-	 * 真流式：fetch + SSE。
-	 *
-	 * 关键头：anthropic-dangerous-direct-browser-access: true。
-	 * 没有这个头时浏览器直连会被 CORS 拦截（fc03352 → ce3e360 的根因）。
-	 */
 	private async callApiRealStream(
 		onTextDelta?: (s: string) => void
 	): Promise<ApiResponse> {
@@ -557,7 +541,6 @@ export class ClaudeClient {
 				const text = decoder.decode(value, { stream: true });
 				if (text) assembler.push(text);
 			}
-			// flush decoder tail
 			const tail = decoder.decode();
 			if (tail) assembler.push(tail);
 		} finally {
@@ -576,7 +559,7 @@ export class ClaudeClient {
 	private buildRequestBody(): Record<string, unknown> {
 		return {
 			model: this.model,
-			max_tokens: 4096,
+			max_tokens: MAX_TOKENS,
 			system: this.systemPrompt,
 			tools: buildToolsArray(this.enableWebSearch),
 			messages: this.messages,
@@ -600,13 +583,13 @@ export class ClaudeClient {
 			throw new Error(`Claude API error ${resp.status}: ${resp.text}`);
 		}
 
-		return resp.json as ApiResponse;
+		const json = resp.json as Record<string, unknown>;
+		if (!json || !Array.isArray(json.content)) {
+			throw new Error("Claude API: unexpected response format");
+		}
+		return json as unknown as ApiResponse;
 	}
 
-	/**
-	 * 伪流：拿到完整响应后客户端切片回放制造打字机效果。
-	 * 兼容性最好（仅依赖 requestUrl），用作真流失败的兜底，或用户显式选择。
-	 */
 	private async callApiTypewriter(
 		onTextDelta?: (s: string) => void
 	): Promise<ApiResponse> {

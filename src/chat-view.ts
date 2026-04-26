@@ -84,6 +84,7 @@ export class ChatView extends ItemView {
 	private inputEl: HTMLTextAreaElement = null!;
 	private tokenBarEl: HTMLElement = null!;
 	private historyOverlay: HTMLElement | null = null;
+	private historyOverlayResizeCleanup: (() => void) | null = null;
 	private isLoading = false;
 	/** Current vault session file id (filename stem). */
 	private sessionId: string | null = null;
@@ -508,14 +509,8 @@ export class ChatView extends ItemView {
 		this.showWelcome();
 	}
 
-	private async openHistoryPanel(): Promise<void> {
-		if (this.historyOverlay) {
-			this.historyOverlay.remove();
-			this.historyOverlay = null;
-		}
-		const { chatHistoryFolder } = this.plugin.settings;
-		let sessions = await listChatSessions(this.app.vault, chatHistoryFolder);
-
+	private updateHistoryOverlayInset(): void {
+		if (!this.historyOverlay || !this.chatContainerEl) return;
 		const headerEl =
 			this.chatContainerEl.querySelector<HTMLElement>(".ai-daily-header");
 		const tokenBarEl =
@@ -525,11 +520,42 @@ export class ChatView extends ItemView {
 		const topInset = headerEl?.offsetHeight ?? 0;
 		const bottomInset =
 			(tokenBarEl?.offsetHeight ?? 0) + (inputAreaEl?.offsetHeight ?? 0);
+		this.historyOverlay.setAttribute(
+			"style",
+			`inset:${topInset}px 0 ${bottomInset}px 0;`
+		);
+	}
+
+	private closeHistoryOverlay(): void {
+		if (this.historyOverlay) {
+			this.historyOverlay.remove();
+			this.historyOverlay = null;
+		}
+		if (this.historyOverlayResizeCleanup) {
+			this.historyOverlayResizeCleanup();
+			this.historyOverlayResizeCleanup = null;
+		}
+	}
+
+	private async openHistoryPanel(): Promise<void> {
+		if (this.historyOverlay) this.closeHistoryOverlay();
+		const { chatHistoryFolder } = this.plugin.settings;
+		let sessions = await listChatSessions(this.app.vault, chatHistoryFolder);
+
 		const overlay = this.chatContainerEl.createDiv({
 			cls: "ai-daily-history-overlay",
-			attr: { style: `inset:${topInset}px 0 ${bottomInset}px 0;` },
 		});
 		this.historyOverlay = overlay;
+		this.updateHistoryOverlayInset();
+		const onViewportResize = () => this.updateHistoryOverlayInset();
+		window.addEventListener("resize", onViewportResize);
+		window.visualViewport?.addEventListener("resize", onViewportResize);
+		window.visualViewport?.addEventListener("scroll", onViewportResize);
+		this.historyOverlayResizeCleanup = () => {
+			window.removeEventListener("resize", onViewportResize);
+			window.visualViewport?.removeEventListener("resize", onViewportResize);
+			window.visualViewport?.removeEventListener("scroll", onViewportResize);
+		};
 
 		const head = overlay.createDiv({ cls: "ai-daily-history-head" });
 		head.createEl("span", { text: "历史对话", cls: "ai-daily-history-title" });
@@ -565,8 +591,7 @@ export class ChatView extends ItemView {
 
 		const closeBtn = headActions.createSpan({ cls: "ai-daily-history-close", text: "✕" });
 		closeBtn.addEventListener("click", () => {
-			overlay.remove();
-			this.historyOverlay = null;
+			this.closeHistoryOverlay();
 		});
 
 		const search = overlay.createEl("input", {
@@ -592,8 +617,7 @@ export class ChatView extends ItemView {
 				});
 				info.addEventListener("click", () => {
 					void this.loadSession(s.id);
-					overlay.remove();
-					this.historyOverlay = null;
+					this.closeHistoryOverlay();
 				});
 
 				const delBtn = row.createSpan({ cls: "ai-daily-history-row-del" });
@@ -657,8 +681,7 @@ export class ChatView extends ItemView {
 
 		overlay.addEventListener("click", (ev) => {
 			if (ev.target === overlay) {
-				overlay.remove();
-				this.historyOverlay = null;
+				this.closeHistoryOverlay();
 			}
 		});
 
@@ -712,6 +735,6 @@ export class ChatView extends ItemView {
 	}
 
 	async onClose(): Promise<void> {
-		// nothing to clean up
+		this.closeHistoryOverlay();
 	}
 }

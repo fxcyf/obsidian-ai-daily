@@ -296,7 +296,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.4.8</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.4.9</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">总结一下这篇文章的要点</div>
@@ -492,10 +492,7 @@ export class ChatView extends ItemView {
 	}
 
 	private async persistSession(): Promise<void> {
-		if (!this.sessionId) {
-			console.debug("[ai-daily] persist skipped (no sessionId)");
-			return;
-		}
+		if (!this.sessionId) return;
 		const { chatHistoryFolder, model } = this.plugin.settings;
 		const now = new Date().toISOString();
 		const persisted: PersistedMessage[] = this.messages.map((m) => ({
@@ -515,12 +512,8 @@ export class ChatView extends ItemView {
 			updated: now,
 			messages: persisted,
 		};
-		const relPath = `${chatHistoryFolder}/${this.sessionId}.json`;
 		try {
 			await saveChatSession(this.app.vault, chatHistoryFolder, file);
-			console.info(
-				`[ai-daily] chat session saved (${persisted.length} messages) → ${relPath}`
-			);
 		} catch (e) {
 			console.error("[ai-daily] persist session failed", e);
 			new Notice(

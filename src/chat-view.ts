@@ -173,13 +173,6 @@ export class ChatView extends ItemView {
 		setIcon(feedBtn, "rss");
 		feedBtn.addEventListener("click", () => this.plugin.generateFeed());
 
-		const exportBtn = this.headerEl.createDiv({
-			cls: "ai-daily-header-btn",
-			attr: { "aria-label": "导出对话", title: "导出对话" },
-		});
-		setIcon(exportBtn, "download");
-		exportBtn.addEventListener("click", () => this.exportChat());
-
 		const historyBtn = this.headerEl.createDiv({
 			cls: "ai-daily-header-btn",
 			attr: { "aria-label": "历史", title: "历史" },
@@ -400,63 +393,6 @@ export class ChatView extends ItemView {
 				}, 2000);
 			});
 		});
-	}
-
-	// ── Export conversation ────────────────────────────────
-
-	private async exportChat(): Promise<void> {
-		if (this.messages.length === 0) {
-			new Notice("没有对话内容可导出", 3000);
-			return;
-		}
-
-		const { chatExportFolder, model } = this.plugin.settings;
-		const vault = this.app.vault;
-
-		const folder = vault.getAbstractFileByPath(chatExportFolder);
-		if (!folder) {
-			await vault.createFolder(chatExportFolder);
-		}
-
-		const now = new Date();
-		const dateStr = now.toISOString().slice(0, 10);
-		const timeStr = now.toISOString().slice(11, 16).replace(":", "");
-
-		const title = titleFromMessages(
-			this.messages.map((m) => ({ role: m.role, content: m.content }))
-		);
-		const safeTitle = title
-			.replace(/[\\/:*?"<>|]/g, "")
-			.slice(0, 40)
-			.trim();
-
-		const filename = `${chatExportFolder}/${dateStr} ${safeTitle} ${timeStr}.md`;
-
-		const lines: string[] = [
-			"---",
-			"type: chat-export",
-			`date: ${dateStr}`,
-			`model: ${model}`,
-			"tags: [ai-chat]",
-			"---",
-			"",
-			`# AI 对话 - ${dateStr}`,
-			"",
-		];
-
-		for (const m of this.messages) {
-			if (m.role === "user") {
-				lines.push(`## Q: ${m.content.split("\n")[0]}`, "");
-				if (m.content.includes("\n")) {
-					lines.push(m.content.split("\n").slice(1).join("\n"), "");
-				}
-			} else {
-				lines.push(m.content, "");
-			}
-		}
-
-		const file = await vault.create(filename, lines.join("\n"));
-		new Notice(`对话已导出: ${file.path}`, 5000);
 	}
 
 	// ── Mobile keyboard ───────────────────────────────────

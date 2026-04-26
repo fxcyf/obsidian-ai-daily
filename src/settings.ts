@@ -29,7 +29,6 @@ export interface AIDailyChatSettings {
 	chatContextBudgetTokens: number;
 	enableWebSearch: boolean;
 	promptTemplates: PromptTemplate[];
-	chatExportFolder: string;
 	// Feed settings
 	feedFolder: string;
 	feedModel: string;
@@ -49,7 +48,6 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	chatContextBudgetTokens: 200_000,
 	enableWebSearch: true,
 	promptTemplates: DEFAULT_PROMPT_TEMPLATES,
-	chatExportFolder: "AI Chats",
 	feedFolder: "Feed",
 	feedModel: "",
 	feedTopics: [],
@@ -207,19 +205,6 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 						this.plugin.settings.chatContextBudgetTokens = Number.isFinite(n)
 							? Math.max(1000, n)
 							: 200_000;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("对话导出文件夹")
-			.setDesc("导出对话为笔记时的存放位置")
-			.addText((text) =>
-				text
-					.setPlaceholder("AI Chats")
-					.setValue(this.plugin.settings.chatExportFolder)
-					.onChange(async (value) => {
-						this.plugin.settings.chatExportFolder = value.trim() || "AI Chats";
 						await this.plugin.saveSettings();
 					})
 			);

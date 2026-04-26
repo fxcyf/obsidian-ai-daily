@@ -6,6 +6,7 @@ import {
 } from "./settings";
 import { ChatView, VIEW_TYPE } from "./chat-view";
 import { generateFeed, checkExistingFeed } from "./feed-generator";
+import { DEFAULT_FEEDS } from "./feeds";
 
 class FeedConfirmModal extends Modal {
 	private resolved = false;
@@ -166,6 +167,23 @@ export default class AIDailyChat extends Plugin {
 			delete raw.chatStreaming;
 		}
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
+
+		// Migrate feed sources: append new default sources that the user doesn't have yet
+		if (Array.isArray(raw.feedSources)) {
+			const existingNames = new Set(
+				this.settings.feedSources.map((s) => s.name)
+			);
+			let added = false;
+			for (const defaultSource of DEFAULT_FEEDS) {
+				if (!existingNames.has(defaultSource.name)) {
+					this.settings.feedSources.push(defaultSource);
+					added = true;
+				}
+			}
+			if (added) {
+				await this.saveData(this.settings);
+			}
+		}
 	}
 
 	async saveSettings(): Promise<void> {

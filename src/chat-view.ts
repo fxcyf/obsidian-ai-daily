@@ -187,14 +187,27 @@ export class ChatView extends ItemView {
 		this.showWelcome();
 
 		if (Platform.isMobile) {
+			const containerTop = container.getBoundingClientRect().top;
+			const initialParentH = container.parentElement!.getBoundingClientRect().height;
+			const tabBarH = window.innerHeight - containerTop - initialParentH;
+
 			this.inputEl.addEventListener("focus", () => {
 				container.addClass("ai-daily-keyboard-open");
 				setTimeout(() => {
-					this.inputAreaEl.scrollIntoView({ block: "end", behavior: "smooth" });
+					container.style.removeProperty("padding-bottom");
+					void container.offsetHeight;
+					const obsidianPb = parseFloat(getComputedStyle(container).paddingBottom) || 0;
+					if (obsidianPb > 50) {
+						const adjusted = Math.max(8, obsidianPb - tabBarH);
+						container.style.setProperty("padding-bottom", adjusted + "px", "important");
+					} else {
+						container.style.setProperty("padding-bottom", "0", "important");
+					}
 				}, 300);
 			});
 			this.inputEl.addEventListener("blur", () => {
 				container.removeClass("ai-daily-keyboard-open");
+				container.style.setProperty("padding-bottom", "0", "important");
 			});
 		}
 	}
@@ -244,7 +257,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.3.0</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.3.1</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">总结一下这篇文章的要点</div>

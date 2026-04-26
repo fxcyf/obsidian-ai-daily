@@ -211,63 +211,73 @@ export class ChatView extends ItemView {
 		this.showWelcome();
 
 		if (Platform.isMobile) {
+			const inMainArea = this.leaf.getRoot() === this.app.workspace.rootSplit;
 			const navbar = document.querySelector<HTMLElement>(".mobile-navbar");
 			const navbarH = navbar ? navbar.getBoundingClientRect().height : 48;
 
 			this.inputAreaEl.style.setProperty("padding-bottom", navbarH + "px", "important");
 
-			const initialPb = parseFloat(getComputedStyle(container).paddingBottom) || 0;
-			const containerTop = container.getBoundingClientRect().top;
-			const initialParentH = container.parentElement!.getBoundingClientRect().height;
-			const tabBarH = window.innerHeight - containerTop - initialParentH;
-			const tabBarUiH = Math.max(0, tabBarH - initialPb);
+			if (inMainArea) {
+				this.inputEl.addEventListener("focus", () => {
+					this.inputAreaEl.style.setProperty("padding-bottom", "8px", "important");
+				});
+				this.inputEl.addEventListener("blur", () => {
+					this.inputAreaEl.style.setProperty("padding-bottom", navbarH + "px", "important");
+				});
+			} else {
+				const initialPb = parseFloat(getComputedStyle(container).paddingBottom) || 0;
+				const containerTop = container.getBoundingClientRect().top;
+				const initialParentH = container.parentElement!.getBoundingClientRect().height;
+				const tabBarH = window.innerHeight - containerTop - initialParentH;
+				const tabBarUiH = Math.max(0, tabBarH - initialPb);
 
-			container.style.setProperty("padding-bottom", "0", "important");
-
-			let keyboardOpen = false;
-			let recalcTimer: ReturnType<typeof setTimeout> | null = null;
-			let kbPollId: ReturnType<typeof setInterval> | null = null;
-
-			const recalcPadding = () => {
-				container.style.removeProperty("padding-bottom");
-				void container.offsetHeight;
-				const obsidianPb = parseFloat(getComputedStyle(container).paddingBottom) || 0;
-				let appliedPb: number;
-				if (obsidianPb > 50) {
-					appliedPb = Math.max(8, obsidianPb - tabBarUiH);
-				} else {
-					appliedPb = 0;
-				}
-				container.style.setProperty("padding-bottom", appliedPb + "px", "important");
-			};
-
-			const scheduleRecalc = () => {
-				if (recalcTimer) clearTimeout(recalcTimer);
-				recalcTimer = setTimeout(recalcPadding, 300);
-			};
-
-			const resizeObs = new ResizeObserver(() => {
-				if (keyboardOpen) scheduleRecalc();
-			});
-			resizeObs.observe(container.parentElement!);
-			this.register(() => resizeObs.disconnect());
-
-			this.inputEl.addEventListener("focus", () => {
-				keyboardOpen = true;
-				container.addClass("ai-daily-keyboard-open");
-				this.inputAreaEl.style.setProperty("padding-bottom", "8px", "important");
-				scheduleRecalc();
-				if (kbPollId) clearInterval(kbPollId);
-				kbPollId = setInterval(recalcPadding, 500);
-			});
-			this.inputEl.addEventListener("blur", () => {
-				keyboardOpen = false;
-				if (recalcTimer) { clearTimeout(recalcTimer); recalcTimer = null; }
-				if (kbPollId) { clearInterval(kbPollId); kbPollId = null; }
-				container.removeClass("ai-daily-keyboard-open");
-				this.inputAreaEl.style.setProperty("padding-bottom", navbarH + "px", "important");
 				container.style.setProperty("padding-bottom", "0", "important");
-			});
+
+				let keyboardOpen = false;
+				let recalcTimer: ReturnType<typeof setTimeout> | null = null;
+				let kbPollId: ReturnType<typeof setInterval> | null = null;
+
+				const recalcPadding = () => {
+					container.style.removeProperty("padding-bottom");
+					void container.offsetHeight;
+					const obsidianPb = parseFloat(getComputedStyle(container).paddingBottom) || 0;
+					let appliedPb: number;
+					if (obsidianPb > 50) {
+						appliedPb = Math.max(8, obsidianPb - tabBarUiH);
+					} else {
+						appliedPb = 0;
+					}
+					container.style.setProperty("padding-bottom", appliedPb + "px", "important");
+				};
+
+				const scheduleRecalc = () => {
+					if (recalcTimer) clearTimeout(recalcTimer);
+					recalcTimer = setTimeout(recalcPadding, 300);
+				};
+
+				const resizeObs = new ResizeObserver(() => {
+					if (keyboardOpen) scheduleRecalc();
+				});
+				resizeObs.observe(container.parentElement!);
+				this.register(() => resizeObs.disconnect());
+
+				this.inputEl.addEventListener("focus", () => {
+					keyboardOpen = true;
+					container.addClass("ai-daily-keyboard-open");
+					this.inputAreaEl.style.setProperty("padding-bottom", "8px", "important");
+					scheduleRecalc();
+					if (kbPollId) clearInterval(kbPollId);
+					kbPollId = setInterval(recalcPadding, 500);
+				});
+				this.inputEl.addEventListener("blur", () => {
+					keyboardOpen = false;
+					if (recalcTimer) { clearTimeout(recalcTimer); recalcTimer = null; }
+					if (kbPollId) { clearInterval(kbPollId); kbPollId = null; }
+					container.removeClass("ai-daily-keyboard-open");
+					this.inputAreaEl.style.setProperty("padding-bottom", navbarH + "px", "important");
+					container.style.setProperty("padding-bottom", "0", "important");
+				});
+			}
 		}
 	}
 

@@ -247,12 +247,11 @@ export class ChatView extends ItemView {
 
 	private showWelcome(): void {
 		const activeFile = this.app.workspace.getActiveFile();
-		const { dailyFolder, knowledgeFolders } = this.plugin.settings;
-		const allFolders = [dailyFolder, ...knowledgeFolders];
+		const { knowledgeFolders } = this.plugin.settings;
 
 		let hint = "打开任意笔记，或直接提问来探索你的知识库。";
 		if (activeFile) {
-			const inKnowledge = allFolders.some((f) =>
+			const inKnowledge = knowledgeFolders.some((f) =>
 				activeFile.path.startsWith(f)
 			);
 			if (inKnowledge) {
@@ -413,17 +412,14 @@ export class ChatView extends ItemView {
 		const {
 			apiKey,
 			model,
-			dailyFolder,
 			knowledgeFolders,
-			contextDays,
 			chatStreamMode,
 			chatCompressThresholdEst,
 			enableWebSearch,
 		} = this.plugin.settings;
 
-		this.vaultTools = new VaultTools(this.app, dailyFolder, knowledgeFolders);
+		this.vaultTools = new VaultTools(this.app, knowledgeFolders);
 
-		const recentContext = await this.vaultTools.loadRecentContext(contextDays);
 		const knowledgeContext = await this.vaultTools.loadKnowledgeContext(5);
 
 		const activeFile = this.app.workspace.getActiveFile();
@@ -432,7 +428,7 @@ export class ChatView extends ItemView {
 			currentNote = await this.app.vault.cachedRead(activeFile);
 		}
 
-		const allFolders = [dailyFolder, ...knowledgeFolders].join("、");
+		const allFolders = knowledgeFolders.join("、");
 
 		const systemPrompt = [
 			"你是一个个人知识库助手。用户在 Obsidian 中管理自己的知识库，包括采集的原始文章（Raw/）、整理的知识条目（Wiki/）和每日笔记。",
@@ -446,7 +442,6 @@ export class ChatView extends ItemView {
 			currentNote
 				? `## 当前打开的笔记\n\n文件: ${activeFile!.path}\n\n${currentNote}`
 				: "",
-			recentContext ? `## 最近的日报\n\n${recentContext}` : "",
 			knowledgeContext ? `## 最近的知识库笔记\n\n${knowledgeContext}` : "",
 		]
 			.filter(Boolean)

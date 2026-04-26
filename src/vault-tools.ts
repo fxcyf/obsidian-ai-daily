@@ -7,12 +7,10 @@ import { App, TFile, TFolder } from "obsidian";
 
 export class VaultTools {
 	private app: App;
-	private dailyFolder: string;
 	private knowledgeFolders: string[];
 
-	constructor(app: App, dailyFolder: string, knowledgeFolders: string[] = []) {
+	constructor(app: App, knowledgeFolders: string[] = []) {
 		this.app = app;
-		this.dailyFolder = dailyFolder;
 		this.knowledgeFolders = knowledgeFolders;
 	}
 
@@ -136,11 +134,11 @@ export class VaultTools {
 		return `Content appended to ${path}`;
 	}
 
-	/** List notes in a specific folder, or all knowledge folders + daily folder if not specified. */
+	/** List notes in a specific folder, or all knowledge folders if not specified. */
 	private async listNotes(folder?: string, limit: number = 20): Promise<string> {
 		const foldersToList = folder
 			? [folder]
-			: [this.dailyFolder, ...this.knowledgeFolders];
+			: [...this.knowledgeFolders];
 
 		const allFiles: TFile[] = [];
 
@@ -164,25 +162,6 @@ export class VaultTools {
 			.slice(0, limit);
 
 		return sorted.map((f) => f.path).join("\n");
-	}
-
-	/** Load recent daily notes as context string. */
-	async loadRecentContext(days: number): Promise<string> {
-		const folder = this.app.vault.getAbstractFileByPath(this.dailyFolder);
-		if (!(folder instanceof TFolder)) return "";
-
-		const files = folder.children
-			.filter((f): f is TFile => f instanceof TFile && f.extension === "md")
-			.sort((a, b) => b.basename.localeCompare(a.basename))
-			.slice(0, days);
-
-		const parts: string[] = [];
-		for (const file of files) {
-			const content = await this.app.vault.cachedRead(file);
-			parts.push(`# ${file.basename}\n\n${content}`);
-		}
-
-		return parts.join("\n\n---\n\n");
 	}
 
 	/** Load recent notes from knowledge folders as context. */

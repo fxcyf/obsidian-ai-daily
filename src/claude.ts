@@ -146,13 +146,13 @@ export const VAULT_TOOLS = [
 	{
 		name: "list_notes",
 		description:
-			"列出指定文件夹中的笔记，按修改时间排序。不指定文件夹则列出所有知识库文件夹（Daily、Raw、Wiki 等）的笔记。",
+			"列出指定文件夹中的笔记，按修改时间排序。不指定文件夹则列出所有知识库文件夹的笔记。",
 		input_schema: {
 			type: "object" as const,
 			properties: {
 				folder: {
 					type: "string",
-					description: "文件夹路径，如 Raw、Wiki、AI-Daily（可选，不填则列出全部）",
+					description: "文件夹路径，如 Raw、Wiki（可选，不填则列出全部）",
 				},
 				limit: {
 					type: "number",

@@ -5,9 +5,7 @@ import type { StreamMode } from "./claude";
 
 export interface AIDailyChatSettings {
 	apiKey: string;
-	dailyFolder: string;
 	knowledgeFolders: string[];
-	contextDays: number;
 	model: string;
 	/** Vault folder for persisted chats (hidden folder recommended). */
 	chatHistoryFolder: string;
@@ -36,9 +34,7 @@ export interface AIDailyChatSettings {
 
 export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	apiKey: "",
-	dailyFolder: "AI-Daily",
 	knowledgeFolders: ["Raw", "Wiki"],
-	contextDays: 7,
 	model: "claude-haiku-4-5",
 	chatHistoryFolder: ".ai-chat",
 	chatHistoryRetentionDays: 30,
@@ -78,19 +74,6 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("日报文件夹")
-			.setDesc("AI Daily 日报所在的 vault 子目录")
-			.addText((text) =>
-				text
-					.setPlaceholder("AI-Daily")
-					.setValue(this.plugin.settings.dailyFolder)
-					.onChange(async (value) => {
-						this.plugin.settings.dailyFolder = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
 			.setName("知识库文件夹")
 			.setDesc("用逗号分隔多个文件夹路径，如 Raw,Wiki")
 			.addText((text) =>
@@ -102,20 +85,6 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 							.split(",")
 							.map((s) => s.trim())
 							.filter(Boolean);
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("上下文天数")
-			.setDesc("自动加载最近几天的日报作为对话上下文")
-			.addSlider((slider) =>
-				slider
-					.setLimits(1, 30, 1)
-					.setValue(this.plugin.settings.contextDays)
-					.setDynamicTooltip()
-					.onChange(async (value) => {
-						this.plugin.settings.contextDays = value;
 						await this.plugin.saveSettings();
 					})
 			);

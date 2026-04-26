@@ -443,3 +443,165 @@
 	gap: 8px;
 	margin-top: 16px;
 }
+
+/* ── Feed source list ────────────────────────────────────── */
+
+.ai-daily-feed-source-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	margin-bottom: 6px;
+}
+
+.ai-daily-feed-source-item:hover {
+	background: var(--background-modifier-hover);
+}
+
+.ai-daily-feed-source-info {
+	flex: 1;
+	min-width: 0;
+}
+
+.ai-daily-feed-source-name {
+	font-size: 13px;
+	font-weight: 500;
+	margin-bottom: 2px;
+}
+
+.ai-daily-feed-source-badges {
+	display: flex;
+	gap: 4px;
+	margin-bottom: 2px;
+}
+
+.ai-daily-feed-badge {
+	font-size: 10px;
+	padding: 1px 6px;
+	border-radius: 4px;
+	font-weight: 500;
+}
+
+.ai-daily-feed-badge-type {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.ai-daily-feed-badge-type[data-type="hn"] {
+	background: #ff6600;
+}
+
+.ai-daily-feed-badge-type[data-type="reddit"] {
+	background: #ff4500;
+}
+
+.ai-daily-feed-badge-type[data-type="github-trending"] {
+	background: #238636;
+}
+
+.ai-daily-feed-badge-cat {
+	background: var(--background-modifier-border);
+	color: var(--text-muted);
+}
+
+.ai-daily-feed-source-url {
+	font-size: 11px;
+	color: var(--text-faint);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ai-daily-feed-source-actions {
+	display: flex;
+	gap: 4px;
+	flex-shrink: 0;
+}
+
+.ai-daily-feed-source-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 6px;
+	cursor: pointer;
+	color: var(--text-muted);
+	background: transparent;
+	border: none;
+	padding: 0;
+}
+
+.ai-daily-feed-source-btn:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.ai-daily-feed-source-btn-del:hover {
+	background: var(--background-modifier-error);
+	color: var(--text-on-accent);
+}
+
+/* ── Feed source editor (inline) ──────────────────────── */
+
+.ai-daily-feed-source-editor {
+	padding: 12px;
+	margin-bottom: 6px;
+	border: 1px solid var(--interactive-accent);
+	border-radius: 8px;
+	background: var(--background-secondary);
+}
+
+.ai-daily-feed-editor-field {
+	margin-bottom: 8px;
+}
+
+.ai-daily-feed-editor-field label {
+	display: block;
+	font-size: 11px;
+	color: var(--text-muted);
+	margin-bottom: 2px;
+	font-weight: 500;
+}
+
+.ai-daily-feed-editor-field input,
+.ai-daily-feed-editor-field select {
+	width: 100%;
+	padding: 6px 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	font-size: 13px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+}
+
+.ai-daily-feed-editor-field input:focus,
+.ai-daily-feed-editor-field select:focus {
+	border-color: var(--interactive-accent);
+	outline: none;
+}
+
+.ai-daily-feed-editor-selects {
+	display: flex;
+	gap: 8px;
+}
+
+.ai-daily-feed-editor-selects .ai-daily-feed-editor-field {
+	flex: 1;
+}
+
+.ai-daily-feed-editor-btns {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 10px;
+}
+
+.ai-daily-feed-editor-btns button {
+	padding: 4px 14px;
+	border-radius: 6px;
+	font-size: 13px;
+	cursor: pointer;
+}

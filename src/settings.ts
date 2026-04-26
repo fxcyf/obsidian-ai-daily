@@ -252,48 +252,195 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		const rssSetting = new Setting(containerEl)
-			.setName("订阅源")
-			.setDesc(
-				`当前 ${this.plugin.settings.feedSources.length} 个源。` +
-				"编辑格式: 名称|URL|分类|类型，每行一个。类型可选: rss(默认), hn, reddit, github-trending"
-			)
-			.addTextArea((text) =>
-				text
-					.setPlaceholder("ArXiv CS.AI|https://rss.arxiv.org/rss/cs.AI|research|rss")
-					.setValue(
-						this.plugin.settings.feedSources
-							.map((s) => {
-								const type = s.type && s.type !== "rss" ? `|${s.type}` : "";
-								return `${s.name}|${s.url}|${s.category}${type}`;
-							})
-							.join("\n")
-					)
-					.onChange(async (value) => {
-						const sources: FeedSource[] = value
-							.split("\n")
-							.map((line) => line.trim())
-							.filter(Boolean)
-							.map((line) => {
-								const parts = line.split("|").map((s) => s.trim());
-								const [name, url, category] = parts;
-								const type = (parts[3] as FeedSource["type"]) || "rss";
-								return {
-									name: name || "",
-									url: url || "",
-									category: category || "other",
-									...(type !== "rss" ? { type } : {}),
-								};
-							})
-							.filter((s) => s.name && s.url);
-						this.plugin.settings.feedSources = sources;
-						await this.plugin.saveSettings();
-					})
+		this.renderFeedSourceList(containerEl);
+	}
+
+	private renderFeedSourceList(containerEl: HTMLElement): void {
+		const wrapper = containerEl.createDiv({ cls: "ai-daily-feed-sources" });
+
+		const header = new Setting(wrapper)
+			.setName(`订阅源 (${this.plugin.settings.feedSources.length})`)
+			.setDesc("管理 RSS、Hacker News、Reddit、GitHub Trending 等内容源")
+			.addButton((btn) =>
+				btn.setButtonText("添加").setCta().onClick(() => {
+					this.plugin.settings.feedSources.push({
+						name: "",
+						url: "",
+						category: "community",
+					});
+					this.refreshSourceList(wrapper, header.settingEl);
+				})
 			);
-		rssSetting.settingEl.addClass("ai-daily-setting-full");
-		const rssTextarea = rssSetting.settingEl.querySelector("textarea");
-		if (rssTextarea) {
-			rssTextarea.rows = 12;
+
+		this.refreshSourceList(wrapper, header.settingEl);
+	}
+
+	private refreshSourceList(wrapper: HTMLElement, headerEl: HTMLElement): void {
+		wrapper.querySelectorAll(".ai-daily-feed-source-item").forEach((el) => el.remove());
+
+		const sources = this.plugin.settings.feedSources;
+
+		const headerSetting = headerEl.querySelector(".setting-item-name");
+		if (headerSetting) {
+			headerSetting.textContent = `订阅源 (${sources.length})`;
 		}
+
+		const TYPE_LABELS: Record<string, string> = {
+			rss: "RSS",
+			hn: "HN",
+			reddit: "Reddit",
+			"github-trending": "GitHub",
+		};
+
+		const CAT_LABELS: Record<string, string> = {
+			research: "研究",
+			community: "社区",
+			tools: "工具",
+			newsletter: "周刊",
+			industry: "行业",
+			news: "新闻",
+			other: "其他",
+		};
+
+		for (let i = 0; i < sources.length; i++) {
+			const source = sources[i];
+			const row = wrapper.createDiv({ cls: "ai-daily-feed-source-item" });
+
+			const info = row.createDiv({ cls: "ai-daily-feed-source-info" });
+			const nameEl = info.createDiv({ cls: "ai-daily-feed-source-name" });
+			nameEl.textContent = source.name || "(未命名)";
+
+			const badges = info.createDiv({ cls: "ai-daily-feed-source-badges" });
+			const typeBadge = badges.createEl("span", {
+				cls: `ai-daily-feed-badge ai-daily-feed-badge-type`,
+				text: TYPE_LABELS[source.type ?? "rss"] ?? "RSS",
+			});
+			typeBadge.dataset.type = source.type ?? "rss";
+			badges.createEl("span", {
+				cls: "ai-daily-feed-badge ai-daily-feed-badge-cat",
+				text: CAT_LABELS[source.category] ?? source.category,
+			});
+
+			const urlEl = info.createDiv({ cls: "ai-daily-feed-source-url" });
+			urlEl.textContent = source.url || "—";
+
+			const actions = row.createDiv({ cls: "ai-daily-feed-source-actions" });
+
+			const editBtn = actions.createEl("button", {
+				cls: "ai-daily-feed-source-btn",
+				attr: { "aria-label": "编辑" },
+			});
+			editBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>`;
+			editBtn.addEventListener("click", () => {
+				this.openSourceEditor(i, wrapper, headerEl);
+			});
+
+			const delBtn = actions.createEl("button", {
+				cls: "ai-daily-feed-source-btn ai-daily-feed-source-btn-del",
+				attr: { "aria-label": "删除" },
+			});
+			delBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>`;
+			delBtn.addEventListener("click", async () => {
+				sources.splice(i, 1);
+				await this.plugin.saveSettings();
+				this.refreshSourceList(wrapper, headerEl);
+			});
+
+			// Auto-open editor for newly added empty sources
+			if (!source.name && !source.url) {
+				setTimeout(() => this.openSourceEditor(i, wrapper, headerEl), 50);
+			}
+		}
+	}
+
+	private openSourceEditor(index: number, wrapper: HTMLElement, headerEl: HTMLElement): void {
+		const source = this.plugin.settings.feedSources[index];
+		if (!source) return;
+
+		const items = wrapper.querySelectorAll(".ai-daily-feed-source-item");
+		const row = items[index];
+		if (!row) return;
+
+		// Remove any existing editor
+		wrapper.querySelectorAll(".ai-daily-feed-source-editor").forEach((el) => el.remove());
+
+		const editor = document.createElement("div");
+		editor.className = "ai-daily-feed-source-editor";
+		row.after(editor);
+
+		const fields = [
+			{ label: "名称", key: "name" as const, placeholder: "ArXiv CS.AI" },
+			{ label: "URL", key: "url" as const, placeholder: "https://rss.arxiv.org/rss/cs.AI" },
+		];
+
+		for (const field of fields) {
+			const fieldRow = editor.createDiv({ cls: "ai-daily-feed-editor-field" });
+			fieldRow.createEl("label", { text: field.label });
+			const input = fieldRow.createEl("input", {
+				type: "text",
+				placeholder: field.placeholder,
+				value: (source as Record<string, string>)[field.key] ?? "",
+			});
+			input.addEventListener("input", () => {
+				(source as Record<string, string>)[field.key] = input.value.trim();
+			});
+		}
+
+		const selectRow = editor.createDiv({ cls: "ai-daily-feed-editor-selects" });
+
+		const catGroup = selectRow.createDiv({ cls: "ai-daily-feed-editor-field" });
+		catGroup.createEl("label", { text: "分类" });
+		const catSelect = catGroup.createEl("select");
+		for (const [val, label] of [
+			["research", "研究"], ["community", "社区"], ["tools", "工具"],
+			["newsletter", "周刊"], ["industry", "行业"], ["news", "新闻"],
+		]) {
+			const opt = catSelect.createEl("option", { value: val, text: label });
+			if (source.category === val) opt.selected = true;
+		}
+		catSelect.addEventListener("change", () => {
+			source.category = catSelect.value;
+		});
+
+		const typeGroup = selectRow.createDiv({ cls: "ai-daily-feed-editor-field" });
+		typeGroup.createEl("label", { text: "类型" });
+		const typeSelect = typeGroup.createEl("select");
+		for (const [val, label] of [
+			["rss", "RSS"], ["hn", "Hacker News"], ["reddit", "Reddit"],
+			["github-trending", "GitHub Trending"],
+		]) {
+			const opt = typeSelect.createEl("option", { value: val, text: label });
+			if ((source.type ?? "rss") === val) opt.selected = true;
+		}
+		typeSelect.addEventListener("change", () => {
+			if (typeSelect.value === "rss") {
+				delete source.type;
+			} else {
+				source.type = typeSelect.value as FeedSource["type"];
+			}
+		});
+
+		const btnRow = editor.createDiv({ cls: "ai-daily-feed-editor-btns" });
+		const saveBtn = btnRow.createEl("button", { text: "保存", cls: "mod-cta" });
+		const cancelBtn = btnRow.createEl("button", { text: "取消" });
+
+		saveBtn.addEventListener("click", async () => {
+			if (!source.name || !source.url) {
+				saveBtn.textContent = "请填写名称和 URL";
+				setTimeout(() => { saveBtn.textContent = "保存"; }, 1500);
+				return;
+			}
+			await this.plugin.saveSettings();
+			editor.remove();
+			this.refreshSourceList(wrapper, headerEl);
+		});
+
+		cancelBtn.addEventListener("click", () => {
+			if (!source.name && !source.url) {
+				this.plugin.settings.feedSources.splice(index, 1);
+			}
+			editor.remove();
+			this.refreshSourceList(wrapper, headerEl);
+		});
 	}
 }

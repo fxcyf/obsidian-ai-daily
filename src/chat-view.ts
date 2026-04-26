@@ -208,30 +208,10 @@ export class ChatView extends ItemView {
 
 			container.style.setProperty("padding-bottom", "0", "important");
 
-			// dump DOM ancestry for debugging bottom chrome
-			const ancestors: string[] = [];
-			let el: HTMLElement | null = container;
-			for (let i = 0; i < 5 && el; i++) {
-				const cls = el.className ? `.${el.className.split(/\s+/).join(".")}` : "";
-				const tag = el.tagName.toLowerCase();
-				const childCount = el.children.length;
-				ancestors.push(`${tag}${cls}(${childCount}ch)`);
-				el = el.parentElement;
-			}
-
-			const debugEl = container.createDiv();
-			debugEl.style.cssText = "position:fixed;top:0;left:0;right:0;background:rgba(255,0,0,0.9);color:#fff;font-size:10px;padding:4px 6px;z-index:9999;font-family:monospace;white-space:pre;pointer-events:none;";
-			debugEl.textContent = [
-				`init: iPb=${initialPb.toFixed(0)} tbH=${tabBarH.toFixed(0)} tbUi=${tabBarUiH.toFixed(0)}`,
-				`dom: ${ancestors.join(" > ")}`,
-			].join("\n");
-
 			let keyboardOpen = false;
 			let recalcTimer: ReturnType<typeof setTimeout> | null = null;
-			let kbPollId: ReturnType<typeof setInterval> | null = null;
-			let vpResizeCount = 0;
 
-			const recalcPadding = (src: string) => {
+			const recalcPadding = () => {
 				container.style.removeProperty("padding-bottom");
 				void container.offsetHeight;
 				const obsidianPb = parseFloat(getComputedStyle(container).paddingBottom) || 0;
@@ -242,30 +222,21 @@ export class ChatView extends ItemView {
 					appliedPb = 0;
 				}
 				container.style.setProperty("padding-bottom", appliedPb + "px", "important");
-				const finalInputB = this.inputAreaEl.getBoundingClientRect().bottom;
-				const vpH = window.visualViewport ? Math.round(window.visualViewport.height) : -1;
-				debugEl.textContent = [
-					`init: iPb=${initialPb.toFixed(0)} tbH=${tabBarH.toFixed(0)} tbUi=${tabBarUiH.toFixed(0)}`,
-					`${src}: obsPb=${obsidianPb} applied=${appliedPb.toFixed(0)} inputB=${finalInputB.toFixed(0)} vpH=${vpH} vpR=${vpResizeCount}`,
-				].join("\n");
 			};
 
-			const scheduleRecalc = (src: string) => {
+			const scheduleRecalc = () => {
 				if (recalcTimer) clearTimeout(recalcTimer);
-				recalcTimer = setTimeout(() => recalcPadding(src), 300);
+				recalcTimer = setTimeout(recalcPadding, 300);
 			};
 
 			const resizeObs = new ResizeObserver(() => {
-				if (keyboardOpen) scheduleRecalc("rsz");
+				if (keyboardOpen) scheduleRecalc();
 			});
 			resizeObs.observe(container.parentElement!);
 			this.register(() => resizeObs.disconnect());
 
 			if (window.visualViewport) {
-				const vpHandler = () => {
-					vpResizeCount++;
-					if (keyboardOpen) scheduleRecalc("vp");
-				};
+				const vpHandler = () => { if (keyboardOpen) scheduleRecalc(); };
 				window.visualViewport.addEventListener("resize", vpHandler);
 				this.register(() => window.visualViewport?.removeEventListener("resize", vpHandler));
 			}
@@ -273,14 +244,11 @@ export class ChatView extends ItemView {
 			this.inputEl.addEventListener("focus", () => {
 				keyboardOpen = true;
 				container.addClass("ai-daily-keyboard-open");
-				scheduleRecalc("focus");
-				if (kbPollId) clearInterval(kbPollId);
-				kbPollId = setInterval(() => recalcPadding("poll"), 500);
+				scheduleRecalc();
 			});
 			this.inputEl.addEventListener("blur", () => {
 				keyboardOpen = false;
 				if (recalcTimer) { clearTimeout(recalcTimer); recalcTimer = null; }
-				if (kbPollId) { clearInterval(kbPollId); kbPollId = null; }
 				container.removeClass("ai-daily-keyboard-open");
 				container.style.setProperty("padding-bottom", "0", "important");
 			});
@@ -332,7 +300,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.4.1</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.4.2</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">总结一下这篇文章的要点</div>

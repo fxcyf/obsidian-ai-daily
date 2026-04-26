@@ -1,7 +1,7 @@
 /* ── AI Daily Chat — mobile-first styles ─────────────────── */
 
-/* Hide Obsidian chrome on mobile — we have our own header */
-.is-mobile .workspace-leaf-content[data-type="ai-daily-chat"] > .view-header {
+/* Hide all Obsidian chrome on mobile — we have our own header */
+.is-mobile .workspace-leaf-content[data-type="ai-daily-chat"] > :not(.view-content) {
 	display: none !important;
 }
 

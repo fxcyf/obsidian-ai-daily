@@ -218,21 +218,22 @@ export class ChatView extends ItemView {
 			this.inputAreaEl.style.setProperty("padding-bottom", navbarH + "px", "important");
 
 			if (inMainArea) {
-				container.style.setProperty("padding-bottom", "0", "important");
-
 				const killObsidianPadding = new MutationObserver(() => {
 					if (container.style.getPropertyValue("padding-bottom") !== "0px") {
 						container.style.setProperty("padding-bottom", "0", "important");
 					}
 				});
-				killObsidianPadding.observe(container, { attributes: true, attributeFilter: ["style"] });
 				this.register(() => killObsidianPadding.disconnect());
 
 				this.inputEl.addEventListener("focus", () => {
 					this.inputAreaEl.style.setProperty("padding-bottom", "8px", "important");
+					container.style.setProperty("padding-bottom", "0", "important");
+					killObsidianPadding.observe(container, { attributes: true, attributeFilter: ["style"] });
 				});
 				this.inputEl.addEventListener("blur", () => {
+					killObsidianPadding.disconnect();
 					this.inputAreaEl.style.setProperty("padding-bottom", navbarH + "px", "important");
+					container.style.removeProperty("padding-bottom");
 				});
 			} else {
 				const initialPb = parseFloat(getComputedStyle(container).paddingBottom) || 0;
@@ -336,7 +337,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.5.2</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.5.3</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">总结一下这篇文章的要点</div>

@@ -549,7 +549,7 @@ export class ChatView extends ItemView {
 	}
 
 	private async openHistoryPanel(): Promise<void> {
-		if (this.historyOverlay) this.closeHistoryOverlay();
+		if (this.historyOverlay) { this.closeHistoryOverlay(); return; }
 		const { chatHistoryFolder } = this.plugin.settings;
 		let sessions = await listChatSessions(this.app.vault, chatHistoryFolder);
 

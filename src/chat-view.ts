@@ -191,6 +191,8 @@ export class ChatView extends ItemView {
 			const initialParentH = container.parentElement!.getBoundingClientRect().height;
 			const tabBarH = window.innerHeight - containerTop - initialParentH;
 
+			container.style.setProperty("padding-bottom", "0", "important");
+
 			const debugEl = container.createDiv();
 			debugEl.style.cssText = "position:fixed;top:0;left:0;right:0;background:rgba(255,0,0,0.9);color:#fff;font-size:10px;padding:4px 6px;z-index:9999;font-family:monospace;white-space:pre;";
 			debugEl.textContent = `init: contTop=${containerTop.toFixed(0)} parentH=${initialParentH.toFixed(0)} tabBarH=${tabBarH.toFixed(0)} innerH=${window.innerHeight}`;
@@ -202,8 +204,6 @@ export class ChatView extends ItemView {
 					void container.offsetHeight;
 					const obsidianPb = parseFloat(getComputedStyle(container).paddingBottom) || 0;
 					const contH = container.getBoundingClientRect().height;
-					const parentH = container.parentElement!.getBoundingClientRect().height;
-					const inputB = this.inputAreaEl.getBoundingClientRect().bottom;
 					let appliedPb: number;
 					if (obsidianPb > 50) {
 						appliedPb = Math.max(8, obsidianPb - tabBarH);
@@ -214,10 +214,9 @@ export class ChatView extends ItemView {
 					}
 					const finalInputB = this.inputAreaEl.getBoundingClientRect().bottom;
 					debugEl.textContent = [
-						`init: contTop=${containerTop.toFixed(0)} parentH_init=${initialParentH.toFixed(0)} tabBarH=${tabBarH.toFixed(0)}`,
-						`focus: obsidianPb=${obsidianPb} contH=${contH.toFixed(0)} parentH=${parentH.toFixed(0)}`,
-						`applied: pb=${appliedPb.toFixed(0)} inputB_before=${inputB.toFixed(0)} inputB_after=${finalInputB.toFixed(0)}`,
-						`contPb_final=${getComputedStyle(container).paddingBottom}`,
+						`init: tabBarH=${tabBarH.toFixed(0)}`,
+						`focus: obsidianPb=${obsidianPb} contH=${contH.toFixed(0)}`,
+						`applied: pb=${appliedPb.toFixed(0)} inputB=${finalInputB.toFixed(0)}`,
 					].join("\n");
 				}, 300);
 			});
@@ -225,13 +224,8 @@ export class ChatView extends ItemView {
 				container.removeClass("ai-daily-keyboard-open");
 				container.style.setProperty("padding-bottom", "0", "important");
 				setTimeout(() => {
-					const contH = container.getBoundingClientRect().height;
-					const pb = getComputedStyle(container).paddingBottom;
 					const inputB = this.inputAreaEl.getBoundingClientRect().bottom;
-					debugEl.textContent = [
-						`init: contTop=${containerTop.toFixed(0)} parentH_init=${initialParentH.toFixed(0)} tabBarH=${tabBarH.toFixed(0)}`,
-						`blur: contH=${contH.toFixed(0)} pb=${pb} inputB=${inputB.toFixed(0)}`,
-					].join("\n");
+					debugEl.textContent = `blur: inputB=${inputB.toFixed(0)} pb=${getComputedStyle(container).paddingBottom}`;
 				}, 300);
 			});
 		}
@@ -282,7 +276,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.3.2</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.3.3</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">总结一下这篇文章的要点</div>

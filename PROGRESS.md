@@ -1,5 +1,17 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-04-25 — 流式 Markdown 渲染与历史面板边界 (`6fda6f3`, `61dbc19`)
+
+- **问题**：真流式 + 打字机后，生成中仍用 `setText()` 展示 accumulated 文本，Markdown 只有结束后才渲染；
+  历史面板挂在 messages 区上也容易覆盖或挤压聊天固定控件。
+- **修复**：
+  - `6fda6f3`：streaming 阶段改为节流 `MarkdownRenderer.render()`，每 120ms 最多渲染一次，
+    最终 flush 后再做完整渲染，避免每个 22ms 打字机 tick 都重渲染。
+  - `61dbc19`：历史面板挂到 chat container，并按 header/token bar/input area 计算 inset；
+    `.ai-daily-chat-container` 增加 `position: relative` 作为 overlay 定位上下文。
+- **教训**：流式 UI 不能只看文本到达速度，Markdown/布局也要在 streaming 过程中逐步成立；
+  但富文本渲染要节流并串行化，避免异步渲染乱序或性能抖动。
+
 ## 2026-04-25 — 移动端 UI 改进 (`409c0aa`)
 
 - **问题**: 移动端多处 UI 问题——历史列表的删除按钮用 `opacity: 0` + `:hover` 显示，触屏设备无 hover 状态导致按钮完全不可见；header 按钮文字小(12px)、tap target 不足；loading 状态仅静态文本

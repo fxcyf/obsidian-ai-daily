@@ -124,16 +124,25 @@ export class ChatView extends ItemView {
 
 		const header = container.createDiv({ cls: "ai-daily-header" });
 
-		const feedBtn = header.createDiv({ cls: "ai-daily-header-btn" });
-		feedBtn.setText("生成 Feed");
+		const feedBtn = header.createDiv({
+			cls: "ai-daily-header-btn ai-daily-header-btn-primary",
+			attr: { "aria-label": "生成 Feed", title: "生成 Feed" },
+		});
+		setIcon(feedBtn, "rss");
 		feedBtn.addEventListener("click", () => this.plugin.generateFeed());
 
-		const historyBtn = header.createDiv({ cls: "ai-daily-header-btn" });
-		historyBtn.setText("历史");
+		const historyBtn = header.createDiv({
+			cls: "ai-daily-header-btn",
+			attr: { "aria-label": "历史", title: "历史" },
+		});
+		setIcon(historyBtn, "history");
 		historyBtn.addEventListener("click", () => this.openHistoryPanel());
 
-		const newChatBtn = header.createDiv({ cls: "ai-daily-header-btn" });
-		newChatBtn.setText("新对话");
+		const newChatBtn = header.createDiv({
+			cls: "ai-daily-header-btn",
+			attr: { "aria-label": "新对话", title: "新对话" },
+		});
+		setIcon(newChatBtn, "plus");
 		newChatBtn.addEventListener("click", () => this.clearChat());
 
 		this.messagesEl = container.createDiv({ cls: "ai-daily-messages" });
@@ -145,7 +154,7 @@ export class ChatView extends ItemView {
 
 		this.inputEl = inputArea.createEl("textarea", {
 			cls: "ai-daily-input",
-			attr: { placeholder: "问点什么...", rows: "2" },
+			attr: { placeholder: "问点什么...", rows: "1" },
 		});
 
 		const sendBtn = inputArea.createEl("button", {
@@ -154,6 +163,11 @@ export class ChatView extends ItemView {
 		setIcon(sendBtn, "send");
 
 		sendBtn.addEventListener("click", () => this.handleSend());
+		this.inputEl.addEventListener("input", () => {
+			this.inputEl.style.height = "auto";
+			this.inputEl.style.height =
+				Math.min(this.inputEl.scrollHeight, 120) + "px";
+		});
 		this.inputEl.addEventListener("keydown", (e) => {
 			if (e.key === "Enter") {
 				if (Platform.isMobile) return;
@@ -179,6 +193,7 @@ export class ChatView extends ItemView {
 		}
 		const pct = Math.min(100, budget > 0 ? (used / budget) * 100 : 0);
 		this.tokenBarEl.empty();
+		this.tokenBarEl.toggleClass("ai-daily-token-bar-low", pct < 10);
 		this.tokenBarEl.createDiv({
 			cls: "ai-daily-token-bar-inner",
 			attr: {
@@ -187,7 +202,7 @@ export class ChatView extends ItemView {
 		});
 		this.tokenBarEl.createSpan({
 			cls: "ai-daily-token-bar-label",
-			text: `约 ${formatTokenK(used)} / ${formatTokenK(budget)} tokens（估算）`,
+			text: `约 ${formatTokenK(used)} / ${formatTokenK(budget)} tokens`,
 		});
 	}
 
@@ -243,6 +258,7 @@ export class ChatView extends ItemView {
 		}
 
 		this.inputEl.value = "";
+		this.inputEl.style.height = "auto";
 		this.addMessage("user", text);
 
 		if (!this.sessionId) {
@@ -257,7 +273,11 @@ export class ChatView extends ItemView {
 		const loadingEl = this.messagesEl.createDiv({
 			cls: "ai-daily-loading",
 		});
-		loadingEl.setText("思考中...");
+		loadingEl.createSpan({ text: "思考中" });
+		const dotsEl = loadingEl.createSpan({ cls: "ai-daily-loading-dots" });
+		dotsEl.createEl("span");
+		dotsEl.createEl("span");
+		dotsEl.createEl("span");
 
 		const useStream = this.plugin.settings.chatStreamMode !== "off";
 

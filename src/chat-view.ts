@@ -96,6 +96,8 @@ export class ChatView extends ItemView {
 		this.plugin = plugin;
 	}
 
+	navigation = false;
+
 	getViewType(): string {
 		return VIEW_TYPE;
 	}
@@ -199,7 +201,8 @@ export class ChatView extends ItemView {
 			debugEl.style.cssText = "position:fixed;top:0;left:0;right:0;background:rgba(255,0,0,0.9);color:#fff;font-size:10px;padding:4px 6px;z-index:9999;font-family:monospace;white-space:pre;";
 			debugEl.textContent = `init: iPb=${initialPb.toFixed(0)} tbH=${tabBarH.toFixed(0)} tbUi=${tabBarUiH.toFixed(0)}`;
 
-			let kbPollId: ReturnType<typeof setInterval> | null = null;
+			let keyboardOpen = false;
+			let recalcTimer: ReturnType<typeof setTimeout> | null = null;
 
 			const recalcPadding = () => {
 				container.style.removeProperty("padding-bottom");
@@ -219,16 +222,25 @@ export class ChatView extends ItemView {
 				].join("\n");
 			};
 
+			const scheduleRecalc = () => {
+				if (recalcTimer) clearTimeout(recalcTimer);
+				recalcTimer = setTimeout(recalcPadding, 300);
+			};
+
+			const resizeObs = new ResizeObserver(() => {
+				if (keyboardOpen) scheduleRecalc();
+			});
+			resizeObs.observe(container.parentElement!);
+			this.register(() => resizeObs.disconnect());
+
 			this.inputEl.addEventListener("focus", () => {
+				keyboardOpen = true;
 				container.addClass("ai-daily-keyboard-open");
-				setTimeout(() => {
-					recalcPadding();
-					if (kbPollId) clearInterval(kbPollId);
-					kbPollId = setInterval(recalcPadding, 500);
-				}, 300);
+				scheduleRecalc();
 			});
 			this.inputEl.addEventListener("blur", () => {
-				if (kbPollId) { clearInterval(kbPollId); kbPollId = null; }
+				keyboardOpen = false;
+				if (recalcTimer) { clearTimeout(recalcTimer); recalcTimer = null; }
 				container.removeClass("ai-daily-keyboard-open");
 				container.style.setProperty("padding-bottom", "0", "important");
 			});
@@ -280,7 +292,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.3.7</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.3.8</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">总结一下这篇文章的要点</div>
@@ -335,11 +347,6 @@ export class ChatView extends ItemView {
 		const useStream = this.plugin.settings.chatStreamMode !== "off";
 
 		let assistantEl: HTMLElement | null = null;
-		if (useStream) {
-			assistantEl = this.messagesEl.createDiv({
-				cls: "ai-daily-msg ai-daily-msg-assistant ai-daily-msg-streaming",
-			});
-		}
 
 		let streamingRenderTimer: number | null = null;
 		let latestStreamingMarkdown = "";

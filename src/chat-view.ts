@@ -188,18 +188,20 @@ export class ChatView extends ItemView {
 		this.showWelcome();
 
 		if (Platform.isMobile && window.visualViewport) {
-			const leaf = this.containerEl;
 			this.viewportHandler = () => {
 				const vv = window.visualViewport!;
 				const keyboardOpen = window.innerHeight - vv.height > 100;
 				container.toggleClass("ai-daily-keyboard-open", keyboardOpen);
 				if (keyboardOpen) {
-					const h = vv.height;
-					leaf.style.height = `${h}px`;
-					leaf.style.maxHeight = `${h}px`;
+					const rect = container.getBoundingClientRect();
+					const h = vv.height + vv.offsetTop - rect.top;
+					container.style.setProperty("height", `${h}px`, "important");
+					container.style.setProperty("max-height", `${h}px`, "important");
+					container.style.overflow = "hidden";
 				} else {
-					leaf.style.height = "";
-					leaf.style.maxHeight = "";
+					container.style.removeProperty("height");
+					container.style.removeProperty("max-height");
+					container.style.overflow = "";
 				}
 			};
 			window.visualViewport.addEventListener("resize", this.viewportHandler);
@@ -253,7 +255,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.2.2</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.2.3</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">总结一下这篇文章的要点</div>
@@ -755,8 +757,9 @@ export class ChatView extends ItemView {
 		if (this.viewportHandler && window.visualViewport) {
 			window.visualViewport.removeEventListener("resize", this.viewportHandler);
 			window.visualViewport.removeEventListener("scroll", this.viewportHandler);
-			this.containerEl.style.height = "";
-			this.containerEl.style.maxHeight = "";
+			this.chatContainerEl.style.removeProperty("height");
+			this.chatContainerEl.style.removeProperty("max-height");
+			this.chatContainerEl.style.overflow = "";
 			this.viewportHandler = null;
 		}
 	}

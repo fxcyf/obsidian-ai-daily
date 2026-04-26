@@ -29,6 +29,38 @@ const STREAM_CHUNK_DELAY_MS = 22;
 const API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 
+async function emitTypewriterText(
+	text: string,
+	onTextDelta: (s: string) => void
+): Promise<void> {
+	let pos = 0;
+	while (pos < text.length) {
+		const chunk = text.slice(pos, pos + STREAM_CHUNK_SIZE);
+		onTextDelta(chunk);
+		pos += STREAM_CHUNK_SIZE;
+		if (pos < text.length) {
+			await new Promise((r) => setTimeout(r, STREAM_CHUNK_DELAY_MS));
+		}
+	}
+}
+
+class TextDeltaTypewriter {
+	private queue = Promise.resolve();
+
+	constructor(private onTextDelta: (s: string) => void) {}
+
+	enqueue(text: string): void {
+		if (!text) return;
+		this.queue = this.queue.then(() =>
+			emitTypewriterText(text, this.onTextDelta)
+		);
+	}
+
+	async flush(): Promise<void> {
+		await this.queue;
+	}
+}
+
 // ── Tool definitions ────────────────────────────────────────────────
 
 const WEB_SEARCH_TOOL = {
@@ -508,8 +540,13 @@ export class ClaudeClient {
 			);
 		}
 
+		const visualTypewriter = onTextDelta
+			? new TextDeltaTypewriter(onTextDelta)
+			: null;
 		const assembler = new AnthropicStreamAssembler({
-			onTextDelta,
+			onTextDelta: visualTypewriter
+				? (delta) => visualTypewriter.enqueue(delta)
+				: undefined,
 		});
 		const reader = res.body.getReader();
 		const decoder = new TextDecoder();
@@ -531,7 +568,9 @@ export class ClaudeClient {
 			}
 		}
 
-		return assembler.finalize();
+		const response = assembler.finalize();
+		await visualTypewriter?.flush();
+		return response;
 	}
 
 	private buildRequestBody(): Record<string, unknown> {
@@ -578,19 +617,7 @@ export class ClaudeClient {
 				.filter((b): b is TextBlock => b.type === "text")
 				.map((b) => b.text)
 				.join("");
-			if (fullText) {
-				let pos = 0;
-				while (pos < fullText.length) {
-					const chunk = fullText.slice(pos, pos + STREAM_CHUNK_SIZE);
-					onTextDelta(chunk);
-					pos += STREAM_CHUNK_SIZE;
-					if (pos < fullText.length) {
-						await new Promise((r) =>
-							setTimeout(r, STREAM_CHUNK_DELAY_MS)
-						);
-					}
-				}
-			}
+			if (fullText) await emitTypewriterText(fullText, onTextDelta);
 		}
 
 		return response;

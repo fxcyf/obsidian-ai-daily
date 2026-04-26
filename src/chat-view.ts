@@ -188,11 +188,15 @@ export class ChatView extends ItemView {
 
 		if (Platform.isMobile) {
 			const initialPb = parseFloat(getComputedStyle(container).paddingBottom) || 0;
+			const containerTop = container.getBoundingClientRect().top;
+			const initialParentH = container.parentElement!.getBoundingClientRect().height;
+			const tabBarH = window.innerHeight - containerTop - initialParentH;
+
 			container.style.setProperty("padding-bottom", "0", "important");
 
 			const debugEl = container.createDiv();
 			debugEl.style.cssText = "position:fixed;top:0;left:0;right:0;background:rgba(255,0,0,0.9);color:#fff;font-size:10px;padding:4px 6px;z-index:9999;font-family:monospace;white-space:pre;";
-			debugEl.textContent = `init: initialPb=${initialPb.toFixed(0)}`;
+			debugEl.textContent = `init: initialPb=${initialPb.toFixed(0)} tabBarH=${tabBarH.toFixed(0)}`;
 
 			this.inputEl.addEventListener("focus", () => {
 				container.addClass("ai-daily-keyboard-open");
@@ -202,14 +206,15 @@ export class ChatView extends ItemView {
 					const obsidianPb = parseFloat(getComputedStyle(container).paddingBottom) || 0;
 					let appliedPb: number;
 					if (obsidianPb > 50) {
-						appliedPb = Math.max(8, obsidianPb - initialPb);
+						const tabBarUiH = Math.max(0, tabBarH - initialPb);
+						appliedPb = Math.max(8, obsidianPb - tabBarUiH);
 					} else {
 						appliedPb = 0;
 					}
 					container.style.setProperty("padding-bottom", appliedPb + "px", "important");
 					const finalInputB = this.inputAreaEl.getBoundingClientRect().bottom;
 					debugEl.textContent = [
-						`init: initialPb=${initialPb.toFixed(0)}`,
+						`init: initialPb=${initialPb.toFixed(0)} tabBarH=${tabBarH.toFixed(0)} tabBarUiH=${Math.max(0, tabBarH - initialPb).toFixed(0)}`,
 						`focus: obsidianPb=${obsidianPb} applied=${appliedPb.toFixed(0)} inputB=${finalInputB.toFixed(0)}`,
 					].join("\n");
 				}, 300);
@@ -266,7 +271,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 		welcomeEl.innerHTML = `
-			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.3.5</div>
+			<div class="ai-daily-welcome-title">AI Knowledge Chat v0.3.6</div>
 			<div class="ai-daily-welcome-hint">${hint}</div>
 			<div class="ai-daily-welcome-examples">
 				<div class="ai-daily-example">总结一下这篇文章的要点</div>

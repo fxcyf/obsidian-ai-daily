@@ -17,6 +17,25 @@ const MAX_TOKENS = 4096;
 const COMPRESS_MAX_OUTPUT_TOKENS = 2048;
 const COMPRESS_BLOB_MAX_CHARS = 120_000;
 
+const RETRY_MAX = 3;
+const RETRY_BASE_MS = 2000;
+
+function isRetryableStatus(status: number): boolean {
+	return status === 429 || status === 529;
+}
+
+async function sleepMs(ms: number): Promise<void> {
+	return new Promise((r) => setTimeout(r, ms));
+}
+
+function retryDelayMs(attempt: number, retryAfterHeader?: string): number {
+	if (retryAfterHeader) {
+		const secs = Number(retryAfterHeader);
+		if (!Number.isNaN(secs) && secs > 0) return secs * 1000;
+	}
+	return RETRY_BASE_MS * Math.pow(2, attempt);
+}
+
 async function emitTypewriterText(
 	text: string,
 	onTextDelta: (s: string) => void
@@ -348,27 +367,33 @@ function extractTextFromResponse(json: unknown): string {
 
 export async function callClaudeSimple(options: SimpleCallOptions): Promise<string> {
 	const { apiKey, model, systemPrompt, userMessage, maxTokens = MAX_TOKENS } = options;
-	const resp = await requestUrl({
-		url: API_URL,
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			"x-api-key": apiKey,
-			"anthropic-version": ANTHROPIC_VERSION,
-		},
-		body: JSON.stringify({
-			model,
-			max_tokens: maxTokens,
-			system: systemPrompt,
-			messages: [{ role: "user", content: userMessage }],
-		}),
-	});
 
-	if (resp.status >= 400) {
-		throw new Error(`Claude API error ${resp.status}: ${resp.text}`);
+	for (let attempt = 0; ; attempt++) {
+		const resp = await requestUrl({
+			url: API_URL,
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"x-api-key": apiKey,
+				"anthropic-version": ANTHROPIC_VERSION,
+			},
+			body: JSON.stringify({
+				model,
+				max_tokens: maxTokens,
+				system: systemPrompt,
+				messages: [{ role: "user", content: userMessage }],
+			}),
+		});
+
+		if (isRetryableStatus(resp.status) && attempt < RETRY_MAX) {
+			await sleepMs(retryDelayMs(attempt, resp.headers?.["retry-after"]));
+			continue;
+		}
+		if (resp.status >= 400) {
+			throw new Error(`Claude API error ${resp.status}: ${resp.text}`);
+		}
+		return extractTextFromResponse(resp.json) || "";
 	}
-
-	return extractTextFromResponse(resp.json) || "";
 }
 
 // ── Client ──────────────────────────────────────────────────────────
@@ -640,30 +665,40 @@ export class ClaudeClient {
 		onTextDelta?: (s: string) => void
 	): Promise<ApiResponse> {
 		const body = { ...this.buildRequestBody(), stream: true };
-		const res = await fetch(API_URL, {
-			method: "POST",
-			headers: {
-				"content-type": "application/json",
-				"x-api-key": this.apiKey,
-				"anthropic-version": ANTHROPIC_VERSION,
-				"anthropic-dangerous-direct-browser-access": "true",
-			},
-			body: JSON.stringify(body),
-		});
 
-		if (!res.ok) {
+		let res: Response | undefined;
+		for (let attempt = 0; ; attempt++) {
+			res = await fetch(API_URL, {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"x-api-key": this.apiKey,
+					"anthropic-version": ANTHROPIC_VERSION,
+					"anthropic-dangerous-direct-browser-access": "true",
+				},
+				body: JSON.stringify(body),
+			});
+
+			if (isRetryableStatus(res.status) && attempt < RETRY_MAX) {
+				await sleepMs(retryDelayMs(attempt, res.headers.get("retry-after") ?? undefined));
+				continue;
+			}
+			break;
+		}
+
+		if (!res!.ok) {
 			let errText = "";
 			try {
-				errText = await res.text();
+				errText = await res!.text();
 			} catch {
 				/* ignore */
 			}
 			throw new Error(
-				`Claude API stream HTTP ${res.status}: ${errText.slice(0, 500)}`
+				`Claude API stream HTTP ${res!.status}: ${errText.slice(0, 500)}`
 			);
 		}
 
-		if (!res.body) {
+		if (!res!.body) {
 			throw new Error(
 				"Claude API stream: response has no body (no ReadableStream)"
 			);
@@ -677,7 +712,7 @@ export class ClaudeClient {
 				? (delta) => visualTypewriter.enqueue(delta)
 				: undefined,
 		});
-		const reader = res.body.getReader();
+		const reader = res!.body!.getReader();
 		const decoder = new TextDecoder();
 		try {
 			while (true) {
@@ -713,26 +748,33 @@ export class ClaudeClient {
 
 	private async callApiNonStreaming(): Promise<ApiResponse> {
 		const body = this.buildRequestBody();
-		const resp = await requestUrl({
-			url: API_URL,
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"x-api-key": this.apiKey,
-				"anthropic-version": ANTHROPIC_VERSION,
-			},
-			body: JSON.stringify(body),
-		});
 
-		if (resp.status >= 400) {
-			throw new Error(`Claude API error ${resp.status}: ${resp.text}`);
-		}
+		for (let attempt = 0; ; attempt++) {
+			const resp = await requestUrl({
+				url: API_URL,
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"x-api-key": this.apiKey,
+					"anthropic-version": ANTHROPIC_VERSION,
+				},
+				body: JSON.stringify(body),
+			});
 
-		const json = resp.json as Record<string, unknown>;
-		if (!json || !Array.isArray(json.content)) {
-			throw new Error("Claude API: unexpected response format");
+			if (isRetryableStatus(resp.status) && attempt < RETRY_MAX) {
+				await sleepMs(retryDelayMs(attempt, resp.headers?.["retry-after"]));
+				continue;
+			}
+			if (resp.status >= 400) {
+				throw new Error(`Claude API error ${resp.status}: ${resp.text}`);
+			}
+
+			const json = resp.json as Record<string, unknown>;
+			if (!json || !Array.isArray(json.content)) {
+				throw new Error("Claude API: unexpected response format");
+			}
+			return json as unknown as ApiResponse;
 		}
-		return json as unknown as ApiResponse;
 	}
 
 	private async callApiTypewriter(

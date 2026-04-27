@@ -80,6 +80,16 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					});
 				text.inputEl.type = "password";
 				text.inputEl.autocomplete = "off";
+			})
+			.addExtraButton((btn) => {
+				btn.setIcon("eye-off").setTooltip("显示/隐藏 API Key").onClick(() => {
+					const setting = btn.extraSettingsEl.closest(".setting-item");
+					const input = setting?.querySelector("input") as HTMLInputElement | null;
+					if (!input) return;
+					const hidden = input.type === "password";
+					input.type = hidden ? "text" : "password";
+					btn.setIcon(hidden ? "eye" : "eye-off");
+				});
 			});
 
 		new Setting(containerEl)

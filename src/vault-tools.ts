@@ -74,6 +74,12 @@ export class VaultTools {
 				if (containsTraversal(path)) return "Error: invalid path";
 				return this.deleteNote(path, confirmed);
 			}
+			case "get_links": {
+				const path = typeof input.path === "string" ? input.path : "";
+				if (!path) return "Error: path is required";
+				if (containsTraversal(path)) return "Error: invalid path";
+				return this.getLinks(path);
+			}
 			case "update_frontmatter": {
 				const path = typeof input.path === "string" ? input.path : "";
 				if (!path) return "Error: path is required";
@@ -299,6 +305,60 @@ export class VaultTools {
 		}
 		await this.app.vault.trash(file, true);
 		return `Deleted (moved to trash): ${path}`;
+	}
+
+	private getLinks(path: string): string {
+		const file = this.app.vault.getAbstractFileByPath(path);
+		if (!(file instanceof TFile)) {
+			return `File not found: ${path}`;
+		}
+
+		const outlinks: { path: string; title: string }[] = [];
+		const resolvedLinks = this.app.metadataCache.resolvedLinks[path];
+		if (resolvedLinks) {
+			for (const targetPath of Object.keys(resolvedLinks)) {
+				const targetFile = this.app.vault.getAbstractFileByPath(targetPath);
+				const title = targetFile instanceof TFile
+					? targetFile.basename
+					: targetPath;
+				outlinks.push({ path: targetPath, title });
+			}
+		}
+
+		const backlinks: { path: string; title: string }[] = [];
+		const allResolved = this.app.metadataCache.resolvedLinks;
+		for (const [sourcePath, links] of Object.entries(allResolved)) {
+			if (sourcePath === path) continue;
+			if (links[path]) {
+				const sourceFile = this.app.vault.getAbstractFileByPath(sourcePath);
+				const title = sourceFile instanceof TFile
+					? sourceFile.basename
+					: sourcePath;
+				backlinks.push({ path: sourcePath, title });
+			}
+		}
+
+		const parts: string[] = [`## Links for ${path}`];
+
+		parts.push(`\n### Outlinks (${outlinks.length})`);
+		if (outlinks.length > 0) {
+			for (const link of outlinks) {
+				parts.push(`- [[${link.title}]] (${link.path})`);
+			}
+		} else {
+			parts.push("_No outgoing links_");
+		}
+
+		parts.push(`\n### Backlinks (${backlinks.length})`);
+		if (backlinks.length > 0) {
+			for (const link of backlinks) {
+				parts.push(`- [[${link.title}]] (${link.path})`);
+			}
+		} else {
+			parts.push("_No incoming links_");
+		}
+
+		return parts.join("\n");
 	}
 
 	private async updateFrontmatter(

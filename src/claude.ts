@@ -238,6 +238,21 @@ export const VAULT_TOOLS = [
 		},
 	},
 	{
+		name: "get_links",
+		description:
+			"获取笔记的双向链接关系。返回该笔记链接到的其他笔记（outlinks）和链接到该笔记的其他笔记（backlinks）。用于理解笔记间的关系和知识图谱结构。",
+		input_schema: {
+			type: "object" as const,
+			properties: {
+				path: {
+					type: "string",
+					description: "笔记路径，如 Wiki/concept.md",
+				},
+			},
+			required: ["path"],
+		},
+	},
+	{
 		name: "update_frontmatter",
 		description:
 			"修改笔记的 YAML frontmatter。支持设置（set）和删除（delete）字段。如果笔记没有 frontmatter 则自动创建。",

@@ -113,7 +113,9 @@ Claude 可以自主调用以下工具：
 | `edit_note` | 编辑笔记（按标题/行号/原文匹配定位替换） |
 | `rename_note` | 重命名/移动笔记，自动更新反向链接 |
 | `delete_note` | 删除笔记（两步确认，移到回收站） |
-| `update_frontmatter` | 修改笔记的 YAML frontmatter（设置/删除字段） || `web_search` | 搜索互联网（Anthropic 内置，需开启联网搜索） |
+| `update_frontmatter` | 修改笔记的 YAML frontmatter（设置/删除字段） |
+| `get_links` | 获取笔记的双向链接关系（outlinks + backlinks） |
+| `web_search` | 搜索互联网（Anthropic 内置，需开启联网搜索） |
 | `web_fetch` | 抓取指定 URL 的网页内容 |
 
 ## 内容采集建议

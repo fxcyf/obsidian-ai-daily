@@ -47,6 +47,11 @@ npm run test:watch # 监听模式
 - [ ] 尝试创建已存在的笔记路径，应返回错误
 - [ ] 尝试删除不存在的笔记，应返回错误
 
+### 知识图谱感知
+- [ ] 让 Claude 查询某笔记的双向链接（`get_links`），验证 outlinks 和 backlinks 正确
+- [ ] 查询不存在的笔记路径，应返回错误
+- [ ] 查询没有链接的笔记，应返回空列表提示
+
 ### 主题兼容
 - [ ] 切换不同主题（Minimal/Things/Blue Topaz），UI 颜色正常
 - [ ] Feed badge 颜色使用 CSS 变量而非硬编码

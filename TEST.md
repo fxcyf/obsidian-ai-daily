@@ -16,6 +16,7 @@ npm run test:watch # 监听模式
 | `src/chat-session.test.ts` | newSessionId, titleFromMessages, isValidChatSession, shouldPruneToday |
 | `src/vault-tools.test.ts` | parseFrontmatter, serializeFrontmatter, findHeadingRange |
 | `src/image-tools.test.ts` | extractLocalImageRefs（wikilink/markdown 图片解析、去重、过滤） |
+| `src/auto-tagger.test.ts` | parseTaggingResponse（JSON 解析、容错、字段过滤） |
 
 ## 手动测试清单（UX 功能）
 
@@ -60,6 +61,15 @@ npm run test:watch # 监听模式
 - [ ] 引用不支持的格式（如 .pdf），不被提取
 - [ ] 关闭"本地图片识别"设置后，图片不被发送
 - [ ] 不含图片引用的消息行为不变
+
+### 自动标注
+- [ ] 在设置中开启"自动标注"，在 Raw/ 文件夹创建新笔记，等待 5 秒后检查 frontmatter 是否生成 tags 和 summary
+- [ ] 已标注的笔记（frontmatter 含 `auto-tagged: true`）不会被重复标注
+- [ ] 修改已标注笔记不会触发重复标注
+- [ ] 监控文件夹设置为 `Raw`，在 Wiki/ 创建笔记不会触发标注
+- [ ] 关闭"自动标注"开关后，新建笔记不会触发标注
+- [ ] 内容过短（< 50 字符正文）的笔记不会触发标注
+- [ ] 标签优先复用 vault 中已有的标签体系
 
 ### 主题兼容
 - [ ] 切换不同主题（Minimal/Things/Blue Topaz），UI 颜色正常

@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Platform, Plugin } from "obsidian";
+import { App, Modal, Notice, Platform, Plugin, TFile } from "obsidian";
 import {
 	AIDailyChatSettings,
 	DEFAULT_SETTINGS,
@@ -7,6 +7,7 @@ import {
 import { ChatView, VIEW_TYPE } from "./chat-view";
 import { generateFeed, checkExistingFeed } from "./feed-generator";
 import { DEFAULT_FEEDS } from "./feeds";
+import { AutoTagger } from "./auto-tagger";
 
 class FeedConfirmModal extends Modal {
 	private resolved = false;
@@ -58,6 +59,7 @@ class FeedConfirmModal extends Modal {
 
 export default class AIDailyChat extends Plugin {
 	settings: AIDailyChatSettings = DEFAULT_SETTINGS;
+	private autoTagger: AutoTagger | null = null;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -99,6 +101,9 @@ export default class AIDailyChat extends Plugin {
 
 		// Settings tab
 		this.addSettingTab(new AIDailyChatSettingTab(this.app, this));
+
+		// Auto-tagging
+		this.setupAutoTagger();
 
 		if (Platform.isMobile) {
 			this.app.workspace.onLayoutReady(() => {
@@ -177,8 +182,39 @@ export default class AIDailyChat extends Plugin {
 		}
 	}
 
+	setupAutoTagger(): void {
+		this.autoTagger?.destroy();
+		this.autoTagger = null;
+
+		if (!this.settings.enableAutoTagging || !this.settings.apiKey) return;
+
+		this.autoTagger = new AutoTagger(this.app, {
+			apiKey: this.settings.apiKey,
+			model: this.settings.model,
+			folders: this.settings.autoTagFolders,
+			customPrompt: this.settings.autoTagPrompt || undefined,
+			onTagged: (path) => {
+				new Notice(`已自动标注: ${path}`, 3000);
+			},
+			onError: (path, error) => {
+				console.warn(`[ai-daily] auto-tag failed for ${path}:`, error);
+			},
+		});
+
+		this.registerEvent(
+			this.app.vault.on("create", (file) => {
+				if (file instanceof TFile) this.autoTagger?.handleFileEvent(file);
+			})
+		);
+		this.registerEvent(
+			this.app.vault.on("modify", (file) => {
+				if (file instanceof TFile) this.autoTagger?.handleFileEvent(file);
+			})
+		);
+	}
+
 	onunload(): void {
-		// Views are cleaned up automatically
+		this.autoTagger?.destroy();
 	}
 
 	async loadSettings(): Promise<void> {

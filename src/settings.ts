@@ -38,6 +38,10 @@ export interface AIDailyChatSettings {
 	enableLocalImages: boolean;
 	maxImagesPerMessage: number;
 	maxImageBytes: number;
+	// Auto-tagging settings
+	enableAutoTagging: boolean;
+	autoTagFolders: string[];
+	autoTagPrompt: string;
 }
 
 export const DEFAULT_SETTINGS: AIDailyChatSettings = {
@@ -59,6 +63,9 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	enableLocalImages: true,
 	maxImagesPerMessage: 3,
 	maxImageBytes: 3_145_728,
+	enableAutoTagging: false,
+	autoTagFolders: ["Raw"],
+	autoTagPrompt: "",
 };
 
 export class AIDailyChatSettingTab extends PluginSettingTab {
@@ -278,6 +285,58 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+
+		// ── Auto-tagging settings ──────────────────────────────
+
+		containerEl.createEl("h3", { text: "自动标注" });
+
+		new Setting(containerEl)
+			.setName("启用自动标注")
+			.setDesc(
+				"新建或修改笔记时，自动调用 Claude 生成 tags 和 summary 写入 frontmatter"
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enableAutoTagging)
+					.onChange(async (value) => {
+						this.plugin.settings.enableAutoTagging = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("监控文件夹")
+			.setDesc("仅对这些文件夹中的笔记自动标注，用逗号分隔")
+			.addText((text) =>
+				text
+					.setPlaceholder("Raw")
+					.setValue(this.plugin.settings.autoTagFolders.join(","))
+					.onChange(async (value) => {
+						this.plugin.settings.autoTagFolders = value
+							.split(",")
+							.map((s) => s.trim())
+							.filter(Boolean);
+						await this.plugin.saveSettings();
+					})
+			);
+
+		const autoTagPromptSetting = new Setting(containerEl)
+			.setName("自定义标注 Prompt")
+			.setDesc("留空使用默认 prompt")
+			.addTextArea((text) =>
+				text
+					.setPlaceholder("你是一个知识库标注助手...")
+					.setValue(this.plugin.settings.autoTagPrompt)
+					.onChange(async (value) => {
+						this.plugin.settings.autoTagPrompt = value;
+						await this.plugin.saveSettings();
+					})
+			);
+		autoTagPromptSetting.settingEl.addClass("ai-daily-setting-full");
+		const autoTagTextarea = autoTagPromptSetting.settingEl.querySelector("textarea");
+		if (autoTagTextarea) {
+			autoTagTextarea.rows = 3;
+		}
 
 		// ── Feed settings ──────────────────────────────────────
 

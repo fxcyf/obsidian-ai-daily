@@ -33,7 +33,7 @@
 | 知识图谱感知（backlinks/outlinks） | ✅ | [Agentic Vault](feature-agentic-vault.md) #1 补充、[知识库增强](feature-knowledge-enhancement.md) #2 | get_links 工具，利用 Obsidian metadataCache API（v0.7.1） |
 | 批量知识整理 Agent | ⬜ | [Agentic Vault](feature-agentic-vault.md) #2 | Raw → Wiki 自动化整理 |
 | 对话驱动知识蒸馏 | ⬜ | [Agentic Vault](feature-agentic-vault.md) #3 | 对话产出自动沉淀为结构化 Wiki（Karpathy LLM Wiki 模式） |
-| 笔记自动标注 | ⬜ | [LLM 自组织](feature-llm-driven-org.md) #1、[工作流自动化](feature-automation.md) #1 | 新笔记自动生成 tags + summary |
+| 笔记自动标注 | ✅ | [LLM 自组织](feature-llm-driven-org.md) #1、[工作流自动化](feature-automation.md) #1 | 新笔记自动生成 tags + summary（v0.7.3） |
 | 本地图片处理 | ✅ | [本地文件处理](feature-local-file-image.md) | 让 Raw 笔记中的本地图片可被 AI 理解（v0.7.2） |
 
 ---

@@ -19,6 +19,7 @@ import { WebTools } from "./web-tools";
 import type { PromptTemplate } from "./settings";
 import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
 import type { PreparedImage } from "./image-tools";
+import { distillConversation } from "./knowledge-agent";
 import {
 	newSessionId,
 	titleFromMessages,
@@ -181,6 +182,13 @@ export class ChatView extends ItemView {
 		});
 		setIcon(historyBtn, "history");
 		historyBtn.addEventListener("click", () => this.openHistoryPanel());
+
+		const distillBtn = this.headerEl.createDiv({
+			cls: "ai-daily-header-btn",
+			attr: { "aria-label": "蒸馏知识", title: "蒸馏知识" },
+		});
+		setIcon(distillBtn, "sparkles");
+		distillBtn.addEventListener("click", () => this.handleDistill());
 
 		const newChatBtn = this.headerEl.createDiv({
 			cls: "ai-daily-header-btn",
@@ -835,6 +843,42 @@ export class ChatView extends ItemView {
 	sendMessage(text: string): void {
 		this.inputEl.value = text;
 		void this.handleSend();
+	}
+
+	private async handleDistill(): Promise<void> {
+		if (this.messages.length < 2) {
+			new Notice("当前对话内容太少，无法蒸馏", 3000);
+			return;
+		}
+		if (this.isLoading) {
+			new Notice("请等待当前操作完成", 2000);
+			return;
+		}
+		if (!this.plugin.settings.apiKey) {
+			new Notice("请先在插件设置中配置 API Key", 3000);
+			return;
+		}
+
+		this.isLoading = true;
+		const notice = new Notice("正在蒸馏对话知识...", 0);
+		try {
+			const result = await distillConversation(this.app, this.messages, {
+				apiKey: this.plugin.settings.apiKey,
+				model: this.plugin.settings.model,
+				knowledgeFolders: this.plugin.settings.knowledgeFolders,
+				targetFolder: this.plugin.settings.distillTargetFolder,
+			});
+			notice.hide();
+			this.addMessage("assistant", result);
+			await this.persistSession();
+			new Notice("知识蒸馏完成", 3000);
+		} catch (e) {
+			notice.hide();
+			const msg = e instanceof Error ? e.message : String(e);
+			new Notice(`蒸馏失败: ${msg}`, 5000);
+		} finally {
+			this.isLoading = false;
+		}
 	}
 
 	private clearChat(): void {

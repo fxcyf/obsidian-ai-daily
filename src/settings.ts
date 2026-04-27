@@ -42,6 +42,9 @@ export interface AIDailyChatSettings {
 	enableAutoTagging: boolean;
 	autoTagFolders: string[];
 	autoTagPrompt: string;
+	// Knowledge organizer settings
+	enableAutoDistill: boolean;
+	distillTargetFolder: string;
 }
 
 export const DEFAULT_SETTINGS: AIDailyChatSettings = {
@@ -66,6 +69,8 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	enableAutoTagging: false,
 	autoTagFolders: ["Raw"],
 	autoTagPrompt: "",
+	enableAutoDistill: false,
+	distillTargetFolder: "Wiki",
 };
 
 export class AIDailyChatSettingTab extends PluginSettingTab {
@@ -337,6 +342,23 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 		if (autoTagTextarea) {
 			autoTagTextarea.rows = 3;
 		}
+
+		// ── Knowledge organizer settings ───────────────────────
+
+		containerEl.createEl("h3", { text: "知识整理" });
+
+		new Setting(containerEl)
+			.setName("蒸馏目标文件夹")
+			.setDesc("对话蒸馏和知识整理的输出目标文件夹")
+			.addText((text) =>
+				text
+					.setPlaceholder("Wiki")
+					.setValue(this.plugin.settings.distillTargetFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.distillTargetFolder = value.trim() || "Wiki";
+						await this.plugin.saveSettings();
+					})
+			);
 
 		// ── Feed settings ──────────────────────────────────────
 

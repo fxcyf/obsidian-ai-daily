@@ -8,6 +8,7 @@ import { ChatView, VIEW_TYPE } from "./chat-view";
 import { generateFeed, checkExistingFeed } from "./feed-generator";
 import { DEFAULT_FEEDS } from "./feeds";
 import { AutoTagger } from "./auto-tagger";
+import { runKnowledgeOrganizer } from "./knowledge-agent";
 
 class FeedConfirmModal extends Modal {
 	private resolved = false;
@@ -99,6 +100,13 @@ export default class AIDailyChat extends Plugin {
 			callback: () => this.generateFeed(),
 		});
 
+		// Command to organize knowledge
+		this.addCommand({
+			id: "organize-knowledge",
+			name: "整理知识库",
+			callback: () => this.organizeKnowledge(),
+		});
+
 		// Settings tab
 		this.addSettingTab(new AIDailyChatSettingTab(this.app, this));
 
@@ -179,6 +187,36 @@ export default class AIDailyChat extends Plugin {
 			notice.hide();
 			const msg = e instanceof Error ? e.message : String(e);
 			new Notice(`Feed 生成失败: ${msg}`, 8000);
+		}
+	}
+
+	async organizeKnowledge(): Promise<void> {
+		if (!this.settings.apiKey) {
+			new Notice("请先在插件设置中配置 Anthropic API Key。", 5000);
+			return;
+		}
+
+		const notice = new Notice("正在扫描待整理笔记...", 0);
+		try {
+			const sourceFolder = this.settings.autoTagFolders[0] || "Raw";
+			const { processed, total } = await runKnowledgeOrganizer(this.app, {
+				apiKey: this.settings.apiKey,
+				model: this.settings.model,
+				knowledgeFolders: this.settings.knowledgeFolders,
+				sourceFolder,
+				targetFolder: this.settings.distillTargetFolder,
+				onProgress: (msg) => { notice.setMessage(msg); },
+			});
+			notice.hide();
+			if (total === 0) {
+				new Notice("没有找到待整理的笔记", 3000);
+			} else {
+				new Notice(`知识整理完成: ${processed}/${total} 篇`, 5000);
+			}
+		} catch (e) {
+			notice.hide();
+			const msg = e instanceof Error ? e.message : String(e);
+			new Notice(`知识整理失败: ${msg}`, 8000);
 		}
 	}
 

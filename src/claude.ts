@@ -18,7 +18,7 @@ const COMPRESS_MAX_OUTPUT_TOKENS = 2048;
 const COMPRESS_BLOB_MAX_CHARS = 120_000;
 
 const RETRY_MAX = 3;
-const RETRY_BASE_MS = 2000;
+const RETRY_BASE_MS = 15_000;
 
 function isRetryableStatus(status: number): boolean {
 	return status === 429 || status === 529;
@@ -28,12 +28,14 @@ async function sleepMs(ms: number): Promise<void> {
 	return new Promise((r) => setTimeout(r, ms));
 }
 
-function retryDelayMs(attempt: number, retryAfterHeader?: string): number {
+function retryDelayMs(attempt: number, status: number, retryAfterHeader?: string): number {
 	if (retryAfterHeader) {
 		const secs = Number(retryAfterHeader);
 		if (!Number.isNaN(secs) && secs > 0) return secs * 1000;
 	}
-	return RETRY_BASE_MS * Math.pow(2, attempt);
+	const delay = RETRY_BASE_MS * Math.pow(2, attempt);
+	console.warn(`[ai-daily] API ${status}, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${RETRY_MAX})`);
+	return delay;
 }
 
 async function emitTypewriterText(
@@ -386,7 +388,7 @@ export async function callClaudeSimple(options: SimpleCallOptions): Promise<stri
 		});
 
 		if (isRetryableStatus(resp.status) && attempt < RETRY_MAX) {
-			await sleepMs(retryDelayMs(attempt, resp.headers?.["retry-after"]));
+			await sleepMs(retryDelayMs(attempt, resp.status, resp.headers?.["retry-after"]));
 			continue;
 		}
 		if (resp.status >= 400) {
@@ -680,7 +682,7 @@ export class ClaudeClient {
 			});
 
 			if (isRetryableStatus(res.status) && attempt < RETRY_MAX) {
-				await sleepMs(retryDelayMs(attempt, res.headers.get("retry-after") ?? undefined));
+				await sleepMs(retryDelayMs(attempt, res.status, res.headers.get("retry-after") ?? undefined));
 				continue;
 			}
 			break;
@@ -762,7 +764,7 @@ export class ClaudeClient {
 			});
 
 			if (isRetryableStatus(resp.status) && attempt < RETRY_MAX) {
-				await sleepMs(retryDelayMs(attempt, resp.headers?.["retry-after"]));
+				await sleepMs(retryDelayMs(attempt, resp.status, resp.headers?.["retry-after"]));
 				continue;
 			}
 			if (resp.status >= 400) {

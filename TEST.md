@@ -15,6 +15,7 @@ npm run test:watch # 监听模式
 | `src/feeds.test.ts` | timeDecay, socialBoost, detectBursts, scoreRelevance |
 | `src/chat-session.test.ts` | newSessionId, titleFromMessages, isValidChatSession, shouldPruneToday |
 | `src/vault-tools.test.ts` | parseFrontmatter, serializeFrontmatter, findHeadingRange |
+| `src/image-tools.test.ts` | extractLocalImageRefs（wikilink/markdown 图片解析、去重、过滤） |
 
 ## 手动测试清单（UX 功能）
 
@@ -51,6 +52,14 @@ npm run test:watch # 监听模式
 - [ ] 让 Claude 查询某笔记的双向链接（`get_links`），验证 outlinks 和 backlinks 正确
 - [ ] 查询不存在的笔记路径，应返回错误
 - [ ] 查询没有链接的笔记，应返回空列表提示
+
+### 本地图片识别
+- [ ] 笔记中引用 `![[photo.png]]` 后发送消息，Notice 显示"已附带 1 张图片"
+- [ ] 引用多张图片（超过上限），Notice 提示跳过原因
+- [ ] 引用不存在的图片文件，Notice 提示"文件未找到"
+- [ ] 引用不支持的格式（如 .pdf），不被提取
+- [ ] 关闭"本地图片识别"设置后，图片不被发送
+- [ ] 不含图片引用的消息行为不变
 
 ### 主题兼容
 - [ ] 切换不同主题（Minimal/Things/Blue Topaz），UI 颜色正常

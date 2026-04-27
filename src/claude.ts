@@ -6,6 +6,7 @@ import {
 	type TextBlock,
 	type ToolUseBlock,
 } from "./anthropic-sse";
+import type { PreparedImage } from "./image-tools";
 
 const STREAM_CHUNK_SIZE = 6;
 const STREAM_CHUNK_DELAY_MS = 22;
@@ -455,9 +456,26 @@ export class ClaudeClient {
 	async chat(
 		userMessage: string,
 		executeTool: ToolExecutor,
-		onAssistantDelta?: (delta: string, accumulated: string) => void
+		onAssistantDelta?: (delta: string, accumulated: string) => void,
+		images?: PreparedImage[]
 	): Promise<string> {
-		this.messages.push({ role: "user", content: userMessage });
+		if (images && images.length > 0) {
+			const content: Record<string, unknown>[] = images.map((img) => ({
+				type: "image",
+				source: {
+					type: "base64",
+					media_type: img.mediaType,
+					data: img.base64,
+				},
+			}));
+			content.push({ type: "text", text: userMessage });
+			this.messages.push({
+				role: "user",
+				content: content as unknown as ContentBlock[],
+			});
+		} else {
+			this.messages.push({ role: "user", content: userMessage });
+		}
 
 		await this.maybeCompressHistory();
 

@@ -34,6 +34,10 @@ export interface AIDailyChatSettings {
 	feedTopics: string[];
 	feedSources: FeedSource[];
 	feedMaxArticles: number;
+	// Image settings
+	enableLocalImages: boolean;
+	maxImagesPerMessage: number;
+	maxImageBytes: number;
 }
 
 export const DEFAULT_SETTINGS: AIDailyChatSettings = {
@@ -52,6 +56,9 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	feedTopics: [],
 	feedSources: DEFAULT_FEEDS,
 	feedMaxArticles: 20,
+	enableLocalImages: true,
+	maxImagesPerMessage: 3,
+	maxImageBytes: 3_145_728,
 };
 
 export class AIDailyChatSettingTab extends PluginSettingTab {
@@ -223,6 +230,54 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 		containerEl.createEl("h3", { text: "Prompt 模板" });
 
 		this.renderPromptTemplates(containerEl);
+
+		// ── Image settings ─────────────────────────────────────
+
+		containerEl.createEl("h3", { text: "本地图片" });
+
+		new Setting(containerEl)
+			.setName("启用本地图片识别")
+			.setDesc(
+				"开启后，笔记中引用的本地图片（![[img.png]]）会自动发送给 Claude 进行多模态对话"
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enableLocalImages)
+					.onChange(async (value) => {
+						this.plugin.settings.enableLocalImages = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("单次最大图片数")
+			.setDesc("每条消息最多附带的图片数量")
+			.addSlider((slider) =>
+				slider
+					.setLimits(1, 10, 1)
+					.setValue(this.plugin.settings.maxImagesPerMessage)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.maxImagesPerMessage = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("单图最大体积 (MB)")
+			.setDesc("超过该体积的图片将被跳过")
+			.addSlider((slider) =>
+				slider
+					.setLimits(1, 10, 1)
+					.setValue(
+						Math.round(this.plugin.settings.maxImageBytes / 1_048_576)
+					)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.maxImageBytes = value * 1_048_576;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		// ── Feed settings ──────────────────────────────────────
 

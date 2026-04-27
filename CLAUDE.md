@@ -87,6 +87,8 @@ rebase 发生冲突时：
 - `src/anthropic-sse.test.ts` — `npm test` 入口（vitest）
 - `src/vault-tools.ts` — Vault 工具实现（read/search/append/list/create/edit/rename/delete/update_frontmatter/get_links）
 - `src/vault-tools.test.ts` — vault-tools 纯函数单测（frontmatter 解析、heading 定位）
+- `src/image-tools.ts` — 本地图片处理（提取引用、二进制读取、base64 编码）
+- `src/image-tools.test.ts` — image-tools 单测（extractLocalImageRefs）
 - `src/web-tools.ts` — Web 工具实现（web_fetch 网页抓取）
 - `src/settings.ts` — 插件设置（含 Feed 配置）
 - `src/feeds.ts` — 多源抓取（RSS/HN API/Reddit/GitHub Trending）、社交热度评分、时间衰减、爆发检测

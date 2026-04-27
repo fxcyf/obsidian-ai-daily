@@ -17,6 +17,8 @@ import { ClaudeClient, estimateTextTokens } from "./claude";
 import { VaultTools } from "./vault-tools";
 import { WebTools } from "./web-tools";
 import type { PromptTemplate } from "./settings";
+import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
+import type { PreparedImage } from "./image-tools";
 import {
 	newSessionId,
 	titleFromMessages,
@@ -629,6 +631,30 @@ export class ChatView extends ItemView {
 		};
 
 		try {
+			let preparedImages: PreparedImage[] | undefined;
+			if (this.plugin.settings.enableLocalImages) {
+				const refs = extractLocalImageRefs(text);
+				if (refs.length > 0) {
+					const { images, skipped } = await prepareLocalImages(
+						this.app,
+						refs,
+						{
+							maxImages: this.plugin.settings.maxImagesPerMessage,
+							maxBytes: this.plugin.settings.maxImageBytes,
+						}
+					);
+					if (images.length > 0) {
+						preparedImages = images;
+						new Notice(`已附带 ${images.length} 张图片`);
+					}
+					if (skipped.length > 0) {
+						new Notice(
+							`跳过 ${skipped.length} 张图片: ${skipped.map((s) => s.reason).join(", ")}`
+						);
+					}
+				}
+			}
+
 			const reply = await this.client!.chat(
 				text,
 				(name, input) => {
@@ -645,7 +671,8 @@ export class ChatView extends ItemView {
 							}
 							scheduleStreamingMarkdown(accumulated);
 						}
-					: undefined
+					: undefined,
+				preparedImages
 			);
 
 			loadingEl.remove();

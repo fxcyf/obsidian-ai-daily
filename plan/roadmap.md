@@ -34,7 +34,7 @@
 | 批量知识整理 Agent | ⬜ | [Agentic Vault](feature-agentic-vault.md) #2 | Raw → Wiki 自动化整理 |
 | 对话驱动知识蒸馏 | ⬜ | [Agentic Vault](feature-agentic-vault.md) #3 | 对话产出自动沉淀为结构化 Wiki（Karpathy LLM Wiki 模式） |
 | 笔记自动标注 | ⬜ | [LLM 自组织](feature-llm-driven-org.md) #1、[工作流自动化](feature-automation.md) #1 | 新笔记自动生成 tags + summary |
-| 本地图片处理 | ⬜ | [本地文件处理](feature-local-file-image.md) | 让 Raw 笔记中的本地图片可被 AI 理解 |
+| 本地图片处理 | ✅ | [本地文件处理](feature-local-file-image.md) | 让 Raw 笔记中的本地图片可被 AI 理解（v0.7.2） |
 
 ---
 
@@ -74,7 +74,7 @@
 | [phase2-implementation.md](phase2-implementation.md) | 阶段二详细实施计划（4 批次） | 🔧 |
 | [feature-semantic-search.md](feature-semantic-search.md) | 语义搜索（Embedding + GraphRAG + Context Engineering） | ⬜ |
 | [feature-llm-driven-org.md](feature-llm-driven-org.md) | LLM 驱动自组织（标签 + 链接 + 健康报告 + 多模型 + 回顾） | ⬜ |
-| [feature-local-file-image.md](feature-local-file-image.md) | 本地图片处理（M1-M5 里程碑） | ⬜ |
+| [feature-local-file-image.md](feature-local-file-image.md) | 本地图片处理（M1-M5 里程碑） | ✅ Phase 1 |
 | [feature-info-feed.md](feature-info-feed.md) | 信息 Feed 流 | ✅ Phase 1 |
 | [feature-chat-experience.md](feature-chat-experience.md) | 对话体验增强（流式 + 历史 + Token） | ✅ |
 | [feature-real-streaming.md](feature-real-streaming.md) | 真流式输出（SSE + 三态降级） | ✅ |

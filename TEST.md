@@ -14,6 +14,7 @@ npm run test:watch # 监听模式
 | `src/anthropic-sse.test.ts` | SSE 解析与 ApiResponse 组装 |
 | `src/feeds.test.ts` | timeDecay, socialBoost, detectBursts, scoreRelevance |
 | `src/chat-session.test.ts` | newSessionId, titleFromMessages, isValidChatSession, shouldPruneToday |
+| `src/vault-tools.test.ts` | parseFrontmatter, serializeFrontmatter, findHeadingRange |
 
 ## 手动测试清单（UX 功能）
 
@@ -35,6 +36,16 @@ npm run test:watch # 监听模式
 - [ ] 鼠标悬停代码块时出现复制按钮
 - [ ] 点击复制按钮，代码复制到剪贴板
 - [ ] 按钮短暂显示为"已复制"状态
+
+### 笔记 CRUD 工具
+- [ ] 对话中让 Claude 创建新笔记（`create_note`），验证文件和 frontmatter 正确生成
+- [ ] 让 Claude 编辑已有笔记的某个段落（`edit_note` search_replace 模式）
+- [ ] 让 Claude 按标题替换整个 section（`edit_note` heading 模式）
+- [ ] 让 Claude 重命名笔记（`rename_note`），验证反向链接更新
+- [ ] 让 Claude 删除笔记（`delete_note`），第一次应返回预览确认，第二次才执行
+- [ ] 让 Claude 更新 frontmatter（`update_frontmatter`），验证字段设置和删除
+- [ ] 尝试创建已存在的笔记路径，应返回错误
+- [ ] 尝试删除不存在的笔记，应返回错误
 
 ### 主题兼容
 - [ ] 切换不同主题（Minimal/Things/Blue Topaz），UI 颜色正常

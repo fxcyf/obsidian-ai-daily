@@ -29,7 +29,7 @@
 
 | 功能 | 状态 | 来源 | 说明 |
 |------|------|------|------|
-| 完整笔记 CRUD 工具集 | ⬜ | [Agentic Vault](feature-agentic-vault.md) #1 | create/edit/rename/delete + frontmatter 管理，后续所有 agentic 功能的前置 |
+| 完整笔记 CRUD 工具集 | ✅ | [Agentic Vault](feature-agentic-vault.md) #1 | create/edit/rename/delete + frontmatter 管理，后续所有 agentic 功能的前置（v0.7.0） |
 | 知识图谱感知（backlinks/outlinks） | ⬜ | [Agentic Vault](feature-agentic-vault.md) #1 补充、[知识库增强](feature-knowledge-enhancement.md) #2 | 低成本，利用 Obsidian metadataCache API |
 | 批量知识整理 Agent | ⬜ | [Agentic Vault](feature-agentic-vault.md) #2 | Raw → Wiki 自动化整理 |
 | 对话驱动知识蒸馏 | ⬜ | [Agentic Vault](feature-agentic-vault.md) #3 | 对话产出自动沉淀为结构化 Wiki（Karpathy LLM Wiki 模式） |
@@ -70,7 +70,8 @@
 
 | 文档 | 主题 | 状态 |
 |------|------|------|
-| [feature-agentic-vault.md](feature-agentic-vault.md) | Agentic Vault 操作（CRUD + 整理 + 蒸馏） | ⬜ |
+| [feature-agentic-vault.md](feature-agentic-vault.md) | Agentic Vault 操作（CRUD + 整理 + 蒸馏） | 🔧 |
+| [phase2-implementation.md](phase2-implementation.md) | 阶段二详细实施计划（4 批次） | 🔧 |
 | [feature-semantic-search.md](feature-semantic-search.md) | 语义搜索（Embedding + GraphRAG + Context Engineering） | ⬜ |
 | [feature-llm-driven-org.md](feature-llm-driven-org.md) | LLM 驱动自组织（标签 + 链接 + 健康报告 + 多模型 + 回顾） | ⬜ |
 | [feature-local-file-image.md](feature-local-file-image.md) | 本地图片处理（M1-M5 里程碑） | ⬜ |

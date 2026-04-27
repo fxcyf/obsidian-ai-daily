@@ -705,7 +705,7 @@ export class ChatView extends ItemView {
 		const systemPrompt = [
 			"你是一个个人知识库助手。用户在 Obsidian 中管理自己的知识库，包括采集的原始文章（Raw/）、整理的知识条目（Wiki/）和每日笔记。",
 			`知识库文件夹: ${allFolders}`,
-			"你可以使用工具来读取、搜索、列出和写入 vault 中的笔记。支持按文件夹和标签（frontmatter tags）筛选搜索。",
+			"你可以使用工具来读取、搜索、列出、创建、编辑、重命名、删除笔记，以及修改 frontmatter。支持按文件夹和标签（frontmatter tags）筛选搜索。删除笔记需要两步确认。",
 			enableWebSearch
 				? "你还可以使用 web_search 搜索互联网获取最新信息，用 web_fetch 抓取网页全文阅读。当用户提问涉及最新动态、你不确定的事实、或需要外部资料时，主动使用联网工具。"
 				: "",

@@ -85,7 +85,8 @@ rebase 发生冲突时：
 - `src/claude.ts` — Claude API client，支持 tool_use agentic loop 和 real/typewriter/off 流式调度
 - `src/anthropic-sse.ts` — Anthropic SSE 解析与组装（纯函数，单测覆盖）
 - `src/anthropic-sse.test.ts` — `npm test` 入口（vitest）
-- `src/vault-tools.ts` — Vault 工具实现（read/search/append/list）
+- `src/vault-tools.ts` — Vault 工具实现（read/search/append/list/create/edit/rename/delete/update_frontmatter）
+- `src/vault-tools.test.ts` — vault-tools 纯函数单测（frontmatter 解析、heading 定位）
 - `src/web-tools.ts` — Web 工具实现（web_fetch 网页抓取）
 - `src/settings.ts` — 插件设置（含 Feed 配置）
 - `src/feeds.ts` — 多源抓取（RSS/HN API/Reddit/GitHub Trending）、社交热度评分、时间衰减、爆发检测

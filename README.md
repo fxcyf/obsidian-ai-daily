@@ -6,7 +6,7 @@
 
 - **知识库管理** — 支持 Raw（原始采集）、Wiki（整理条目）、Daily（每日笔记）多文件夹结构
 - **自动加载上下文** — 打开笔记后直接提问，插件自动读取当前笔记 + 最近日报 + 最近知识库笔记
-- **AI 工具调用** — Claude 可以搜索、读取、列出和写回 vault 笔记，支持按标签和文件夹筛选
+- **AI 工具调用** — Claude 可以搜索、读取、创建、编辑、重命名、删除笔记并管理 frontmatter，支持按标签和文件���筛选
 - **一键对话** — 命令面板「对话当前笔记」，自动总结当前打开的文章
 - **移动端优先** — 针对 iPhone 设计的 UI，纯 HTTP 调用 Claude API
 - **知识沉淀** — 对话中的洞察一键写回 Obsidian
@@ -109,7 +109,11 @@ Claude 可以自主调用以下工具：
 | `search_vault` | 按关键词搜索，支持文件夹和标签过滤 |
 | `list_notes` | 列出指定文件夹或全部知识库的笔记 |
 | `append_to_note` | 追加内容到笔记 |
-| `web_search` | 搜索互联网（Anthropic 内置，需开启联网搜索） |
+| `create_note` | 创建新笔记，支持 frontmatter，自动创建中间目录 |
+| `edit_note` | 编辑笔记（按标题/行号/原文匹配定位替换） |
+| `rename_note` | 重命名/移动笔记，自动更新反向链接 |
+| `delete_note` | 删除笔记（两步确认，移到回收站） |
+| `update_frontmatter` | 修改笔记的 YAML frontmatter（设置/删除字段） || `web_search` | 搜索互联网（Anthropic 内置，需开启联网搜索） |
 | `web_fetch` | 抓取指定 URL 的网页内容 |
 
 ## 内容采集建议

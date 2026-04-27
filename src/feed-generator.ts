@@ -56,14 +56,16 @@ export interface FeedProgress {
 async function searchVaultForTopics(
 	app: App,
 	topics: string[],
-	knowledgeFolders: string[]
+	knowledgeFolders: string[],
+	excludeFolder?: string
 ): Promise<string> {
 	if (topics.length === 0) return "";
 
 	const results: { path: string; snippet: string }[] = [];
 
 	const files = app.vault.getMarkdownFiles().filter((f) =>
-		knowledgeFolders.some((folder) => f.path.startsWith(folder))
+		knowledgeFolders.some((folder) => f.path.startsWith(folder)) &&
+		!(excludeFolder && f.path.startsWith(excludeFolder))
 	);
 
 	for (const topic of topics) {
@@ -106,6 +108,35 @@ async function callClaude(
 		userMessage,
 	});
 	return result || "Feed 生成失败。";
+}
+
+// ── Cross-day deduplication ───────────────────────────────────────
+
+const URL_PATTERN = /https?:\/\/[^\s\])>"']+/g;
+
+async function getRecentFeedUrls(
+	app: App,
+	feedFolder: string,
+	days: number = 3
+): Promise<Set<string>> {
+	const urls = new Set<string>();
+	const today = new Date();
+
+	for (let i = 1; i <= days; i++) {
+		const d = new Date(today);
+		d.setDate(d.getDate() - i);
+		const dateStr = d.toISOString().slice(0, 10);
+		const filePath = `${feedFolder}/Feed-${dateStr}.md`;
+		const file = app.vault.getAbstractFileByPath(filePath);
+		if (file instanceof TFile) {
+			const content = await app.vault.cachedRead(file);
+			for (const match of content.matchAll(URL_PATTERN)) {
+				urls.add(match[0]);
+			}
+		}
+	}
+
+	return urls;
 }
 
 // ── Existing feed check ───────────────────────────────────────────
@@ -160,14 +191,26 @@ export async function generateFeed(
 		onProgress?.({ stage: "rss", message: "未抓取到任何文章" });
 	}
 
+	// Step 1.5: Cross-day deduplication
+	onProgress?.({ stage: "dedup", message: "正在去重（排除近期已报道内容）..." });
+	const recentUrls = await getRecentFeedUrls(app, feedFolder);
+	const beforeCount = articles.length;
+	const dedupedArticles = articles.filter((a) => !recentUrls.has(a.url));
+	if (beforeCount > dedupedArticles.length) {
+		onProgress?.({
+			stage: "dedup",
+			message: `已过滤 ${beforeCount - dedupedArticles.length} 篇近期已报道的文章`,
+		});
+	}
+
 	// Step 2: Search vault for related notes
 	onProgress?.({ stage: "vault", message: "正在搜索笔记库..." });
-	const vaultContext = await searchVaultForTopics(app, feedTopics, knowledgeFolders);
+	const vaultContext = await searchVaultForTopics(app, feedTopics, knowledgeFolders, feedFolder);
 
 	// Step 3: Call Claude to generate feed
 	onProgress?.({ stage: "ai", message: "正在让 AI 生成 Feed..." });
 
-	const articlesText = articles
+	const articlesText = dedupedArticles
 		.map(
 			(a) => {
 				let text =
@@ -198,10 +241,10 @@ export async function generateFeed(
 		`${topicsStr}` +
 		`${deduplicationNote}` +
 		`## 用户笔记库中的相关内容\n\n${vaultContext}\n\n` +
-		`## RSS 抓取到的文章（共 ${articles.length} 篇）\n\n${articlesText}`;
+		`## RSS 抓取到的文章（共 ${dedupedArticles.length} 篇）\n\n${articlesText}`;
 
 	let aiContent: string;
-	if (articles.length === 0 && vaultContext === "未找到相关笔记。") {
+	if (dedupedArticles.length === 0 && vaultContext === "未找到相关笔记。") {
 		aiContent = "今天暂无新的 Feed 内容。请检查 RSS 源配置或网络连接。";
 	} else {
 		aiContent = await callClaude(apiKey, effectiveModel, userMessage);

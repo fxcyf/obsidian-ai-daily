@@ -255,16 +255,28 @@ export default class AIDailyChat extends Plugin {
 		this.autoTagger?.destroy();
 	}
 
+	private get backupPath(): string {
+		return `${this.manifest.dir}/data.backup.json`;
+	}
+
 	async loadSettings(): Promise<void> {
-		const raw = ((await this.loadData()) ?? {}) as Record<string, unknown>;
-		// Migrate old chatStreaming:boolean → chatStreamMode (Phase 2 of feature-real-streaming)
+		let raw = ((await this.loadData()) ?? {}) as Record<string, unknown>;
+
+		if (Object.keys(raw).length === 0) {
+			const restored = await this.restoreFromBackup();
+			if (restored) {
+				raw = restored;
+				new Notice("设置已从备份恢复（data.json 可能丢失或损坏）", 8000);
+				console.warn("[ai-daily] data.json was empty/missing, restored from backup");
+			}
+		}
+
 		if ("chatStreaming" in raw && !("chatStreamMode" in raw)) {
 			raw.chatStreamMode = raw.chatStreaming === false ? "off" : "auto";
 			delete raw.chatStreaming;
 		}
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
 
-		// Migrate feed sources: append new default sources that the user doesn't have yet
 		if (Array.isArray(raw.feedSources)) {
 			const existingNames = new Set(
 				this.settings.feedSources.map((s) => s.name)
@@ -280,9 +292,37 @@ export default class AIDailyChat extends Plugin {
 				await this.saveData(this.settings);
 			}
 		}
+
+		await this.writeBackup();
 	}
 
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
+		await this.writeBackup();
+	}
+
+	private async writeBackup(): Promise<void> {
+		try {
+			const json = JSON.stringify(this.settings, null, "\t");
+			await this.app.vault.adapter.write(this.backupPath, json);
+		} catch {
+			// backup is best-effort
+		}
+	}
+
+	private async restoreFromBackup(): Promise<Record<string, unknown> | null> {
+		try {
+			const exists = await this.app.vault.adapter.exists(this.backupPath);
+			if (!exists) return null;
+			const content = await this.app.vault.adapter.read(this.backupPath);
+			const parsed = JSON.parse(content);
+			if (parsed && typeof parsed === "object" && parsed.apiKey !== undefined) {
+				await this.saveData(parsed);
+				return parsed as Record<string, unknown>;
+			}
+		} catch {
+			// backup unreadable
+		}
+		return null;
 	}
 }

@@ -96,6 +96,7 @@ rebase 发生冲突时：
 - `src/settings.ts` — 插件设置（含 Feed 配置）
 - `src/feeds.ts` — 多源抓取（RSS/HN API/Reddit/GitHub Trending）、社交热度评分、时间衰减、爆发检测
 - `src/feed-generator.ts` — Feed 生成器，编排 RSS + vault 搜索 + Claude 汇总
+- `mcp-server/` — 独立 MCP server，用于 Claude Code 直接操作 vault（纯 Node.js 文件操作，不依赖 Obsidian API）
 
 ## 版本管理
 

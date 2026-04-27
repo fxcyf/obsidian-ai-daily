@@ -279,19 +279,17 @@ export class ChatView extends ItemView {
 				cls: "ai-daily-template-item-prompt",
 				text: tpl.prompt.length > 50 ? tpl.prompt.slice(0, 50) + "…" : tpl.prompt,
 			});
-			if (!tpl.builtin) {
-				const deleteBtn = item.createDiv({ cls: "ai-daily-template-item-delete", attr: { "aria-label": "删除模板" } });
-				deleteBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
-				deleteBtn.addEventListener("click", async (e) => {
-					e.stopPropagation();
-					const idx = this.plugin.settings.promptTemplates.indexOf(tpl);
-					if (idx !== -1) {
-						this.plugin.settings.promptTemplates.splice(idx, 1);
-						await this.plugin.saveSettings();
-						this.handleTemplateInput();
-					}
-				});
-			}
+			const deleteBtn = item.createDiv({ cls: "ai-daily-template-item-delete", attr: { "aria-label": "删除模板" } });
+			deleteBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+			deleteBtn.addEventListener("click", async (e) => {
+				e.stopPropagation();
+				const idx = this.plugin.settings.promptTemplates.indexOf(tpl);
+				if (idx !== -1) {
+					this.plugin.settings.promptTemplates.splice(idx, 1);
+					await this.plugin.saveSettings();
+					this.handleTemplateInput();
+				}
+			});
 			item.addEventListener("click", () => {
 				this.inputEl.value = tpl.prompt;
 				this.inputEl.style.height = "auto";

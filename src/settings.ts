@@ -6,16 +6,15 @@ import type { StreamMode } from "./claude";
 export interface PromptTemplate {
 	name: string;
 	prompt: string;
-	builtin?: boolean;
 }
 
 export const DEFAULT_PROMPT_TEMPLATES: PromptTemplate[] = [
-	{ name: "总结要点", prompt: "总结这篇文章的要点", builtin: true },
-	{ name: "生成 Wiki 条目", prompt: "提取关键概念，生成 Wiki 条目", builtin: true },
-	{ name: "翻译为中文", prompt: "翻译为中文", builtin: true },
-	{ name: "翻译为英文", prompt: "翻译为英文", builtin: true },
-	{ name: "生成闪卡", prompt: "根据这篇笔记生成复习闪卡", builtin: true },
-	{ name: "查找相关笔记", prompt: "找出知识库中与当前笔记相关的内容", builtin: true },
+	{ name: "总结要点", prompt: "总结这篇文章的要点" },
+	{ name: "生成 Wiki 条目", prompt: "提取关键概念，生成 Wiki 条目" },
+	{ name: "翻译为中文", prompt: "翻译为中文" },
+	{ name: "翻译为英文", prompt: "翻译为英文" },
+	{ name: "生成闪卡", prompt: "根据这篇笔记生成复习闪卡" },
+	{ name: "查找相关笔记", prompt: "找出知识库中与当前笔记相关的内容" },
 ];
 
 export interface AIDailyChatSettings {
@@ -328,18 +327,16 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-			if (!tpl.builtin) {
-				s.addButton((btn) =>
-					btn
-						.setIcon("trash-2")
-						.setTooltip("删除")
-						.onClick(async () => {
-							this.plugin.settings.promptTemplates.splice(i, 1);
-							await this.plugin.saveSettings();
-							this.display();
-						})
-				);
-			}
+			s.addButton((btn) =>
+				btn
+					.setIcon("trash-2")
+					.setTooltip("删除")
+					.onClick(async () => {
+						this.plugin.settings.promptTemplates.splice(i, 1);
+						await this.plugin.saveSettings();
+						this.display();
+					})
+			);
 		}
 	}
 

@@ -91,7 +91,7 @@ rebase 发生冲突时：
 - `src/image-tools.test.ts` — image-tools 单测（extractLocalImageRefs）
 - `src/auto-tagger.ts` — 笔记自动标注（debounce + Claude API 生成 tags/summary + frontmatter 写入）
 - `src/auto-tagger.test.ts` — auto-tagger 单测（parseTaggingResponse）
-- `src/knowledge-agent.ts` — 知识整理 Agent（批量整理 Raw→Wiki + 对话蒸馏）
+- `src/knowledge-agent.ts` — 知识整理辅助（findUnorganizedNotes 扫描 + distillConversation 对话蒸馏），整理流程通过聊天交互完成
 - `src/web-tools.ts` — Web 工具实现（web_fetch 网页抓取）
 - `src/settings.ts` — 插件设置（含 Feed 配置）
 - `src/feeds.ts` — 多源抓取（RSS/HN API/Reddit/GitHub Trending）、社交热度评分、时间衰减、爆发检测

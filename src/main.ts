@@ -8,7 +8,7 @@ import { ChatView, VIEW_TYPE } from "./chat-view";
 import { generateFeed, checkExistingFeed } from "./feed-generator";
 import { DEFAULT_FEEDS } from "./feeds";
 import { AutoTagger } from "./auto-tagger";
-import { runKnowledgeOrganizer } from "./knowledge-agent";
+import { findUnorganizedNotes, MAX_NOTES_PER_RUN } from "./knowledge-agent";
 
 class FeedConfirmModal extends Modal {
 	private resolved = false;
@@ -196,27 +196,37 @@ export default class AIDailyChat extends Plugin {
 			return;
 		}
 
-		const notice = new Notice("正在扫描待整理笔记...", 0);
-		try {
-			const sourceFolder = this.settings.autoTagFolders[0] || "Raw";
-			const { processed, total } = await runKnowledgeOrganizer(this.app, {
-				apiKey: this.settings.apiKey,
-				model: this.settings.model,
-				knowledgeFolders: this.settings.knowledgeFolders,
-				sourceFolder,
-				targetFolder: this.settings.distillTargetFolder,
-				onProgress: (msg) => { notice.setMessage(msg); },
-			});
-			notice.hide();
-			if (total === 0) {
-				new Notice("没有找到待整理的笔记", 3000);
-			} else {
-				new Notice(`知识整理完成: ${processed}/${total} 篇`, 5000);
-			}
-		} catch (e) {
-			notice.hide();
-			const msg = e instanceof Error ? e.message : String(e);
-			new Notice(`知识整理失败: ${msg}`, 8000);
+		const sourceFolder = this.settings.autoTagFolders[0] || "Raw";
+		const unorganized = await findUnorganizedNotes(this.app, sourceFolder);
+
+		if (unorganized.length === 0) {
+			new Notice("没有找到待整理的笔记", 3000);
+			return;
+		}
+
+		const batch = unorganized.slice(0, MAX_NOTES_PER_RUN);
+		const targetFolder = this.settings.distillTargetFolder;
+		const noteList = batch.map((f) => `- [[${f.basename}]] (${f.path})`).join("\n");
+
+		const message = [
+			`请帮我整理以下 ${batch.length} 篇笔记（共 ${unorganized.length} 篇待整理）到 ${targetFolder}/ 文件夹：`,
+			"",
+			noteList,
+			"",
+			"整理流程：",
+			"1. 逐篇用 read_note 阅读笔记内容，提取核心观点和关键概念",
+			`2. 用 search_vault 在 ${targetFolder}/ 中搜索相关的已有条目`,
+			"3. 有相关条目 → edit_note 补充新信息；没有 → create_note 创建新条目",
+			"4. 新条目需包含 frontmatter（tags、summary）和指向原笔记的 wiki-link",
+			"5. 每篇整理完后用 update_frontmatter 标记 organized: true",
+			"",
+			"请逐篇处理，每篇完成后告诉我做了什么。",
+		].join("\n");
+
+		await this.activateView();
+		const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
+		if (leaf) {
+			(leaf.view as ChatView).sendMessage(message);
 		}
 	}
 

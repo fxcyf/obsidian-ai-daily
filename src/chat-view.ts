@@ -823,12 +823,11 @@ export class ChatView extends ItemView {
 
 	private getMcpConfig(): { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] } {
 		const { knowledgeFolders } = this.plugin.settings;
+		const { join } = require("path") as typeof import("path");
 		const adapter = this.app.vault.adapter as { basePath?: string };
 		const vaultPath = adapter.basePath || "";
-		const mcpServerPath = require("path").join(
-			(this.plugin.manifest as { dir?: string }).dir || "",
-			"mcp-dist", "index.js"
-		);
+		const pluginRelDir = (this.plugin.manifest as { dir?: string }).dir || "";
+		const mcpServerPath = join(vaultPath, pluginRelDir, "mcp-dist", "index.js");
 		return { vaultPath, mcpServerPath, knowledgeFolders };
 	}
 

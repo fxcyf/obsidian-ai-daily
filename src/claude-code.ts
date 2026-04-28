@@ -300,17 +300,30 @@ export function spawnClaudeCode(
 	// Resolve node to absolute path for MCP server command
 	const nodeBin = findNodeExecutable(home) || "node";
 
-	const mcpFlag = [
-		"obsidian-vault",
-		"-e", `VAULT_PATH=${mcpConfig.vaultPath}`,
-		"-e", `KNOWLEDGE_FOLDERS=${mcpConfig.knowledgeFolders.join(",")}`,
-		"--", nodeBin, mcpConfig.mcpServerPath,
-	].join(" ");
+	// Build MCP config as JSON for --mcp-config
+	const { writeFileSync, mkdirSync, unlinkSync } = require("fs") as typeof import("fs");
+	const { join } = require("path") as typeof import("path");
+	const tmpDir = join(process.env.TMPDIR || "/tmp", "ai-daily-mcp");
+	try { mkdirSync(tmpDir, { recursive: true }); } catch { /* exists */ }
+	const mcpConfigPath = join(tmpDir, `mcp-${Date.now()}.json`);
+	const mcpConfigJson = {
+		mcpServers: {
+			"obsidian-vault": {
+				command: nodeBin,
+				args: [mcpConfig.mcpServerPath],
+				env: {
+					VAULT_PATH: mcpConfig.vaultPath,
+					KNOWLEDGE_FOLDERS: mcpConfig.knowledgeFolders.join(","),
+				},
+			},
+		},
+	};
+	writeFileSync(mcpConfigPath, JSON.stringify(mcpConfigJson));
 
 	const args = [
 		"-p", prompt,
 		"--output-format", "stream-json",
-		"--mcp", mcpFlag,
+		"--mcp-config", mcpConfigPath,
 	];
 	if (sessionId) {
 		args.push("--resume", sessionId);
@@ -360,6 +373,8 @@ export function spawnClaudeCode(
 	});
 
 	child.on("close", (code: number | null) => {
+		try { unlinkSync(mcpConfigPath); } catch { /* best-effort cleanup */ }
+
 		if (buffer.trim()) {
 			try {
 				const event = JSON.parse(buffer);

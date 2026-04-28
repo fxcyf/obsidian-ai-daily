@@ -1449,7 +1449,7 @@ export class ChatView extends ItemView {
 		this.setSendButtonState(true);
 		this.addMessage("user", userText);
 		if (!this.sessionId) this.sessionId = newSessionId();
-		this.runClaudeCodeStream(userText, this.getMcpConfig(), undefined, this.plugin.settings.model);
+		this.runClaudeCodeStream(userText, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.model);
 	}
 
 	private runClaudeCodeStream(prompt: string, mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] }, sessionId?: string, model?: string): void {

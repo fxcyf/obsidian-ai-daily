@@ -1461,10 +1461,10 @@ export class ChatView extends ItemView {
 		dotsEl.createEl("span");
 
 		let assistantEl: HTMLDivElement | null = null;
+		let streamTextEl: HTMLElement | null = null;
 		let accumulated = "";
-		let renderTimer: number | null = null;
-		let renderQueue = Promise.resolve();
-		let latestContent = "";
+		let rendered = 0;
+		let typewriterTimer: number | null = null;
 		let toolCallsEl: HTMLElement | null = null;
 		let toolCallsSummaryEl: HTMLElement | null = null;
 		const toolCallEls = new Map<string, HTMLElement>();
@@ -1474,31 +1474,25 @@ export class ChatView extends ItemView {
 		let thinkingContentEl: HTMLElement | null = null;
 		let thinkingText = "";
 
-		const renderMarkdown = async (content: string) => {
-			if (!assistantEl) return;
-			assistantEl.empty();
-			await MarkdownRenderer.render(this.app, content, assistantEl, "", this.plugin);
-			this.scrollToBottomIfFollowing();
-		};
+		const CHARS_PER_TICK = 8;
+		const TICK_MS = 16;
 
-		const scheduleRender = () => {
-			latestContent = accumulated;
-			if (renderTimer !== null) return;
-			renderTimer = window.setTimeout(() => {
-				renderTimer = null;
-				const snapshot = latestContent;
-				renderQueue = renderQueue.then(() => renderMarkdown(snapshot));
-			}, STREAM_MARKDOWN_RENDER_INTERVAL_MS);
-		};
-
-		const flushRender = async (content: string) => {
-			latestContent = content;
-			if (renderTimer !== null) {
-				window.clearTimeout(renderTimer);
-				renderTimer = null;
+		const typewriterTick = () => {
+			if (!streamTextEl) return;
+			if (rendered >= accumulated.length) {
+				typewriterTimer = null;
+				return;
 			}
-			await renderQueue;
-			await renderMarkdown(content);
+			const end = Math.min(rendered + CHARS_PER_TICK, accumulated.length);
+			streamTextEl.textContent = accumulated.slice(0, end);
+			rendered = end;
+			this.scrollToBottomIfFollowing();
+			typewriterTimer = window.setTimeout(typewriterTick, TICK_MS);
+		};
+
+		const startTypewriter = () => {
+			if (typewriterTimer !== null) return;
+			typewriterTimer = window.setTimeout(typewriterTick, TICK_MS);
 		};
 
 		const handle = spawnClaudeCode(prompt, { mcpConfig, sessionId, model }, {
@@ -1508,9 +1502,12 @@ export class ChatView extends ItemView {
 					assistantEl = this.messagesEl.createDiv({
 						cls: "ai-daily-msg ai-daily-msg-assistant ai-daily-msg-streaming",
 					});
+					streamTextEl = assistantEl.createEl("pre", {
+						cls: "ai-daily-stream-text",
+					});
 				}
 				accumulated += delta;
-				scheduleRender();
+				startTypewriter();
 			},
 			onToolCall: (id, name, input, status) => {
 				if (status === "running") {
@@ -1572,8 +1569,10 @@ export class ChatView extends ItemView {
 			},
 			onError: (error) => {
 				loadingEl.remove();
+				if (typewriterTimer !== null) { window.clearTimeout(typewriterTimer); typewriterTimer = null; }
 				if (assistantEl && accumulated) {
-					void flushRender(accumulated).then(() => {
+					assistantEl.empty();
+					void MarkdownRenderer.render(this.app, accumulated, assistantEl, "", this.plugin).then(() => {
 						assistantEl!.removeClass("ai-daily-msg-streaming");
 						this.postProcessAssistantEl(assistantEl!);
 					});
@@ -1588,8 +1587,10 @@ export class ChatView extends ItemView {
 			},
 			onDone: (fullText) => {
 				loadingEl.remove();
+				if (typewriterTimer !== null) { window.clearTimeout(typewriterTimer); typewriterTimer = null; }
 				if (assistantEl) {
-					void flushRender(fullText).then(() => {
+					assistantEl.empty();
+					void MarkdownRenderer.render(this.app, fullText, assistantEl, "", this.plugin).then(() => {
 						assistantEl!.removeClass("ai-daily-msg-streaming");
 						this.postProcessAssistantEl(assistantEl!);
 					});

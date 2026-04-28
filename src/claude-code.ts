@@ -15,6 +15,8 @@ function getUserSearchPaths(): string[] {
 		`${home}/.local/bin/claude`,
 		`${home}/.npm-global/bin/claude`,
 		`${home}/.nvm/current/bin/claude`,
+		`${home}/Library/pnpm/claude`,
+		`${home}/.pnpm-global/bin/claude`,
 	];
 }
 
@@ -45,13 +47,19 @@ async function findClaudeBinary(): Promise<string | false> {
 }
 
 export async function isClaudeCodeAvailable(): Promise<boolean> {
+	console.log("[ai-daily] isClaudeCodeAvailable called, Platform.isMobile =", Platform.isMobile);
 	if (Platform.isMobile) return false;
-	if (cachedClaudePath !== null) return cachedClaudePath !== false;
+	if (cachedClaudePath !== null) {
+		console.log("[ai-daily] using cached claude path:", cachedClaudePath);
+		return cachedClaudePath !== false;
+	}
 
 	try {
 		cachedClaudePath = await findClaudeBinary();
+		console.log("[ai-daily] claude detection result:", cachedClaudePath);
 		return cachedClaudePath !== false;
-	} catch {
+	} catch (e) {
+		console.log("[ai-daily] claude detection error:", e);
 		cachedClaudePath = false;
 		return false;
 	}

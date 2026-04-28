@@ -192,7 +192,9 @@ export default class AIDailyChat extends Plugin {
 	}
 
 	async organizeKnowledge(): Promise<void> {
+		console.log("[ai-daily] organizeKnowledge called");
 		const useClaudeCode = await isClaudeCodeAvailable();
+		console.log("[ai-daily] useClaudeCode =", useClaudeCode);
 
 		if (!useClaudeCode && !this.settings.apiKey) {
 			new Notice("请先在插件设置中配置 Anthropic API Key，或安装 Claude Code。", 5000);

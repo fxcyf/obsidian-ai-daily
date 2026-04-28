@@ -1474,20 +1474,20 @@ export class ChatView extends ItemView {
 		let thinkingContentEl: HTMLElement | null = null;
 		let thinkingText = "";
 
-		const CHARS_PER_TICK = 8;
-		const TICK_MS = 16;
-
 		const typewriterTick = () => {
 			if (!streamTextEl) return;
-			if (rendered >= accumulated.length) {
+			const buffered = accumulated.length - rendered;
+			if (buffered <= 0) {
 				typewriterTimer = null;
 				return;
 			}
-			const end = Math.min(rendered + CHARS_PER_TICK, accumulated.length);
+			// Adaptive speed: slow when buffer is small, fast when buffer is large
+			const chars = buffered > 60 ? 4 : buffered > 20 ? 2 : 1;
+			const end = Math.min(rendered + chars, accumulated.length);
 			streamTextEl.textContent = accumulated.slice(0, end);
 			rendered = end;
 			this.scrollToBottomIfFollowing();
-			typewriterTimer = window.setTimeout(typewriterTick, TICK_MS);
+			typewriterTimer = window.setTimeout(typewriterTick, 25);
 		};
 
 		const startTypewriter = () => {

@@ -27,6 +27,8 @@
 	line-height: 1.5;
 	max-width: 88%;
 	word-wrap: break-word;
+	-webkit-user-select: text;
+	user-select: text;
 }
 
 .ai-daily-msg-user {
@@ -115,6 +117,8 @@
 	color: var(--text-normal);
 	min-height: 36px;
 	max-height: 120px;
+	-webkit-user-select: text;
+	user-select: text;
 }
 
 .ai-daily-input:focus {

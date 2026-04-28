@@ -470,6 +470,7 @@ function handleStreamEvent(
 	appendText: (t: string) => void
 ): void {
 	const type = event.type as string | undefined;
+	console.log("[ai-daily] stream event:", type, type === "assistant" ? "(content blocks: " + ((event.message as Record<string, unknown>)?.content as unknown[])?.length + ")" : "");
 
 	switch (type) {
 		case "assistant": {

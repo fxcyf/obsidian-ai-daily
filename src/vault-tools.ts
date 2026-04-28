@@ -2,14 +2,61 @@ import { App, TFile, TFolder, normalizePath } from "obsidian";
 
 const MAX_SEARCH_RESULTS = 10;
 const KNOWLEDGE_CONTEXT_TRUNCATE = 2000;
+const MAX_UNDO_HISTORY = 20;
+
+export interface UndoEntry {
+	id: number;
+	toolName: string;
+	path: string;
+	description: string;
+	timestamp: number;
+	undo: () => Promise<string>;
+}
 
 export class VaultTools {
 	private app: App;
 	private knowledgeFolders: string[];
+	private undoHistory: UndoEntry[] = [];
+	private undoIdCounter = 0;
 
 	constructor(app: App, knowledgeFolders: string[] = []) {
 		this.app = app;
 		this.knowledgeFolders = knowledgeFolders;
+	}
+
+	private pushUndo(toolName: string, path: string, description: string, undoFn: () => Promise<string>): void {
+		this.undoHistory.push({
+			id: this.undoIdCounter++,
+			toolName,
+			path,
+			description,
+			timestamp: Date.now(),
+			undo: undoFn,
+		});
+		if (this.undoHistory.length > MAX_UNDO_HISTORY) {
+			this.undoHistory.shift();
+		}
+	}
+
+	getUndoHistory(): UndoEntry[] {
+		return [...this.undoHistory];
+	}
+
+	async undoLast(): Promise<string | null> {
+		const entry = this.undoHistory.pop();
+		if (!entry) return null;
+		return entry.undo();
+	}
+
+	async undoById(id: number): Promise<string | null> {
+		const idx = this.undoHistory.findIndex(e => e.id === id);
+		if (idx === -1) return null;
+		const entry = this.undoHistory.splice(idx, 1)[0];
+		return entry.undo();
+	}
+
+	clearUndoHistory(): void {
+		this.undoHistory = [];
 	}
 
 	async execute(
@@ -166,7 +213,14 @@ export class VaultTools {
 		if (!(file instanceof TFile)) {
 			return `File not found: ${path}`;
 		}
+		const originalContent = await this.app.vault.cachedRead(file);
 		await this.app.vault.append(file, "\n\n" + content);
+		this.pushUndo("append_to_note", path, `追加内容到 ${path}`, async () => {
+			const f = this.app.vault.getAbstractFileByPath(path);
+			if (!(f instanceof TFile)) return `撤销失败: 文件不存在 ${path}`;
+			await this.app.vault.modify(f, originalContent);
+			return `已撤销追加: ${path}`;
+		});
 		return `Content appended to ${path}`;
 	}
 
@@ -214,6 +268,12 @@ export class VaultTools {
 		}
 
 		await this.app.vault.create(normalized, body);
+		this.pushUndo("create_note", normalized, `创建笔记 ${normalized}`, async () => {
+			const f = this.app.vault.getAbstractFileByPath(normalized);
+			if (!(f instanceof TFile)) return `撤销失败: 文件不存在 ${normalized}`;
+			await this.app.vault.trash(f, true);
+			return `已撤销创建 (移入回收站): ${normalized}`;
+		});
 		return `Created: ${normalized}`;
 	}
 
@@ -229,6 +289,15 @@ export class VaultTools {
 		}
 
 		const content = await this.app.vault.cachedRead(file);
+		const recordUndo = (desc: string) => {
+			const originalContent = content;
+			this.pushUndo("edit_note", path, desc, async () => {
+				const f = this.app.vault.getAbstractFileByPath(path);
+				if (!(f instanceof TFile)) return `撤销失败: 文件不存在 ${path}`;
+				await this.app.vault.modify(f, originalContent);
+				return `已撤销编辑: ${path}`;
+			});
+		};
 
 		switch (mode) {
 			case "search_replace": {
@@ -238,6 +307,7 @@ export class VaultTools {
 				if (idx === -1) return `Error: target text not found in ${path}`;
 				const newContent = content.substring(0, idx) + replacement + content.substring(idx + search.length);
 				await this.app.vault.modify(file, newContent);
+				recordUndo(`替换文本 in ${path}`);
 				return `Replaced text in ${path}`;
 			}
 			case "heading": {
@@ -247,6 +317,7 @@ export class VaultTools {
 				if (start === -1) return `Error: heading "${heading}" not found in ${path}`;
 				const newContent = content.substring(0, start) + replacement + content.substring(end);
 				await this.app.vault.modify(file, newContent);
+				recordUndo(`替换标题段 "${heading}" in ${path}`);
 				return `Replaced heading section "${heading}" in ${path}`;
 			}
 			case "line_range": {
@@ -267,6 +338,7 @@ export class VaultTools {
 				const after = lines.slice(Math.min(endLine, lines.length));
 				const newContent = [...before, replacement, ...after].join("\n");
 				await this.app.vault.modify(file, newContent);
+				recordUndo(`替换行 ${startLine}-${endLine} in ${path}`);
 				return `Replaced lines ${startLine}-${endLine} in ${path}`;
 			}
 			default:
@@ -289,6 +361,12 @@ export class VaultTools {
 			await this.ensureFolder(dir);
 		}
 		await this.app.fileManager.renameFile(file, normalizedNew);
+		this.pushUndo("rename_note", normalizedNew, `重命名 ${path} → ${normalizedNew}`, async () => {
+			const f = this.app.vault.getAbstractFileByPath(normalizedNew);
+			if (!(f instanceof TFile)) return `撤销失败: 文件不存在 ${normalizedNew}`;
+			await this.app.fileManager.renameFile(f, path);
+			return `已撤销重命名: ${normalizedNew} → ${path}`;
+		});
 		return `Renamed: ${path} → ${normalizedNew}`;
 	}
 
@@ -303,7 +381,16 @@ export class VaultTools {
 			const size = content.length;
 			return `⚠️ 确认删除 ${path}?\n\n文件大小: ${size} 字符\n\n预览:\n${preview}\n\n要执行删除，请带 confirmed: true 再次调用此工具。文件将被移到系统回收站。`;
 		}
+		const savedContent = await this.app.vault.cachedRead(file);
 		await this.app.vault.trash(file, true);
+		this.pushUndo("delete_note", path, `删除笔记 ${path}`, async () => {
+			const existing = this.app.vault.getAbstractFileByPath(path);
+			if (existing) return `撤销失败: ${path} 已存在`;
+			const dir = path.substring(0, path.lastIndexOf("/"));
+			if (dir) await this.ensureFolder(dir);
+			await this.app.vault.create(path, savedContent);
+			return `已撤销删除 (重新创建): ${path}`;
+		});
 		return `Deleted (moved to trash): ${path}`;
 	}
 
@@ -388,11 +475,20 @@ export class VaultTools {
 		const newContent = Object.keys(updated).length > 0
 			? serializeFrontmatter(updated) + body
 			: body;
+		const originalContent = content;
 		await this.app.vault.modify(file, newContent);
 
 		const changes: string[] = [];
 		if (set) changes.push(`set: ${Object.keys(set).join(", ")}`);
 		if (del) changes.push(`deleted: ${del.join(", ")}`);
+
+		this.pushUndo("update_frontmatter", path, `更新 frontmatter of ${path}`, async () => {
+			const f = this.app.vault.getAbstractFileByPath(path);
+			if (!(f instanceof TFile)) return `撤销失败: 文件不存在 ${path}`;
+			await this.app.vault.modify(f, originalContent);
+			return `已撤销 frontmatter 更新: ${path}`;
+		});
+
 		return `Updated frontmatter of ${path} (${changes.join("; ")})`;
 	}
 

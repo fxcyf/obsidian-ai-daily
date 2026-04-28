@@ -14,7 +14,7 @@ import {
 } from "obsidian";
 import type AIDailyChat from "./main";
 import { ClaudeClient, estimateTextTokens } from "./claude";
-import { VaultTools } from "./vault-tools";
+import { VaultTools, type UndoEntry } from "./vault-tools";
 import { WebTools } from "./web-tools";
 import type { PromptTemplate } from "./settings";
 import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
@@ -38,6 +38,30 @@ const STREAM_MARKDOWN_RENDER_INTERVAL_MS = 120;
 interface ChatMessage {
 	role: "user" | "assistant";
 	content: string;
+}
+
+const TOOL_DISPLAY_NAMES: Record<string, string> = {
+	read_note: "读取笔记",
+	search_vault: "搜索笔记",
+	append_to_note: "追加内容",
+	list_notes: "列出笔记",
+	create_note: "创建笔记",
+	edit_note: "编辑笔记",
+	rename_note: "重命名笔记",
+	delete_note: "删除笔记",
+	get_links: "获取链接",
+	update_frontmatter: "更新属性",
+	web_search: "网络搜索",
+	web_fetch: "抓取网页",
+};
+
+function toolCallSummary(name: string, input: Record<string, unknown>): string {
+	const label = TOOL_DISPLAY_NAMES[name] || name;
+	const path = typeof input.path === "string" ? input.path : "";
+	const query = typeof input.query === "string" ? input.query : "";
+	if (path) return `${label}: ${path}`;
+	if (query) return `${label}: ${query}`;
+	return label;
 }
 
 function formatTokenK(n: number): string {
@@ -702,6 +726,38 @@ export class ChatView extends ItemView {
 				}
 			}
 
+			let toolCallsEl: HTMLElement | null = null;
+			const toolCallEls = new Map<string, HTMLElement>();
+			let toolCallCounter = 0;
+
+			const onToolCall = (name: string, input: Record<string, unknown>, status: "start" | "done" | "error") => {
+				if (status === "start") {
+					loadingEl.remove();
+					if (!toolCallsEl) {
+						toolCallsEl = this.messagesEl.createDiv({ cls: "ai-daily-tool-calls" });
+					}
+					const key = `${name}-${toolCallCounter++}`;
+					const el = toolCallsEl.createDiv({ cls: "ai-daily-tool-call ai-daily-tool-call-running" });
+					const iconSpan = el.createSpan({ cls: "ai-daily-tool-call-icon" });
+					setIcon(iconSpan, "loader");
+					el.createSpan({ cls: "ai-daily-tool-call-text", text: toolCallSummary(name, input) });
+					toolCallEls.set(key, el);
+					this.scrollToBottomIfFollowing();
+				} else {
+					const lastKey = `${name}-${toolCallCounter - 1}`;
+					const el = toolCallEls.get(lastKey);
+					if (el) {
+						el.removeClass("ai-daily-tool-call-running");
+						el.addClass(status === "done" ? "ai-daily-tool-call-done" : "ai-daily-tool-call-error");
+						const iconSpan = el.querySelector(".ai-daily-tool-call-icon");
+						if (iconSpan) {
+							iconSpan.empty();
+							setIcon(iconSpan as HTMLElement, status === "done" ? "check" : "x");
+						}
+					}
+				}
+			};
+
 			const reply = await this.client!.chat(
 				text,
 				(name, input) => {
@@ -719,7 +775,8 @@ export class ChatView extends ItemView {
 							scheduleStreamingMarkdown(accumulated);
 						}
 					: undefined,
-				preparedImages
+				preparedImages,
+				onToolCall
 			);
 
 			loadingEl.remove();
@@ -734,6 +791,7 @@ export class ChatView extends ItemView {
 				this.addMessage("assistant", reply);
 			}
 			this.scrollToBottomIfFollowing();
+			this.renderUndoBar();
 
 			await this.persistSession();
 			this.updateTokenBar();
@@ -878,6 +936,41 @@ export class ChatView extends ItemView {
 			this.scrollToBottomIfFollowing();
 		}
 		this.updateTokenBar();
+	}
+
+	private renderUndoBar(): void {
+		const existing = this.messagesEl.querySelector(".ai-daily-undo-bar");
+		if (existing) existing.remove();
+
+		if (!this.vaultTools) return;
+		const history = this.vaultTools.getUndoHistory();
+		if (history.length === 0) return;
+
+		const last = history[history.length - 1];
+		const bar = this.messagesEl.createDiv({ cls: "ai-daily-undo-bar" });
+		const textSpan = bar.createSpan({ cls: "ai-daily-undo-text", text: last.description });
+
+		const undoBtn = bar.createEl("button", { cls: "ai-daily-undo-btn", text: "撤销" });
+		const iconSpan = undoBtn.createSpan({ cls: "ai-daily-undo-btn-icon" });
+		setIcon(iconSpan, "undo");
+		undoBtn.prepend(iconSpan);
+
+		undoBtn.addEventListener("click", async () => {
+			undoBtn.disabled = true;
+			undoBtn.setText("撤销中...");
+			try {
+				const result = await this.vaultTools!.undoById(last.id);
+				if (result) {
+					new Notice(result, 3000);
+				}
+			} catch (e) {
+				new Notice(`撤销失败: ${e instanceof Error ? e.message : String(e)}`, 4000);
+			}
+			bar.remove();
+			this.renderUndoBar();
+		});
+
+		this.scrollToBottomIfFollowing();
 	}
 
 	sendMessage(text: string): void {

@@ -490,7 +490,8 @@ export class ClaudeClient {
 		userMessage: string,
 		executeTool: ToolExecutor,
 		onAssistantDelta?: (delta: string, accumulated: string) => void,
-		images?: PreparedImage[]
+		images?: PreparedImage[],
+		onToolCall?: (name: string, input: Record<string, unknown>, status: "start" | "done" | "error") => void
 	): Promise<string> {
 		if (images && images.length > 0) {
 			const content: Record<string, unknown>[] = images.map((img) => ({
@@ -569,14 +570,17 @@ export class ClaudeClient {
 			const results: ToolResult[] = [];
 			for (const tool of toolUses) {
 				if (signal.aborted) break;
+				onToolCall?.(tool.name, tool.input, "start");
 				try {
 					const result = await executeTool(tool.name, tool.input);
+					onToolCall?.(tool.name, tool.input, "done");
 					results.push({
 						type: "tool_result",
 						tool_use_id: tool.id,
 						content: result,
 					});
 				} catch (e) {
+					onToolCall?.(tool.name, tool.input, "error");
 					results.push({
 						type: "tool_result",
 						tool_use_id: tool.id,

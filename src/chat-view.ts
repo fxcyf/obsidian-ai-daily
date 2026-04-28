@@ -11,7 +11,6 @@ import {
 	Notice,
 	Modal,
 	App,
-	FuzzySuggestModal,
 	TFile,
 } from "obsidian";
 import type AIDailyChat from "./main";
@@ -104,28 +103,6 @@ class ConfirmModal extends Modal {
 	}
 }
 
-class NoteSuggestModal extends FuzzySuggestModal<TFile> {
-	private onChoose: (file: TFile) => void;
-
-	constructor(app: App, onChoose: (file: TFile) => void) {
-		super(app);
-		this.onChoose = onChoose;
-		this.setPlaceholder("搜索笔记…");
-	}
-
-	getItems(): TFile[] {
-		return this.app.vault.getMarkdownFiles();
-	}
-
-	getItemText(item: TFile): string {
-		return item.path;
-	}
-
-	onChooseItem(item: TFile): void {
-		this.onChoose(item);
-	}
-}
-
 export class ChatView extends ItemView {
 	plugin: AIDailyChat;
 	private chatContainerEl!: HTMLElement;
@@ -148,6 +125,8 @@ export class ChatView extends ItemView {
 	private sessionId: string | null = null;
 	private attachedFiles: TFile[] = [];
 	private attachBarEl: HTMLElement | null = null;
+	private mentionPopupEl: HTMLElement | null = null;
+	private mentionStartPos: number | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AIDailyChat) {
 		super(leaf);
@@ -258,16 +237,9 @@ export class ChatView extends ItemView {
 
 		const inputRow = this.inputAreaEl.createDiv({ cls: "ai-daily-input-row" });
 
-		const attachBtn = inputRow.createEl("button", {
-			cls: "ai-daily-attach-btn",
-			attr: { "aria-label": "附加笔记", title: "附加笔记" },
-		});
-		setIcon(attachBtn, "paperclip");
-		attachBtn.addEventListener("click", () => this.openAttachPicker());
-
 		this.inputEl = inputRow.createEl("textarea", {
 			cls: "ai-daily-input",
-			attr: { placeholder: "问点什么… 输入 / 选择模板", rows: "1" },
+			attr: { placeholder: "问点什么… @ 引用笔记，/ 选择模板", rows: "1" },
 		});
 
 		this.sendBtn = inputRow.createEl("button", {
@@ -287,8 +259,29 @@ export class ChatView extends ItemView {
 			this.inputEl.style.height =
 				Math.min(this.inputEl.scrollHeight, 120) + "px";
 			this.handleTemplateInput();
+			this.handleMentionInput();
 		});
 		this.inputEl.addEventListener("keydown", (e) => {
+			if (this.mentionPopupEl) {
+				if (e.key === "Escape") {
+					e.preventDefault();
+					this.closeMentionPopup();
+					return;
+				}
+				if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+					e.preventDefault();
+					this.navigatePopup(this.mentionPopupEl, e.key === "ArrowDown" ? 1 : -1);
+					return;
+				}
+				if (e.key === "Enter" || e.key === "Tab") {
+					const active = this.mentionPopupEl.querySelector(".ai-daily-mention-item-active");
+					if (active) {
+						e.preventDefault();
+						(active as HTMLElement).click();
+						return;
+					}
+				}
+			}
 			if (this.templatePopupEl) {
 				if (e.key === "Escape") {
 					e.preventDefault();
@@ -402,14 +395,94 @@ export class ChatView extends ItemView {
 		}
 	}
 
-	// ── Attach files ──────────────────────────────────────
+	// ── @ mention popup ──────────────────────────────────
 
-	private openAttachPicker(): void {
-		new NoteSuggestModal(this.app, (file) => {
-			if (this.attachedFiles.some((f) => f.path === file.path)) return;
+	private handleMentionInput(): void {
+		const value = this.inputEl.value;
+		const cursor = this.inputEl.selectionStart ?? value.length;
+
+		const before = value.slice(0, cursor);
+		const atMatch = before.match(/@([^\s@]*)$/);
+		if (atMatch) {
+			this.mentionStartPos = cursor - atMatch[1].length - 1;
+			const query = atMatch[1].toLowerCase();
+			const allFiles = this.app.vault.getMarkdownFiles();
+			const filtered = query
+				? allFiles.filter((f) =>
+					f.basename.toLowerCase().includes(query) ||
+					f.path.toLowerCase().includes(query)
+				)
+				: allFiles;
+			const sorted = filtered
+				.sort((a, b) => b.stat.mtime - a.stat.mtime)
+				.slice(0, 10);
+			if (sorted.length > 0) {
+				this.showMentionPopup(sorted);
+			} else {
+				this.closeMentionPopup();
+			}
+		} else {
+			this.closeMentionPopup();
+		}
+	}
+
+	private showMentionPopup(files: TFile[]): void {
+		this.closeMentionPopup();
+		const popup = this.inputAreaEl.createDiv({ cls: "ai-daily-mention-popup" });
+		this.mentionPopupEl = popup;
+
+		for (let i = 0; i < files.length; i++) {
+			const file = files[i];
+			const already = this.attachedFiles.some((f) => f.path === file.path);
+			const item = popup.createDiv({
+				cls: `ai-daily-mention-item${i === 0 ? " ai-daily-mention-item-active" : ""}${already ? " ai-daily-mention-item-attached" : ""}`,
+			});
+			const iconSpan = item.createSpan({ cls: "ai-daily-mention-item-icon" });
+			setIcon(iconSpan, "file-text");
+			const textDiv = item.createDiv({ cls: "ai-daily-mention-item-text" });
+			textDiv.createDiv({ cls: "ai-daily-mention-item-name", text: file.basename });
+			if (file.parent && file.parent.path !== "/") {
+				textDiv.createDiv({ cls: "ai-daily-mention-item-path", text: file.parent.path });
+			}
+			if (already) {
+				const badge = item.createSpan({ cls: "ai-daily-mention-item-badge", text: "已添加" });
+			}
+			item.addEventListener("click", () => {
+				this.selectMention(file);
+			});
+		}
+	}
+
+	private selectMention(file: TFile): void {
+		if (!this.attachedFiles.some((f) => f.path === file.path)) {
 			this.attachedFiles.push(file);
 			this.renderAttachBar();
-		}).open();
+		}
+		const value = this.inputEl.value;
+		const start = this.mentionStartPos ?? 0;
+		const cursor = this.inputEl.selectionStart ?? value.length;
+		this.inputEl.value = value.slice(0, start) + value.slice(cursor);
+		this.inputEl.selectionStart = this.inputEl.selectionEnd = start;
+		this.closeMentionPopup();
+		this.inputEl.focus();
+	}
+
+	private navigatePopup(popup: HTMLElement, direction: number): void {
+		const items = Array.from(popup.querySelectorAll(".ai-daily-mention-item"));
+		if (items.length === 0) return;
+		const activeIndex = items.findIndex((el) => el.classList.contains("ai-daily-mention-item-active"));
+		items[activeIndex]?.classList.remove("ai-daily-mention-item-active");
+		const next = (activeIndex + direction + items.length) % items.length;
+		items[next]?.classList.add("ai-daily-mention-item-active");
+		items[next]?.scrollIntoView({ block: "nearest" });
+	}
+
+	private closeMentionPopup(): void {
+		if (this.mentionPopupEl) {
+			this.mentionPopupEl.remove();
+			this.mentionPopupEl = null;
+		}
+		this.mentionStartPos = null;
 	}
 
 	private renderAttachBar(): void {
@@ -1585,5 +1658,6 @@ export class ChatView extends ItemView {
 	async onClose(): Promise<void> {
 		this.closeHistoryOverlay();
 		this.closeTemplatePopup();
+		this.closeMentionPopup();
 	}
 }

@@ -94,6 +94,7 @@
 .ai-daily-input-area {
 	display: flex;
 	flex-direction: column;
+	gap: 0;
 	padding: 8px 8px;
 	border-top: 1px solid var(--background-modifier-border);
 	padding-bottom: max(8px, env(safe-area-inset-bottom));
@@ -106,33 +107,7 @@
 .ai-daily-input-row {
 	display: flex;
 	align-items: flex-end;
-	gap: 6px;
-}
-
-.ai-daily-attach-btn {
-	width: 32px;
-	height: 32px;
-	border-radius: 50%;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	background: none;
-	color: var(--text-muted);
-	border: none;
-	cursor: pointer;
-	flex-shrink: 0;
-	padding: 0;
-	align-self: flex-end;
-	margin-bottom: 2px;
-}
-
-.ai-daily-attach-btn:hover {
-	color: var(--text-normal);
-}
-
-.ai-daily-attach-btn svg {
-	width: 16px;
-	height: 16px;
+	gap: 8px;
 }
 
 .ai-daily-attach-bar {
@@ -186,6 +161,81 @@
 .ai-daily-attach-chip-remove svg {
 	width: 12px;
 	height: 12px;
+}
+
+/* ── @ mention popup ─────────────────────────────────── */
+
+.ai-daily-mention-popup {
+	position: absolute;
+	bottom: 100%;
+	left: 0;
+	right: 0;
+	max-height: 280px;
+	overflow-y: auto;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	box-shadow: 0 2px 12px rgba(0,0,0,.15);
+	z-index: 100;
+	margin-bottom: 4px;
+}
+
+.ai-daily-mention-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 10px;
+	cursor: pointer;
+	font-size: 13px;
+}
+
+.ai-daily-mention-item:hover,
+.ai-daily-mention-item-active {
+	background: var(--background-secondary);
+}
+
+.ai-daily-mention-item-icon {
+	display: flex;
+	flex-shrink: 0;
+	color: var(--text-muted);
+}
+
+.ai-daily-mention-item-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.ai-daily-mention-item-text {
+	flex: 1;
+	min-width: 0;
+}
+
+.ai-daily-mention-item-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-normal);
+}
+
+.ai-daily-mention-item-path {
+	font-size: 11px;
+	color: var(--text-faint);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ai-daily-mention-item-badge {
+	font-size: 10px;
+	color: var(--text-faint);
+	background: var(--background-modifier-border);
+	padding: 1px 6px;
+	border-radius: 8px;
+	flex-shrink: 0;
+}
+
+.ai-daily-mention-item-attached {
+	opacity: 0.6;
 }
 
 .ai-daily-input {

@@ -841,14 +841,23 @@ export class ChatView extends ItemView {
 
 		if (isFirstMessage) {
 			const { knowledgeFolders } = this.plugin.settings;
-			prompt = [
+			const parts: string[] = [
 				"你是一个个人知识库助手。用户在 Obsidian 中管理知识库。",
 				`知识库文件夹: ${knowledgeFolders.join("、")}`,
 				"你可以使用 MCP 工具来读取、搜索、创建、编辑笔记。回答用中文，简洁有深度。",
 				"在回复中引用笔记时，请使用 [[笔记名]] 的 wiki-link 格式。",
-				"",
-				text,
-			].join("\n");
+			];
+
+			if (this.messages.length > 1) {
+				const history = this.messages.slice(0, -1);
+				const summary = history.map((m) =>
+					`${m.role === "user" ? "用户" : "助手"}: ${m.content}`
+				).join("\n\n");
+				parts.push("", "以下是之前的对话记录，请基于这些上下文继续：", "---", summary, "---");
+			}
+
+			parts.push("", text);
+			prompt = parts.join("\n");
 		}
 
 		this.runClaudeCodeStream(prompt, this.getMcpConfig(), this.claudeCodeSessionId);
@@ -927,6 +936,7 @@ export class ChatView extends ItemView {
 			created: existing?.created ?? now,
 			updated: now,
 			messages: persisted,
+			claudeCodeSessionId: this.claudeCodeSessionId,
 		};
 		try {
 			await saveChatSession(this.app.vault, chatHistoryFolder, file);
@@ -1337,6 +1347,7 @@ export class ChatView extends ItemView {
 			return;
 		}
 		this.sessionId = data.id;
+		this.claudeCodeSessionId = data.claudeCodeSessionId;
 		this.messages = data.messages.map((m) => ({
 			role: m.role,
 			content: m.content,

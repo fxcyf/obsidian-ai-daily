@@ -20,7 +20,7 @@ import type { PromptTemplate } from "./settings";
 import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
 import type { PreparedImage } from "./image-tools";
 import { distillConversation } from "./knowledge-agent";
-import { spawnClaudeCode } from "./claude-code";
+import { isClaudeCodeAvailable, spawnClaudeCode } from "./claude-code";
 import {
 	newSessionId,
 	titleFromMessages,
@@ -623,20 +623,27 @@ export class ChatView extends ItemView {
 
 		const text = this.inputEl.value.trim();
 		if (!text || this.isLoading) return;
-		this.isLoading = true;
-		this.setSendButtonState(true);
 
-		if (!this.plugin.settings.apiKey) {
-			this.isLoading = false;
+		const useClaudeCode = await isClaudeCodeAvailable();
+
+		if (!useClaudeCode && !this.plugin.settings.apiKey) {
 			this.addMessage(
 				"assistant",
-				"请先在插件设置中配置 Anthropic API Key。"
+				"请先在插件设置中配置 Anthropic API Key，或安装 Claude Code。"
 			);
 			return;
 		}
 
+		this.isLoading = true;
+		this.setSendButtonState(true);
 		this.inputEl.value = "";
 		this.inputEl.style.height = "auto";
+
+		if (useClaudeCode) {
+			this.handleSendViaClaudeCode(text);
+			return;
+		}
+
 		this.addMessage("user", text);
 
 		if (!this.sessionId) {
@@ -814,6 +821,42 @@ export class ChatView extends ItemView {
 		}
 	}
 
+	private handleSendViaClaudeCode(text: string): void {
+		this.addMessage("user", text);
+		if (!this.sessionId) this.sessionId = newSessionId();
+
+		const { knowledgeFolders } = this.plugin.settings;
+		const adapter = this.app.vault.adapter as { basePath?: string };
+		const vaultPath = adapter.basePath || "";
+		const mcpServerPath = require("path").join(
+			(this.plugin.manifest as { dir?: string }).dir || "",
+			"mcp-dist", "index.js"
+		);
+
+		const historyLines: string[] = [];
+		const recent = this.messages.slice(0, -1).slice(-10);
+		for (const m of recent) {
+			historyLines.push(`${m.role === "user" ? "用户" : "助手"}: ${m.content}`);
+		}
+
+		const systemContext = [
+			"你是一个个人知识库助手。用户在 Obsidian 中管理知识库。",
+			`知识库文件夹: ${knowledgeFolders.join("、")}`,
+			"你可以使用 MCP 工具来读取、搜索、创建、编辑笔记。回答用中文，简洁有深度。",
+			"在回复中引用笔记时，请使用 [[笔记名]] 的 wiki-link 格式。",
+		].join("\n");
+
+		const fullPrompt = historyLines.length > 0
+			? `${systemContext}\n\n## 对话历史\n\n${historyLines.join("\n\n")}\n\n## 当前提问\n\n${text}`
+			: `${systemContext}\n\n${text}`;
+
+		this.runClaudeCodeStream(fullPrompt, {
+			vaultPath,
+			mcpServerPath,
+			knowledgeFolders,
+		});
+	}
+
 	private async initClient(): Promise<void> {
 		const {
 			apiKey,
@@ -979,14 +1022,16 @@ export class ChatView extends ItemView {
 		void this.handleSend();
 	}
 
-	sendClaudeCodeMessage(text: string, mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] }): void {
+	sendClaudeCodeMessage(userText: string, mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] }): void {
 		if (this.isLoading) return;
 		this.isLoading = true;
 		this.setSendButtonState(true);
-
-		this.addMessage("user", text);
+		this.addMessage("user", userText);
 		if (!this.sessionId) this.sessionId = newSessionId();
+		this.runClaudeCodeStream(userText, mcpConfig);
+	}
 
+	private runClaudeCodeStream(prompt: string, mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] }): void {
 		const loadingEl = this.messagesEl.createDiv({ cls: "ai-daily-loading" });
 		loadingEl.createSpan({ text: "Claude Code 处理中" });
 		const dotsEl = loadingEl.createSpan({ cls: "ai-daily-loading-dots" });
@@ -1013,7 +1058,7 @@ export class ChatView extends ItemView {
 			}, STREAM_MARKDOWN_RENDER_INTERVAL_MS);
 		};
 
-		const handle = spawnClaudeCode(text, mcpConfig, {
+		const handle = spawnClaudeCode(prompt, mcpConfig, {
 			onText: (delta) => {
 				loadingEl.remove();
 				if (!assistantEl) {

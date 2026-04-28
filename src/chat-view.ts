@@ -11,6 +11,8 @@ import {
 	Notice,
 	Modal,
 	App,
+	FuzzySuggestModal,
+	TFile,
 } from "obsidian";
 import type AIDailyChat from "./main";
 import { ClaudeClient, estimateTextTokens } from "./claude";
@@ -102,6 +104,28 @@ class ConfirmModal extends Modal {
 	}
 }
 
+class NoteSuggestModal extends FuzzySuggestModal<TFile> {
+	private onChoose: (file: TFile) => void;
+
+	constructor(app: App, onChoose: (file: TFile) => void) {
+		super(app);
+		this.onChoose = onChoose;
+		this.setPlaceholder("搜索笔记…");
+	}
+
+	getItems(): TFile[] {
+		return this.app.vault.getMarkdownFiles();
+	}
+
+	getItemText(item: TFile): string {
+		return item.path;
+	}
+
+	onChooseItem(item: TFile): void {
+		this.onChoose(item);
+	}
+}
+
 export class ChatView extends ItemView {
 	plugin: AIDailyChat;
 	private chatContainerEl!: HTMLElement;
@@ -122,6 +146,8 @@ export class ChatView extends ItemView {
 	private userScrolledUp = false;
 	private cachedTokenCount = 0;
 	private sessionId: string | null = null;
+	private attachedFiles: TFile[] = [];
+	private attachBarEl: HTMLElement | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AIDailyChat) {
 		super(leaf);
@@ -227,12 +253,24 @@ export class ChatView extends ItemView {
 	private buildInputArea(container: HTMLElement): void {
 		this.inputAreaEl = container.createDiv({ cls: "ai-daily-input-area" });
 
-		this.inputEl = this.inputAreaEl.createEl("textarea", {
+		this.attachBarEl = this.inputAreaEl.createDiv({ cls: "ai-daily-attach-bar" });
+		this.attachBarEl.style.display = "none";
+
+		const inputRow = this.inputAreaEl.createDiv({ cls: "ai-daily-input-row" });
+
+		const attachBtn = inputRow.createEl("button", {
+			cls: "ai-daily-attach-btn",
+			attr: { "aria-label": "附加笔记", title: "附加笔记" },
+		});
+		setIcon(attachBtn, "paperclip");
+		attachBtn.addEventListener("click", () => this.openAttachPicker());
+
+		this.inputEl = inputRow.createEl("textarea", {
 			cls: "ai-daily-input",
 			attr: { placeholder: "问点什么… 输入 / 选择模板", rows: "1" },
 		});
 
-		this.sendBtn = this.inputAreaEl.createEl("button", {
+		this.sendBtn = inputRow.createEl("button", {
 			cls: "ai-daily-send-btn",
 		});
 		setIcon(this.sendBtn, "send");
@@ -362,6 +400,54 @@ export class ChatView extends ItemView {
 			this.templatePopupEl.remove();
 			this.templatePopupEl = null;
 		}
+	}
+
+	// ── Attach files ──────────────────────────────────────
+
+	private openAttachPicker(): void {
+		new NoteSuggestModal(this.app, (file) => {
+			if (this.attachedFiles.some((f) => f.path === file.path)) return;
+			this.attachedFiles.push(file);
+			this.renderAttachBar();
+		}).open();
+	}
+
+	private renderAttachBar(): void {
+		if (!this.attachBarEl) return;
+		this.attachBarEl.empty();
+		if (this.attachedFiles.length === 0) {
+			this.attachBarEl.style.display = "none";
+			return;
+		}
+		this.attachBarEl.style.display = "";
+		for (const file of this.attachedFiles) {
+			const chip = this.attachBarEl.createDiv({ cls: "ai-daily-attach-chip" });
+			const iconSpan = chip.createSpan({ cls: "ai-daily-attach-chip-icon" });
+			setIcon(iconSpan, "file-text");
+			chip.createSpan({ cls: "ai-daily-attach-chip-name", text: file.basename });
+			const removeBtn = chip.createSpan({ cls: "ai-daily-attach-chip-remove" });
+			setIcon(removeBtn, "x");
+			removeBtn.addEventListener("click", () => {
+				this.attachedFiles = this.attachedFiles.filter((f) => f.path !== file.path);
+				this.renderAttachBar();
+			});
+		}
+	}
+
+	private async consumeAttachedFiles(): Promise<string> {
+		if (this.attachedFiles.length === 0) return "";
+		const parts: string[] = [];
+		for (const file of this.attachedFiles) {
+			try {
+				const content = await this.app.vault.cachedRead(file);
+				parts.push(`## 附加笔记: ${file.path}\n\n${content}`);
+			} catch {
+				parts.push(`## 附加笔记: ${file.path}\n\n(读取失败)`);
+			}
+		}
+		this.attachedFiles = [];
+		this.renderAttachBar();
+		return parts.join("\n\n---\n\n");
 	}
 
 	// ── Post-processing: wiki-links & code copy buttons ───
@@ -834,6 +920,7 @@ export class ChatView extends ItemView {
 		if (!this.sessionId) this.sessionId = newSessionId();
 
 		const isFirstMessage = !this.claudeCodeSessionId;
+		const attachedContent = await this.consumeAttachedFiles();
 		let prompt = text;
 
 		if (isFirstMessage) {
@@ -861,6 +948,10 @@ export class ChatView extends ItemView {
 				} catch {
 					parts.push("", `## 当前打开的笔记: ${activeFile.path}`);
 				}
+			}
+
+			if (attachedContent) {
+				parts.push("", attachedContent);
 			}
 
 			parts.push(
@@ -891,6 +982,21 @@ export class ChatView extends ItemView {
 
 			parts.push("", text);
 			prompt = parts.join("\n");
+		} else {
+			const contextParts: string[] = [];
+
+			const activeFile = this.app.workspace.getActiveFile();
+			if (activeFile) {
+				contextParts.push(`[当前笔记: ${activeFile.path}]`);
+			}
+
+			if (attachedContent) {
+				contextParts.push(attachedContent);
+			}
+
+			if (contextParts.length > 0) {
+				prompt = contextParts.join("\n\n") + "\n\n" + text;
+			}
 		}
 
 		this.runClaudeCodeStream(prompt, this.getMcpConfig(), this.claudeCodeSessionId);
@@ -1246,6 +1352,8 @@ export class ChatView extends ItemView {
 		this.client = null;
 		this.vaultTools = null;
 		this.claudeCodeSessionId = undefined;
+		this.attachedFiles = [];
+		this.renderAttachBar();
 		this.messagesEl.empty();
 		this.showWelcome();
 	}

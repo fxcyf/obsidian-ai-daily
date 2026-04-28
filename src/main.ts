@@ -234,16 +234,8 @@ export default class AIDailyChat extends Plugin {
 		const view = leaf.view as ChatView;
 
 		if (useClaudeCode) {
-			const adapter = this.app.vault.adapter as { basePath?: string };
-			const vaultPath = adapter.basePath || "";
-			const mcpServerPath = require("path").join(this.manifest.dir, "mcp-dist", "index.js");
-
 			new Notice("使用 Claude Code 整理（Max plan 额度）", 3000);
-			view.sendClaudeCodeMessage(message, {
-				vaultPath,
-				mcpServerPath,
-				knowledgeFolders: this.settings.knowledgeFolders,
-			});
+			view.sendClaudeCodeMessage(message);
 		} else {
 			view.sendMessage(message);
 		}

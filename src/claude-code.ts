@@ -78,14 +78,21 @@ export interface ClaudeCodeStreamCallbacks {
 	onToolCall?: (name: string, status: "running" | "done" | "error") => void;
 	onError: (error: string) => void;
 	onDone: (fullText: string) => void;
+	onSessionId?: (id: string) => void;
+}
+
+export interface ClaudeCodeOptions {
+	mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] };
+	sessionId?: string;
 }
 
 export function spawnClaudeCode(
 	prompt: string,
-	mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] },
+	options: ClaudeCodeOptions,
 	callbacks: ClaudeCodeStreamCallbacks
 ): { abort: () => void } {
 	const { spawn } = require("child_process") as typeof import("child_process");
+	const { mcpConfig, sessionId } = options;
 
 	const mcpFlag = [
 		"obsidian-vault",
@@ -99,6 +106,9 @@ export function spawnClaudeCode(
 		"--output-format", "stream-json",
 		"--mcp", mcpFlag,
 	];
+	if (sessionId) {
+		args.push("--resume", sessionId);
+	}
 
 	const claudeBin = getClaudePath();
 	let child: ChildProcess;
@@ -205,6 +215,8 @@ function handleStreamEvent(
 				callbacks.onText(result);
 				appendText(result);
 			}
+			const sid = event.session_id as string | undefined;
+			if (sid) callbacks.onSessionId?.(sid);
 			break;
 		}
 	}

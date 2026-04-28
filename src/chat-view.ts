@@ -821,10 +821,7 @@ export class ChatView extends ItemView {
 		}
 	}
 
-	private handleSendViaClaudeCode(text: string): void {
-		this.addMessage("user", text);
-		if (!this.sessionId) this.sessionId = newSessionId();
-
+	private getMcpConfig(): { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] } {
 		const { knowledgeFolders } = this.plugin.settings;
 		const adapter = this.app.vault.adapter as { basePath?: string };
 		const vaultPath = adapter.basePath || "";
@@ -832,29 +829,29 @@ export class ChatView extends ItemView {
 			(this.plugin.manifest as { dir?: string }).dir || "",
 			"mcp-dist", "index.js"
 		);
+		return { vaultPath, mcpServerPath, knowledgeFolders };
+	}
 
-		const historyLines: string[] = [];
-		const recent = this.messages.slice(0, -1).slice(-10);
-		for (const m of recent) {
-			historyLines.push(`${m.role === "user" ? "用户" : "助手"}: ${m.content}`);
+	private handleSendViaClaudeCode(text: string): void {
+		this.addMessage("user", text);
+		if (!this.sessionId) this.sessionId = newSessionId();
+
+		const isFirstMessage = !this.claudeCodeSessionId;
+		let prompt = text;
+
+		if (isFirstMessage) {
+			const { knowledgeFolders } = this.plugin.settings;
+			prompt = [
+				"你是一个个人知识库助手。用户在 Obsidian 中管理知识库。",
+				`知识库文件夹: ${knowledgeFolders.join("、")}`,
+				"你可以使用 MCP 工具来读取、搜索、创建、编辑笔记。回答用中文，简洁有深度。",
+				"在回复中引用笔记时，请使用 [[笔记名]] 的 wiki-link 格式。",
+				"",
+				text,
+			].join("\n");
 		}
 
-		const systemContext = [
-			"你是一个个人知识库助手。用户在 Obsidian 中管理知识库。",
-			`知识库文件夹: ${knowledgeFolders.join("、")}`,
-			"你可以使用 MCP 工具来读取、搜索、创建、编辑笔记。回答用中文，简洁有深度。",
-			"在回复中引用笔记时，请使用 [[笔记名]] 的 wiki-link 格式。",
-		].join("\n");
-
-		const fullPrompt = historyLines.length > 0
-			? `${systemContext}\n\n## 对话历史\n\n${historyLines.join("\n\n")}\n\n## 当前提问\n\n${text}`
-			: `${systemContext}\n\n${text}`;
-
-		this.runClaudeCodeStream(fullPrompt, {
-			vaultPath,
-			mcpServerPath,
-			knowledgeFolders,
-		});
+		this.runClaudeCodeStream(prompt, this.getMcpConfig(), this.claudeCodeSessionId);
 	}
 
 	private async initClient(): Promise<void> {
@@ -1022,16 +1019,16 @@ export class ChatView extends ItemView {
 		void this.handleSend();
 	}
 
-	sendClaudeCodeMessage(userText: string, mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] }): void {
+	sendClaudeCodeMessage(userText: string): void {
 		if (this.isLoading) return;
 		this.isLoading = true;
 		this.setSendButtonState(true);
 		this.addMessage("user", userText);
 		if (!this.sessionId) this.sessionId = newSessionId();
-		this.runClaudeCodeStream(userText, mcpConfig);
+		this.runClaudeCodeStream(userText, this.getMcpConfig());
 	}
 
-	private runClaudeCodeStream(prompt: string, mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] }): void {
+	private runClaudeCodeStream(prompt: string, mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] }, sessionId?: string): void {
 		const loadingEl = this.messagesEl.createDiv({ cls: "ai-daily-loading" });
 		loadingEl.createSpan({ text: "Claude Code 处理中" });
 		const dotsEl = loadingEl.createSpan({ cls: "ai-daily-loading-dots" });
@@ -1058,7 +1055,7 @@ export class ChatView extends ItemView {
 			}, STREAM_MARKDOWN_RENDER_INTERVAL_MS);
 		};
 
-		const handle = spawnClaudeCode(prompt, mcpConfig, {
+		const handle = spawnClaudeCode(prompt, { mcpConfig, sessionId }, {
 			onText: (delta) => {
 				loadingEl.remove();
 				if (!assistantEl) {
@@ -1099,12 +1096,17 @@ export class ChatView extends ItemView {
 				this.isLoading = false;
 				this.setSendButtonState(false);
 			},
+			onSessionId: (id) => {
+				this.claudeCodeSessionId = id;
+				console.log("[ai-daily] Claude Code session:", id);
+			},
 		});
 
 		this.claudeCodeAbort = handle.abort;
 	}
 
 	private claudeCodeAbort: (() => void) | null = null;
+	private claudeCodeSessionId: string | undefined;
 
 	private async handleDistill(): Promise<void> {
 		if (this.messages.length < 2) {
@@ -1148,6 +1150,7 @@ export class ChatView extends ItemView {
 		this.cachedTokenCount = 0;
 		this.client = null;
 		this.vaultTools = null;
+		this.claudeCodeSessionId = undefined;
 		this.messagesEl.empty();
 		this.showWelcome();
 	}

@@ -1,7 +1,6 @@
 import esbuild from "esbuild";
 import process from "process";
-import { execSync } from "child_process";
-import { cpSync, existsSync, mkdirSync, rmSync } from "fs";
+import { existsSync, mkdirSync, rmSync, cpSync } from "fs";
 
 const production = process.argv[2] === "production";
 const DIST_DIR = "dist";
@@ -20,7 +19,6 @@ const buildOptions = {
 };
 
 if (production) {
-	// Clean and create dist/
 	rmSync(DIST_DIR, { recursive: true, force: true });
 	mkdirSync(DIST_DIR, { recursive: true });
 
@@ -33,12 +31,19 @@ if (production) {
 		}
 	}
 
-	// Build and bundle MCP server
-	if (existsSync("mcp-server/package.json")) {
+	// Bundle MCP server into a single file via esbuild (no subdirectory)
+	if (existsSync("mcp-server/src/index.ts")) {
 		try {
-			execSync("npm run build", { cwd: "mcp-server", stdio: "inherit" });
-			cpSync("mcp-server/dist", `${DIST_DIR}/mcp-dist`, { recursive: true });
-			console.log("  mcp-dist/  bundled");
+			await esbuild.build({
+				entryPoints: ["mcp-server/src/index.ts"],
+				bundle: true,
+				format: "esm",
+				target: "node18",
+				platform: "node",
+				outfile: `${DIST_DIR}/mcp-server.js`,
+				minify: true,
+			});
+			console.log("  mcp-server.js  bundled");
 		} catch (e) {
 			console.warn("  mcp-server build skipped:", e.message);
 		}

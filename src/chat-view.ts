@@ -827,7 +827,7 @@ export class ChatView extends ItemView {
 		const adapter = this.app.vault.adapter as { basePath?: string };
 		const vaultPath = adapter.basePath || "";
 		const pluginRelDir = (this.plugin.manifest as { dir?: string }).dir || "";
-		const mcpServerPath = join(vaultPath, pluginRelDir, "mcp-dist", "index.js");
+		const mcpServerPath = join(vaultPath, pluginRelDir, "mcp-server.js");
 		return { vaultPath, mcpServerPath, knowledgeFolders };
 	}
 

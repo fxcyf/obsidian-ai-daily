@@ -2,65 +2,218 @@ import { Platform } from "obsidian";
 import { ChildProcess } from "child_process";
 
 let cachedClaudePath: string | false | null = null;
+let cachedNodePath: string | null = null;
 
-const CLAUDE_SEARCH_PATHS = [
-	"/usr/local/bin/claude",
-	"/usr/bin/claude",
-];
+// ---------------------------------------------------------------------------
+// NVM alias resolution (filesystem-based, no env vars needed in Electron)
+// ---------------------------------------------------------------------------
 
-function getUserSearchPaths(): string[] {
-	const home = process.env.HOME || process.env.USERPROFILE || "";
-	if (!home) return [];
-	return [
-		`${home}/.local/bin/claude`,
-		`${home}/.npm-global/bin/claude`,
-		`${home}/.nvm/current/bin/claude`,
-		`${home}/Library/pnpm/claude`,
-		`${home}/.pnpm-global/bin/claude`,
-	];
+function resolveNvmNodeBin(home: string): string | null {
+	const { existsSync, readFileSync, readdirSync } = require("fs") as typeof import("fs");
+	const nvmDir = process.env.NVM_DIR || `${home}/.nvm`;
+
+	// Fast path: symlinked current
+	const current = `${nvmDir}/current/bin`;
+	if (existsSync(current)) return current;
+
+	// Read alias/default and resolve the chain (up to 5 levels, matching Claudian)
+	const aliasDir = `${nvmDir}/alias`;
+	const versionsDir = `${nvmDir}/versions/node`;
+	if (!existsSync(versionsDir)) return null;
+
+	let target = "default";
+	const seen = new Set<string>();
+	for (let i = 0; i < 5; i++) {
+		if (seen.has(target)) break;
+		seen.add(target);
+
+		const aliasFile = `${aliasDir}/${target}`;
+		if (!existsSync(aliasFile)) break;
+
+		target = readFileSync(aliasFile, "utf-8").trim();
+		if (!target) break;
+	}
+
+	// target is now a version specifier like "22", "22.1", "v22.1.0", "node", "stable"
+	if (target === "node" || target === "stable") {
+		target = ""; // match latest
+	}
+
+	try {
+		const installed = readdirSync(versionsDir).sort();
+		if (installed.length === 0) return null;
+
+		let match: string | undefined;
+		if (target) {
+			const prefix = target.startsWith("v") ? target : `v${target}`;
+			match = installed.filter((v: string) => v.startsWith(prefix)).pop();
+		}
+		if (!match) match = installed.pop();
+
+		if (match) {
+			const bin = `${versionsDir}/${match}/bin`;
+			if (existsSync(bin)) return bin;
+		}
+	} catch { /* versions dir unreadable */ }
+
+	return null;
 }
 
-function getNodePaths(home: string): string[] {
-	const { existsSync, readdirSync } = require("fs") as typeof import("fs");
-	const paths: string[] = [
-		"/usr/local/bin",
-		"/opt/homebrew/bin",
+// ---------------------------------------------------------------------------
+// FNM resolution
+// ---------------------------------------------------------------------------
+
+function resolveFnmNodeBin(home: string): string | null {
+	const { existsSync, readdirSync, readlinkSync } = require("fs") as typeof import("fs");
+	const { join } = require("path") as typeof import("path");
+
+	// FNM uses different directories per platform
+	const candidates = [
+		`${home}/Library/Application Support/fnm/node-versions`,  // macOS
+		`${home}/.local/share/fnm/node-versions`,                 // Linux
+		`${home}/.fnm/node-versions`,                             // legacy / custom
+	];
+
+	// Check for fnm aliases/default first
+	const aliasDirs = [
+		`${home}/Library/Application Support/fnm/aliases`,
+		`${home}/.local/share/fnm/aliases`,
+		`${home}/.fnm/aliases`,
+	];
+	for (const aliasDir of aliasDirs) {
+		const defaultAlias = join(aliasDir, "default");
+		if (existsSync(defaultAlias)) {
+			try {
+				const resolved = readlinkSync(defaultAlias);
+				const bin = join(resolved, "installation/bin");
+				if (existsSync(bin)) return bin;
+			} catch { /* not a symlink or broken */ }
+		}
+	}
+
+	for (const dir of candidates) {
+		try {
+			const versions = readdirSync(dir).sort();
+			if (versions.length > 0) {
+				const latest = versions.pop()!;
+				const bin = `${dir}/${latest}/installation/bin`;
+				if (existsSync(bin)) return bin;
+			}
+		} catch { /* dir doesn't exist */ }
+	}
+	return null;
+}
+
+// ---------------------------------------------------------------------------
+// Build enhanced PATH for spawning (Electron's PATH is minimal)
+// ---------------------------------------------------------------------------
+
+function buildEnhancedPath(home: string): string {
+	const { existsSync } = require("fs") as typeof import("fs");
+
+	const dirs: string[] = [];
+
+	// Node version managers (highest priority — these are what the user likely uses)
+	const nvmBin = resolveNvmNodeBin(home);
+	if (nvmBin) dirs.push(nvmBin);
+
+	const fnmBin = resolveFnmNodeBin(home);
+	if (fnmBin) dirs.push(fnmBin);
+
+	// Volta (manages node, npm, yarn, pnpm)
+	const voltaBin = `${home}/.volta/bin`;
+	if (existsSync(voltaBin)) dirs.push(voltaBin);
+
+	// asdf version manager
+	const asdfShims = `${home}/.asdf/shims`;
+	if (existsSync(asdfShims)) dirs.push(asdfShims);
+
+	// Common install locations
+	dirs.push(
 		`${home}/.local/bin`,
 		`${home}/.npm-global/bin`,
 		`${home}/Library/pnpm`,
-	];
+		`${home}/.bun/bin`,
+		"/opt/homebrew/bin",        // macOS ARM
+		"/usr/local/bin",           // macOS x86 / Linux
+	);
 
-	const nvmDir = process.env.NVM_DIR || `${home}/.nvm`;
-	const nvmCurrent = `${nvmDir}/current/bin`;
-	if (existsSync(nvmCurrent)) {
-		paths.unshift(nvmCurrent);
-	} else {
-		try {
-			const versions = readdirSync(`${nvmDir}/versions/node`);
-			if (versions.length > 0) {
-				const latest = versions.sort().pop()!;
-				paths.unshift(`${nvmDir}/versions/node/${latest}/bin`);
-			}
-		} catch { /* nvm not installed */ }
+	// If the claude binary lives in a directory with node, add that too
+	if (cachedClaudePath && cachedClaudePath !== "claude") {
+		const { dirname } = require("path") as typeof import("path");
+		const claudeDir = dirname(cachedClaudePath);
+		if (!dirs.includes(claudeDir)) dirs.unshift(claudeDir);
 	}
 
-	const fnmDir = `${home}/Library/Application Support/fnm/node-versions`;
-	try {
-		const versions = readdirSync(fnmDir);
-		if (versions.length > 0) {
-			const latest = versions.sort().pop()!;
-			paths.unshift(`${fnmDir}/${latest}/installation/bin`);
-		}
-	} catch { /* fnm not installed */ }
+	return [...dirs, process.env.PATH || ""].join(":");
+}
 
-	return paths;
+// ---------------------------------------------------------------------------
+// Find node executable (absolute path)
+// ---------------------------------------------------------------------------
+
+function findNodeExecutable(home: string): string | null {
+	const { existsSync } = require("fs") as typeof import("fs");
+
+	if (cachedNodePath) return cachedNodePath;
+
+	// Check well-known locations
+	const nvmBin = resolveNvmNodeBin(home);
+	if (nvmBin) {
+		const candidate = `${nvmBin}/node`;
+		if (existsSync(candidate)) { cachedNodePath = candidate; return candidate; }
+	}
+
+	const fnmBin = resolveFnmNodeBin(home);
+	if (fnmBin) {
+		const candidate = `${fnmBin}/node`;
+		if (existsSync(candidate)) { cachedNodePath = candidate; return candidate; }
+	}
+
+	const staticPaths = [
+		`${home}/.volta/bin/node`,
+		`${home}/.asdf/shims/node`,
+		"/opt/homebrew/bin/node",
+		"/usr/local/bin/node",
+		"/usr/bin/node",
+	];
+	for (const p of staticPaths) {
+		if (existsSync(p)) { cachedNodePath = p; return p; }
+	}
+
+	return null;
+}
+
+// ---------------------------------------------------------------------------
+// Find Claude CLI binary
+// ---------------------------------------------------------------------------
+
+function getClaudeSearchPaths(home: string): string[] {
+	return [
+		// User-level installs (most common for npm -g / pnpm)
+		`${home}/.local/bin/claude`,
+		`${home}/.npm-global/bin/claude`,
+		`${home}/Library/pnpm/claude`,
+		`${home}/.pnpm-global/bin/claude`,
+		// Version managers
+		`${home}/.volta/bin/claude`,
+		`${home}/.asdf/shims/claude`,
+		`${home}/.bun/bin/claude`,
+		// NVM-managed
+		...(resolveNvmNodeBin(home) ? [`${resolveNvmNodeBin(home)}/claude`] : []),
+		// System-wide
+		"/opt/homebrew/bin/claude",
+		"/usr/local/bin/claude",
+		"/usr/bin/claude",
+	];
 }
 
 async function findClaudeBinary(): Promise<string | false> {
 	const { existsSync } = require("fs") as typeof import("fs");
 	const { execFile } = require("child_process") as typeof import("child_process");
+	const home = process.env.HOME || process.env.USERPROFILE || "";
 
-	const candidates = [...getUserSearchPaths(), ...CLAUDE_SEARCH_PATHS];
+	const candidates = getClaudeSearchPaths(home);
 	for (const p of candidates) {
 		if (existsSync(p)) {
 			console.log(`[ai-daily] found claude at: ${p}`);
@@ -68,11 +221,15 @@ async function findClaudeBinary(): Promise<string | false> {
 		}
 	}
 
-	// fallback: try PATH
+	// Fallback: try enhanced PATH (covers edge cases)
+	const enhancedPath = home ? buildEnhancedPath(home) : process.env.PATH || "";
 	return new Promise<string | false>((resolve) => {
-		execFile("claude", ["--version"], { timeout: 5000 }, (err: Error | null) => {
+		execFile("claude", ["--version"], {
+			timeout: 5000,
+			env: { ...process.env, PATH: enhancedPath },
+		}, (err: Error | null) => {
 			if (!err) {
-				console.log("[ai-daily] found claude in PATH");
+				console.log("[ai-daily] found claude via enhanced PATH");
 				resolve("claude");
 			} else {
 				console.log("[ai-daily] claude not found");
@@ -82,20 +239,20 @@ async function findClaudeBinary(): Promise<string | false> {
 	});
 }
 
+// ---------------------------------------------------------------------------
+// Public API: detection & cache
+// ---------------------------------------------------------------------------
+
 export async function isClaudeCodeAvailable(): Promise<boolean> {
-	console.log("[ai-daily] isClaudeCodeAvailable called, Platform.isMobile =", Platform.isMobile);
 	if (Platform.isMobile) return false;
-	if (cachedClaudePath !== null) {
-		console.log("[ai-daily] using cached claude path:", cachedClaudePath);
-		return cachedClaudePath !== false;
-	}
+	if (cachedClaudePath !== null) return cachedClaudePath !== false;
 
 	try {
 		cachedClaudePath = await findClaudeBinary();
 		console.log("[ai-daily] claude detection result:", cachedClaudePath);
 		return cachedClaudePath !== false;
 	} catch (e) {
-		console.log("[ai-daily] claude detection error:", e);
+		console.error("[ai-daily] claude detection error:", e);
 		cachedClaudePath = false;
 		return false;
 	}
@@ -107,7 +264,12 @@ export function getClaudePath(): string {
 
 export function resetClaudeCodeCache(): void {
 	cachedClaudePath = null;
+	cachedNodePath = null;
 }
+
+// ---------------------------------------------------------------------------
+// Stream callbacks & options
+// ---------------------------------------------------------------------------
 
 export interface ClaudeCodeStreamCallbacks {
 	onText: (delta: string) => void;
@@ -122,6 +284,10 @@ export interface ClaudeCodeOptions {
 	sessionId?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Spawn Claude Code
+// ---------------------------------------------------------------------------
+
 export function spawnClaudeCode(
 	prompt: string,
 	options: ClaudeCodeOptions,
@@ -129,12 +295,16 @@ export function spawnClaudeCode(
 ): { abort: () => void } {
 	const { spawn } = require("child_process") as typeof import("child_process");
 	const { mcpConfig, sessionId } = options;
+	const home = process.env.HOME || process.env.USERPROFILE || "";
+
+	// Resolve node to absolute path for MCP server command
+	const nodeBin = findNodeExecutable(home) || "node";
 
 	const mcpFlag = [
 		"obsidian-vault",
 		"-e", `VAULT_PATH=${mcpConfig.vaultPath}`,
 		"-e", `KNOWLEDGE_FOLDERS=${mcpConfig.knowledgeFolders.join(",")}`,
-		"--", "node", mcpConfig.mcpServerPath,
+		"--", nodeBin, mcpConfig.mcpServerPath,
 	].join(" ");
 
 	const args = [
@@ -148,10 +318,8 @@ export function spawnClaudeCode(
 
 	const claudeBin = getClaudePath();
 	const env = { ...process.env };
-	const home = env.HOME || env.USERPROFILE || "";
 	if (home) {
-		const extraPaths = getNodePaths(home);
-		env.PATH = [...extraPaths, env.PATH || ""].join(":");
+		env.PATH = buildEnhancedPath(home);
 	}
 
 	let child: ChildProcess;
@@ -180,7 +348,6 @@ export function spawnClaudeCode(
 				const event = JSON.parse(line);
 				handleStreamEvent(event, callbacks, (t) => { fullText += t; });
 			} catch {
-				// not JSON, treat as raw text
 				callbacks.onText(line);
 				fullText += line;
 			}
@@ -221,6 +388,10 @@ export function spawnClaudeCode(
 	};
 }
 
+// ---------------------------------------------------------------------------
+// Stream event parsing
+// ---------------------------------------------------------------------------
+
 function handleStreamEvent(
 	event: Record<string, unknown>,
 	callbacks: ClaudeCodeStreamCallbacks,
@@ -242,6 +413,8 @@ function handleStreamEvent(
 					}
 				}
 			}
+			const sid = event.session_id as string | undefined;
+			if (sid) callbacks.onSessionId?.(sid);
 			break;
 		}
 		case "content_block_delta": {

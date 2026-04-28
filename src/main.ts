@@ -9,6 +9,7 @@ import { generateFeed, checkExistingFeed } from "./feed-generator";
 import { DEFAULT_FEEDS } from "./feeds";
 import { AutoTagger } from "./auto-tagger";
 import { findUnorganizedNotes, MAX_NOTES_PER_RUN } from "./knowledge-agent";
+import { isClaudeCodeAvailable } from "./claude-code";
 
 class FeedConfirmModal extends Modal {
 	private resolved = false;
@@ -191,8 +192,10 @@ export default class AIDailyChat extends Plugin {
 	}
 
 	async organizeKnowledge(): Promise<void> {
-		if (!this.settings.apiKey) {
-			new Notice("请先在插件设置中配置 Anthropic API Key。", 5000);
+		const useClaudeCode = await isClaudeCodeAvailable();
+
+		if (!useClaudeCode && !this.settings.apiKey) {
+			new Notice("请先在插件设置中配置 Anthropic API Key，或安装 Claude Code。", 5000);
 			return;
 		}
 
@@ -225,8 +228,22 @@ export default class AIDailyChat extends Plugin {
 
 		await this.activateView();
 		const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
-		if (leaf) {
-			(leaf.view as ChatView).sendMessage(message);
+		if (!leaf) return;
+		const view = leaf.view as ChatView;
+
+		if (useClaudeCode) {
+			const adapter = this.app.vault.adapter as { basePath?: string };
+			const vaultPath = adapter.basePath || "";
+			const mcpServerPath = require("path").join(this.manifest.dir, "mcp-dist", "index.js");
+
+			new Notice("使用 Claude Code 整理（Max plan 额度）", 3000);
+			view.sendClaudeCodeMessage(message, {
+				vaultPath,
+				mcpServerPath,
+				knowledgeFolders: this.settings.knowledgeFolders,
+			});
+		} else {
+			view.sendMessage(message);
 		}
 	}
 

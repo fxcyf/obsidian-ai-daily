@@ -20,6 +20,7 @@ import type { PromptTemplate } from "./settings";
 import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
 import type { PreparedImage } from "./image-tools";
 import { distillConversation } from "./knowledge-agent";
+import { spawnClaudeCode } from "./claude-code";
 import {
 	newSessionId,
 	titleFromMessages,
@@ -977,6 +978,88 @@ export class ChatView extends ItemView {
 		this.inputEl.value = text;
 		void this.handleSend();
 	}
+
+	sendClaudeCodeMessage(text: string, mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] }): void {
+		if (this.isLoading) return;
+		this.isLoading = true;
+		this.setSendButtonState(true);
+
+		this.addMessage("user", text);
+		if (!this.sessionId) this.sessionId = newSessionId();
+
+		const loadingEl = this.messagesEl.createDiv({ cls: "ai-daily-loading" });
+		loadingEl.createSpan({ text: "Claude Code 处理中" });
+		const dotsEl = loadingEl.createSpan({ cls: "ai-daily-loading-dots" });
+		dotsEl.createEl("span");
+		dotsEl.createEl("span");
+		dotsEl.createEl("span");
+
+		let assistantEl: HTMLDivElement | null = null;
+		let accumulated = "";
+		let renderTimer: number | null = null;
+
+		const renderMarkdown = async (content: string) => {
+			if (!assistantEl) return;
+			assistantEl.empty();
+			await MarkdownRenderer.render(this.app, content, assistantEl, "", this.plugin);
+			this.scrollToBottomIfFollowing();
+		};
+
+		const scheduleRender = () => {
+			if (renderTimer !== null) return;
+			renderTimer = window.setTimeout(() => {
+				renderTimer = null;
+				void renderMarkdown(accumulated);
+			}, STREAM_MARKDOWN_RENDER_INTERVAL_MS);
+		};
+
+		const handle = spawnClaudeCode(text, mcpConfig, {
+			onText: (delta) => {
+				loadingEl.remove();
+				if (!assistantEl) {
+					assistantEl = this.messagesEl.createDiv({
+						cls: "ai-daily-msg ai-daily-msg-assistant ai-daily-msg-streaming",
+					});
+				}
+				accumulated += delta;
+				scheduleRender();
+			},
+			onError: (error) => {
+				loadingEl.remove();
+				if (renderTimer !== null) { window.clearTimeout(renderTimer); renderTimer = null; }
+				if (assistantEl && accumulated) {
+					assistantEl.removeClass("ai-daily-msg-streaming");
+					this.messages.push({ role: "assistant", content: accumulated });
+				} else if (assistantEl) {
+					assistantEl.remove();
+				}
+				this.addMessage("assistant", `Claude Code 出错: ${error}`);
+				this.isLoading = false;
+				this.setSendButtonState(false);
+			},
+			onDone: (fullText) => {
+				loadingEl.remove();
+				if (renderTimer !== null) { window.clearTimeout(renderTimer); renderTimer = null; }
+				if (assistantEl) {
+					void renderMarkdown(fullText).then(() => {
+						assistantEl!.removeClass("ai-daily-msg-streaming");
+						this.postProcessAssistantEl(assistantEl!);
+					});
+					this.messages.push({ role: "assistant", content: fullText });
+				} else if (fullText) {
+					this.addMessage("assistant", fullText);
+				}
+				this.scrollToBottomIfFollowing();
+				void this.persistSession();
+				this.isLoading = false;
+				this.setSendButtonState(false);
+			},
+		});
+
+		this.claudeCodeAbort = handle.abort;
+	}
+
+	private claudeCodeAbort: (() => void) | null = null;
 
 	private async handleDistill(): Promise<void> {
 		if (this.messages.length < 2) {

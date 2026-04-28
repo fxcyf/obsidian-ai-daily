@@ -838,8 +838,15 @@ export class ChatView extends ItemView {
 	}
 
 	private handleStop(): void {
-		if (!this.isLoading || !this.client) return;
-		this.client.abort();
+		if (!this.isLoading) return;
+		if (this.claudeCodeAbort) {
+			this.claudeCodeAbort();
+			this.claudeCodeAbort = null;
+			return;
+		}
+		if (this.client) {
+			this.client.abort();
+		}
 	}
 
 	private setSendButtonState(loading: boolean): void {
@@ -1492,7 +1499,20 @@ export class ChatView extends ItemView {
 
 		const startTypewriter = () => {
 			if (typewriterTimer !== null) return;
-			typewriterTimer = window.setTimeout(typewriterTick, TICK_MS);
+			if (streamTextEl) streamTextEl.addClass("ai-daily-stream-text");
+			typewriterTimer = window.setTimeout(typewriterTick, 25);
+		};
+
+		const flushTypewriter = () => {
+			if (typewriterTimer !== null) {
+				window.clearTimeout(typewriterTimer);
+				typewriterTimer = null;
+			}
+			if (streamTextEl && rendered < accumulated.length) {
+				streamTextEl.textContent = accumulated;
+				rendered = accumulated.length;
+			}
+			if (streamTextEl) streamTextEl.removeClass("ai-daily-stream-text");
 		};
 
 		const handle = spawnClaudeCode(prompt, { mcpConfig, sessionId, model }, {
@@ -1505,6 +1525,8 @@ export class ChatView extends ItemView {
 					streamTextEl = assistantEl.createEl("pre", {
 						cls: "ai-daily-stream-text",
 					});
+				} else if (streamTextEl && !streamTextEl.hasClass("ai-daily-stream-text")) {
+					streamTextEl.addClass("ai-daily-stream-text");
 				}
 				accumulated += delta;
 				startTypewriter();
@@ -1512,6 +1534,7 @@ export class ChatView extends ItemView {
 			onToolCall: (id, name, input, status) => {
 				if (status === "running") {
 					loadingEl.remove();
+					flushTypewriter();
 					if (!toolCallsEl) {
 						const wrapper = this.messagesEl.createDiv({ cls: "ai-daily-tool-calls" });
 						const detailsEl = wrapper.createEl("details", { cls: "ai-daily-tool-calls-details" });

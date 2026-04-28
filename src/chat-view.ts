@@ -57,8 +57,14 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
 	web_fetch: "抓取网页",
 };
 
+function normalizeToolName(raw: string): string {
+	const match = raw.match(/(?:mcp__[^_]+__)?(.+)/);
+	return match ? match[1] : raw;
+}
+
 function toolCallSummary(name: string, input: Record<string, unknown>): string {
-	const label = TOOL_DISPLAY_NAMES[name] || name;
+	const normalized = normalizeToolName(name);
+	const label = TOOL_DISPLAY_NAMES[normalized] || normalized;
 	const path = typeof input.path === "string" ? input.path : "";
 	const query = typeof input.query === "string" ? input.query : "";
 	if (path) return `${label}: ${path}`;
@@ -1289,6 +1295,19 @@ export class ChatView extends ItemView {
 		}
 	}
 
+	private updateToolCallsSummary(el: HTMLElement, total: number, running: number): void {
+		el.empty();
+		if (running > 0) {
+			const iconSpan = el.createSpan({ cls: "ai-daily-tool-calls-summary-icon" });
+			setIcon(iconSpan, "loader");
+			el.createSpan({ text: ` ${total} 个工具调用 (${running} 进行中)` });
+		} else {
+			const iconSpan = el.createSpan({ cls: "ai-daily-tool-calls-summary-icon ai-daily-tool-calls-summary-done" });
+			setIcon(iconSpan, "check-circle");
+			el.createSpan({ text: ` ${total} 个工具调用已完成` });
+		}
+	}
+
 	private createUndoBarEl(description: string, filePath: string, onUndo: () => Promise<string>, undoData?: UndoData): void {
 		const bar = this.messagesEl.createDiv({ cls: "ai-daily-undo-bar" });
 
@@ -1445,7 +1464,10 @@ export class ChatView extends ItemView {
 		let accumulated = "";
 		let renderTimer: number | null = null;
 		let toolCallsEl: HTMLElement | null = null;
+		let toolCallsSummaryEl: HTMLElement | null = null;
 		const toolCallEls = new Map<string, HTMLElement>();
+		let toolTotal = 0;
+		let toolRunning = 0;
 		let thinkingEl: HTMLElement | null = null;
 		let thinkingContentEl: HTMLElement | null = null;
 		let thinkingText = "";
@@ -1480,13 +1502,19 @@ export class ChatView extends ItemView {
 				if (status === "running") {
 					loadingEl.remove();
 					if (!toolCallsEl) {
-						toolCallsEl = this.messagesEl.createDiv({ cls: "ai-daily-tool-calls" });
+						const wrapper = this.messagesEl.createDiv({ cls: "ai-daily-tool-calls" });
+						const detailsEl = wrapper.createEl("details", { cls: "ai-daily-tool-calls-details" });
+						toolCallsSummaryEl = detailsEl.createEl("summary", { cls: "ai-daily-tool-calls-summary" });
+						toolCallsEl = detailsEl.createDiv({ cls: "ai-daily-tool-calls-list" });
 					}
+					toolTotal++;
+					toolRunning++;
 					const el = toolCallsEl.createDiv({ cls: "ai-daily-tool-call ai-daily-tool-call-running" });
 					const iconSpan = el.createSpan({ cls: "ai-daily-tool-call-icon" });
 					setIcon(iconSpan, "loader");
 					el.createSpan({ cls: "ai-daily-tool-call-text", text: toolCallSummary(name, input) });
 					toolCallEls.set(id, el);
+					this.updateToolCallsSummary(toolCallsSummaryEl!, toolTotal, toolRunning);
 					this.scrollToBottomIfFollowing();
 				} else {
 					const el = toolCallEls.get(id);
@@ -1499,6 +1527,8 @@ export class ChatView extends ItemView {
 							setIcon(iconSpan as HTMLElement, status === "done" ? "check" : "x");
 						}
 					}
+					toolRunning = Math.max(0, toolRunning - 1);
+					this.updateToolCallsSummary(toolCallsSummaryEl!, toolTotal, toolRunning);
 				}
 			},
 			onToolResult: (id, result, isError) => {

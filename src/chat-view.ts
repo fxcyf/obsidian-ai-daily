@@ -66,6 +66,72 @@ function toolCallSummary(name: string, input: Record<string, unknown>): string {
 	return label;
 }
 
+function escapeHtml(s: string): string {
+	return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function simpleDiff(before: string, after: string): string {
+	const oldLines = before.split("\n");
+	const newLines = after.split("\n");
+
+	const lcs = lcsLines(oldLines, newLines);
+	const result: string[] = [];
+	let oi = 0, ni = 0, li = 0;
+
+	while (oi < oldLines.length || ni < newLines.length) {
+		if (li < lcs.length && oi < oldLines.length && ni < newLines.length &&
+			oldLines[oi] === lcs[li] && newLines[ni] === lcs[li]) {
+			oi++; ni++; li++;
+		} else if (li < lcs.length && ni < newLines.length && newLines[ni] === lcs[li]) {
+			result.push(`<span class="ai-daily-diff-del">- ${escapeHtml(oldLines[oi])}</span>`);
+			oi++;
+		} else if (li < lcs.length && oi < oldLines.length && oldLines[oi] === lcs[li]) {
+			result.push(`<span class="ai-daily-diff-add">+ ${escapeHtml(newLines[ni])}</span>`);
+			ni++;
+		} else {
+			if (oi < oldLines.length) {
+				result.push(`<span class="ai-daily-diff-del">- ${escapeHtml(oldLines[oi])}</span>`);
+				oi++;
+			}
+			if (ni < newLines.length) {
+				result.push(`<span class="ai-daily-diff-add">+ ${escapeHtml(newLines[ni])}</span>`);
+				ni++;
+			}
+		}
+	}
+
+	if (result.length > 40) {
+		return result.slice(0, 40).join("\n") + `\n<span class="ai-daily-diff-more">…还有 ${result.length - 40} 行</span>`;
+	}
+	return result.join("\n");
+}
+
+function lcsLines(a: string[], b: string[]): string[] {
+	const m = a.length, n = b.length;
+	if (m > 500 || n > 500) {
+		return [];
+	}
+	const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+	for (let i = 1; i <= m; i++) {
+		for (let j = 1; j <= n; j++) {
+			dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
+		}
+	}
+	const result: string[] = [];
+	let i = m, j = n;
+	while (i > 0 && j > 0) {
+		if (a[i - 1] === b[j - 1]) {
+			result.unshift(a[i - 1]);
+			i--; j--;
+		} else if (dp[i - 1][j] > dp[i][j - 1]) {
+			i--;
+		} else {
+			j--;
+		}
+	}
+	return result;
+}
+
 function formatTokenK(n: number): string {
 	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
 	if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
@@ -1202,33 +1268,46 @@ export class ChatView extends ItemView {
 	}
 
 	private renderUndoBar(): void {
-		const existing = this.messagesEl.querySelector(".ai-daily-undo-bar");
-		if (existing) existing.remove();
+		this.messagesEl.querySelectorAll(".ai-daily-undo-bar").forEach((el) => el.remove());
 
 		// API mode undo
 		if (this.vaultTools) {
 			const history = this.vaultTools.getUndoHistory();
-			if (history.length > 0) {
-				const last = history[history.length - 1];
-				this.createUndoBarEl(last.description, async () => {
-					return await this.vaultTools!.undoById(last.id) || "已撤销";
+			for (const entry of history.slice(-5).reverse()) {
+				this.createUndoBarEl(entry.description, entry.path, async () => {
+					return await this.vaultTools!.undoById(entry.id) || "已撤销";
 				});
-				return;
 			}
+			if (history.length > 0) return;
 		}
 
 		// Claude Code mode undo
-		if (this.claudeCodeUndoHistory.length > 0) {
-			const last = this.claudeCodeUndoHistory[this.claudeCodeUndoHistory.length - 1];
-			this.createUndoBarEl(last.description, async () => {
-				return await this.executeClaudeCodeUndo(last.id);
-			});
+		for (const entry of this.claudeCodeUndoHistory.slice(-5).reverse()) {
+			this.createUndoBarEl(entry.description, entry.data.path, async () => {
+				return await this.executeClaudeCodeUndo(entry.id);
+			}, entry.data);
 		}
 	}
 
-	private createUndoBarEl(description: string, onUndo: () => Promise<string>): void {
+	private createUndoBarEl(description: string, filePath: string, onUndo: () => Promise<string>, undoData?: UndoData): void {
 		const bar = this.messagesEl.createDiv({ cls: "ai-daily-undo-bar" });
-		bar.createSpan({ cls: "ai-daily-undo-text", text: description });
+
+		const textSpan = bar.createSpan({ cls: "ai-daily-undo-text", text: description });
+		textSpan.addEventListener("click", () => {
+			this.app.workspace.openLinkText(filePath, "", false);
+		});
+
+		if (undoData?.previous !== undefined && undoData.tool !== "create_note") {
+			const diffBtn = bar.createEl("button", { cls: "ai-daily-undo-diff-btn" });
+			setIcon(diffBtn, "diff");
+			diffBtn.setAttribute("aria-label", "查看变更");
+			diffBtn.setAttribute("title", "查看变更");
+			diffBtn.addEventListener("click", () => {
+				const existingDiff = bar.querySelector(".ai-daily-undo-diff");
+				if (existingDiff) { existingDiff.remove(); return; }
+				this.showDiffInBar(bar, filePath, undoData.previous!);
+			});
+		}
 
 		const undoBtn = bar.createEl("button", { cls: "ai-daily-undo-btn", text: "撤销" });
 		const iconSpan = undoBtn.createSpan({ cls: "ai-daily-undo-btn-icon" });
@@ -1248,6 +1327,28 @@ export class ChatView extends ItemView {
 			this.renderUndoBar();
 		});
 
+		this.scrollToBottomIfFollowing();
+	}
+
+	private async showDiffInBar(bar: HTMLElement, filePath: string, previous: string): Promise<void> {
+		let current: string;
+		try {
+			const file = this.app.vault.getAbstractFileByPath(filePath);
+			if (file && file instanceof TFile) {
+				current = await this.app.vault.cachedRead(file);
+			} else {
+				const adapter = this.app.vault.adapter as { basePath?: string };
+				const { join } = require("path") as typeof import("path");
+				const { readFileSync } = require("fs") as typeof import("fs");
+				current = readFileSync(join(adapter.basePath || "", filePath), "utf-8");
+			}
+		} catch {
+			current = "(文件不存在或已删除)";
+		}
+
+		const diffEl = bar.createDiv({ cls: "ai-daily-undo-diff" });
+		const diffHtml = simpleDiff(previous, current);
+		diffEl.innerHTML = diffHtml;
 		this.scrollToBottomIfFollowing();
 	}
 

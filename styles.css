@@ -1054,6 +1054,7 @@
 .ai-daily-undo-bar {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: 8px;
 	padding: 6px 12px;
 	margin: 4px 0 8px;
@@ -1070,6 +1071,14 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	min-width: 0;
+	cursor: pointer;
+	text-decoration: underline;
+	text-decoration-style: dotted;
+	text-underline-offset: 2px;
+}
+
+.ai-daily-undo-text:hover {
+	color: var(--text-normal);
 }
 
 .ai-daily-undo-btn {
@@ -1100,4 +1109,63 @@
 .ai-daily-undo-btn-icon svg {
 	width: 12px;
 	height: 12px;
+}
+
+.ai-daily-undo-diff-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border-radius: 4px;
+	background: transparent;
+	border: 1px solid var(--background-modifier-border);
+	color: var(--text-muted);
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+.ai-daily-undo-diff-btn:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.ai-daily-undo-diff-btn svg {
+	width: 14px;
+	height: 14px;
+}
+
+.ai-daily-undo-diff {
+	width: 100%;
+	margin-top: 4px;
+	padding: 6px 8px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	font-family: var(--font-monospace);
+	font-size: 11px;
+	line-height: 1.5;
+	max-height: 240px;
+	overflow-y: auto;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.ai-daily-diff-del {
+	display: block;
+	color: var(--text-error);
+	background: rgba(255, 0, 0, 0.06);
+}
+
+.ai-daily-diff-add {
+	display: block;
+	color: var(--interactive-success, #2da44e);
+	background: rgba(0, 180, 0, 0.06);
+}
+
+.ai-daily-diff-more {
+	display: block;
+	color: var(--text-faint);
+	font-style: italic;
 }

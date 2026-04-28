@@ -325,7 +325,7 @@ export function spawnClaudeCode(
 		"--output-format", "stream-json",
 		"--verbose",
 		"--permission-mode", "bypassPermissions",
-		"--tools", "",
+		"--tools", "ReadFile,Grep,Glob,WebSearch,WebFetch,TodoWrite",
 		"--mcp-config", mcpConfigPath,
 	];
 	if (sessionId) {

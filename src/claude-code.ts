@@ -318,7 +318,18 @@ export function spawnClaudeCode(
 			},
 		},
 	};
-	writeFileSync(mcpConfigPath, JSON.stringify(mcpConfigJson));
+	const mcpJsonStr = JSON.stringify(mcpConfigJson, null, 2);
+	writeFileSync(mcpConfigPath, mcpJsonStr);
+	console.log("[ai-daily] MCP config path:", mcpConfigPath);
+	console.log("[ai-daily] MCP config:", mcpJsonStr);
+	console.log("[ai-daily] node binary:", nodeBin);
+	console.log("[ai-daily] MCP server path:", mcpConfig.mcpServerPath);
+
+	// Verify MCP server file exists
+	const { existsSync } = require("fs") as typeof import("fs");
+	if (!existsSync(mcpConfig.mcpServerPath)) {
+		console.error("[ai-daily] MCP server file NOT FOUND:", mcpConfig.mcpServerPath);
+	}
 
 	const args = [
 		"-p", prompt,
@@ -333,6 +344,7 @@ export function spawnClaudeCode(
 	}
 
 	const claudeBin = getClaudePath();
+	console.log("[ai-daily] spawn:", claudeBin, args.filter(a => a !== prompt).join(" "));
 	const env = { ...process.env };
 	if (home) {
 		env.PATH = buildEnhancedPath(home);

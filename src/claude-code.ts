@@ -323,6 +323,7 @@ export function spawnClaudeCode(
 	const args = [
 		"-p", prompt,
 		"--output-format", "stream-json",
+		"--verbose",
 		"--mcp-config", mcpConfigPath,
 	];
 	if (sessionId) {

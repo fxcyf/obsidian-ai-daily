@@ -428,6 +428,7 @@ export class ClaudeClient {
 	private compressKeepMessages: number;
 	private onCompress?: (detail: string) => void;
 	private onStreamFallback?: (reason: string) => void;
+	private abortController: AbortController | null = null;
 
 	constructor(
 		apiKey: string,
@@ -480,6 +481,11 @@ export class ClaudeClient {
 		return estimateMessagesTokens(this.messages, this.systemPrompt);
 	}
 
+	abort(): void {
+		this.abortController?.abort();
+		this.abortController = null;
+	}
+
 	async chat(
 		userMessage: string,
 		executeTool: ToolExecutor,
@@ -506,10 +512,16 @@ export class ClaudeClient {
 
 		await this.maybeCompressHistory();
 
+		this.abortController = new AbortController();
+		const signal = this.abortController.signal;
+
 		const collectedText: string[] = [];
 		let priorAssistantText = "";
 
+		try {
 		while (true) {
+			if (signal.aborted) break;
+
 			let roundStream = "";
 			const onDelta = onAssistantDelta
 				? (d: string) => {
@@ -518,7 +530,7 @@ export class ClaudeClient {
 					}
 				: undefined;
 
-			const response = await this.callApi(onDelta);
+			const response = await this.callApi(onDelta, signal);
 
 			let roundText = "";
 			for (const block of response.content) {
@@ -556,6 +568,7 @@ export class ClaudeClient {
 
 			const results: ToolResult[] = [];
 			for (const tool of toolUses) {
+				if (signal.aborted) break;
 				try {
 					const result = await executeTool(tool.name, tool.input);
 					results.push({
@@ -574,6 +587,18 @@ export class ClaudeClient {
 			}
 
 			this.messages.push({ role: "user", content: results as unknown as ContentBlock[] });
+		}
+
+		} catch (e) {
+			if (signal.aborted) {
+				if (collectedText.length > 0) {
+					this.messages.push({ role: "assistant", content: collectedText.join("") });
+				}
+				return collectedText.join("");
+			}
+			throw e;
+		} finally {
+			this.abortController = null;
 		}
 
 		return collectedText.join("");
@@ -638,16 +663,18 @@ export class ClaudeClient {
 	// ── Streaming dispatch ──────────────────────────────────────────
 
 	private async callApi(
-		onTextDelta?: (s: string) => void
+		onTextDelta?: (s: string) => void,
+		signal?: AbortSignal
 	): Promise<ApiResponse> {
 		if (this.streamMode === "off") {
-			return this.callApiNonStreaming();
+			return this.callApiNonStreaming(signal);
 		}
 
 		if (this.streamMode === "auto" || this.streamMode === "real") {
 			try {
-				return await this.callApiRealStream(onTextDelta);
+				return await this.callApiRealStream(onTextDelta, signal);
 			} catch (e) {
+				if (signal?.aborted) throw e;
 				if (this.streamMode === "real") {
 					throw e;
 				}
@@ -660,11 +687,12 @@ export class ClaudeClient {
 			}
 		}
 
-		return this.callApiTypewriter(onTextDelta);
+		return this.callApiTypewriter(onTextDelta, signal);
 	}
 
 	private async callApiRealStream(
-		onTextDelta?: (s: string) => void
+		onTextDelta?: (s: string) => void,
+		signal?: AbortSignal
 	): Promise<ApiResponse> {
 		const body = { ...this.buildRequestBody(), stream: true };
 
@@ -679,6 +707,7 @@ export class ClaudeClient {
 					"anthropic-dangerous-direct-browser-access": "true",
 				},
 				body: JSON.stringify(body),
+				signal,
 			});
 
 			if (isRetryableStatus(res.status) && attempt < RETRY_MAX) {
@@ -748,10 +777,11 @@ export class ClaudeClient {
 		};
 	}
 
-	private async callApiNonStreaming(): Promise<ApiResponse> {
+	private async callApiNonStreaming(signal?: AbortSignal): Promise<ApiResponse> {
 		const body = this.buildRequestBody();
 
 		for (let attempt = 0; ; attempt++) {
+			if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 			const resp = await requestUrl({
 				url: API_URL,
 				method: "POST",
@@ -780,9 +810,10 @@ export class ClaudeClient {
 	}
 
 	private async callApiTypewriter(
-		onTextDelta?: (s: string) => void
+		onTextDelta?: (s: string) => void,
+		signal?: AbortSignal
 	): Promise<ApiResponse> {
-		const response = await this.callApiNonStreaming();
+		const response = await this.callApiNonStreaming(signal);
 
 		if (onTextDelta) {
 			const fullText = response.content

@@ -88,6 +88,7 @@ export class ChatView extends ItemView {
 	private messagesEl!: HTMLElement;
 	private inputAreaEl!: HTMLElement;
 	private inputEl!: HTMLTextAreaElement;
+	private sendBtn!: HTMLButtonElement;
 	private tokenBarEl!: HTMLElement;
 	private historyOverlay: HTMLElement | null = null;
 	private historyOverlayResizeCleanup: (() => void) | null = null;
@@ -206,12 +207,18 @@ export class ChatView extends ItemView {
 			attr: { placeholder: "问点什么… 输入 / 选择模板", rows: "1" },
 		});
 
-		const sendBtn = this.inputAreaEl.createEl("button", {
+		this.sendBtn = this.inputAreaEl.createEl("button", {
 			cls: "ai-daily-send-btn",
 		});
-		setIcon(sendBtn, "send");
+		setIcon(this.sendBtn, "send");
 
-		sendBtn.addEventListener("click", () => this.handleSend());
+		this.sendBtn.addEventListener("click", () => {
+			if (this.isLoading) {
+				this.handleStop();
+			} else {
+				this.handleSend();
+			}
+		});
 		this.inputEl.addEventListener("input", () => {
 			this.inputEl.style.height = "auto";
 			this.inputEl.style.height =
@@ -574,12 +581,25 @@ export class ChatView extends ItemView {
 		this.updateTokenBar();
 	}
 
+	private handleStop(): void {
+		if (!this.isLoading || !this.client) return;
+		this.client.abort();
+	}
+
+	private setSendButtonState(loading: boolean): void {
+		setIcon(this.sendBtn, loading ? "square" : "send");
+		this.sendBtn.toggleClass("ai-daily-send-btn-stop", loading);
+		this.sendBtn.setAttribute("aria-label", loading ? "停止生成" : "发送");
+		this.sendBtn.setAttribute("title", loading ? "停止生成" : "发送");
+	}
+
 	private async handleSend(): Promise<void> {
 		this.closeTemplatePopup();
 
 		const text = this.inputEl.value.trim();
 		if (!text || this.isLoading) return;
 		this.isLoading = true;
+		this.setSendButtonState(true);
 
 		if (!this.plugin.settings.apiKey) {
 			this.isLoading = false;
@@ -705,12 +725,12 @@ export class ChatView extends ItemView {
 			loadingEl.remove();
 
 			if (useStream && assistantEl) {
-				await flushStreamingMarkdown(reply);
+				await flushStreamingMarkdown(reply || "*(已停止)*");
 				this.postProcessAssistantEl(assistantEl);
 				assistantEl.removeClass("ai-daily-msg-streaming");
-				this.messages.push({ role: "assistant", content: reply });
+				this.messages.push({ role: "assistant", content: reply || "*(已停止)*" });
 				this.cachedTokenCount += estimateTextTokens(reply);
-			} else {
+			} else if (reply) {
 				this.addMessage("assistant", reply);
 			}
 			this.scrollToBottomIfFollowing();
@@ -730,6 +750,7 @@ export class ChatView extends ItemView {
 			this.addMessage("assistant", `出错了: ${msg}`);
 		} finally {
 			this.isLoading = false;
+			this.setSendButtonState(false);
 			this.updateTokenBar();
 		}
 	}

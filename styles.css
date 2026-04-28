@@ -144,6 +144,15 @@
 	height: 18px;
 }
 
+.ai-daily-send-btn-stop {
+	background: var(--text-error);
+}
+
+.ai-daily-send-btn-stop svg {
+	width: 14px;
+	height: 14px;
+}
+
 /* ── Header ────────────────────────────────────────────── */
 
 .ai-daily-header {

@@ -325,6 +325,7 @@ export function spawnClaudeCode(
 		"--output-format", "stream-json",
 		"--verbose",
 		"--permission-mode", "bypassPermissions",
+		"--tools", "",
 		"--mcp-config", mcpConfigPath,
 	];
 	if (sessionId) {

@@ -1463,6 +1463,8 @@ export class ChatView extends ItemView {
 		let assistantEl: HTMLDivElement | null = null;
 		let accumulated = "";
 		let renderTimer: number | null = null;
+		let renderQueue = Promise.resolve();
+		let latestContent = "";
 		let toolCallsEl: HTMLElement | null = null;
 		let toolCallsSummaryEl: HTMLElement | null = null;
 		const toolCallEls = new Map<string, HTMLElement>();
@@ -1480,11 +1482,23 @@ export class ChatView extends ItemView {
 		};
 
 		const scheduleRender = () => {
+			latestContent = accumulated;
 			if (renderTimer !== null) return;
 			renderTimer = window.setTimeout(() => {
 				renderTimer = null;
-				void renderMarkdown(accumulated);
+				const snapshot = latestContent;
+				renderQueue = renderQueue.then(() => renderMarkdown(snapshot));
 			}, STREAM_MARKDOWN_RENDER_INTERVAL_MS);
+		};
+
+		const flushRender = async (content: string) => {
+			latestContent = content;
+			if (renderTimer !== null) {
+				window.clearTimeout(renderTimer);
+				renderTimer = null;
+			}
+			await renderQueue;
+			await renderMarkdown(content);
 		};
 
 		const handle = spawnClaudeCode(prompt, { mcpConfig, sessionId, model }, {
@@ -1558,9 +1572,11 @@ export class ChatView extends ItemView {
 			},
 			onError: (error) => {
 				loadingEl.remove();
-				if (renderTimer !== null) { window.clearTimeout(renderTimer); renderTimer = null; }
 				if (assistantEl && accumulated) {
-					assistantEl.removeClass("ai-daily-msg-streaming");
+					void flushRender(accumulated).then(() => {
+						assistantEl!.removeClass("ai-daily-msg-streaming");
+						this.postProcessAssistantEl(assistantEl!);
+					});
 					this.messages.push({ role: "assistant", content: accumulated });
 				} else if (assistantEl) {
 					assistantEl.remove();
@@ -1572,9 +1588,8 @@ export class ChatView extends ItemView {
 			},
 			onDone: (fullText) => {
 				loadingEl.remove();
-				if (renderTimer !== null) { window.clearTimeout(renderTimer); renderTimer = null; }
 				if (assistantEl) {
-					void renderMarkdown(fullText).then(() => {
+					void flushRender(fullText).then(() => {
 						assistantEl!.removeClass("ai-daily-msg-streaming");
 						this.postProcessAssistantEl(assistantEl!);
 					});

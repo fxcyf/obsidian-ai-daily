@@ -584,6 +584,19 @@
 	min-height: 1.5em;
 }
 
+.ai-daily-msg-streaming > :last-child::after {
+	content: "▍";
+	animation: ai-daily-cursor-blink 0.6s step-end infinite;
+	color: var(--text-accent);
+	font-weight: bold;
+	margin-left: 1px;
+}
+
+@keyframes ai-daily-cursor-blink {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0; }
+}
+
 /* ── Confirm modal ────────────────────────────────────── */
 
 .ai-daily-confirm-btns {

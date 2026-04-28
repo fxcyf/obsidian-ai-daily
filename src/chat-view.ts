@@ -839,12 +839,28 @@ export class ChatView extends ItemView {
 		let prompt = text;
 
 		if (isFirstMessage) {
-			const { knowledgeFolders } = this.plugin.settings;
+			const { knowledgeFolders, distillTargetFolder, autoTagFolders } = this.plugin.settings;
 			const parts: string[] = [
 				"你是一个个人知识库助手。用户在 Obsidian 中管理知识库。",
-				`知识库文件夹: ${knowledgeFolders.join("、")}`,
-				"你可以使用 MCP 工具来读取、搜索、创建、编辑笔记。回答用中文，简洁有深度。",
-				"在回复中引用笔记时，请使用 [[笔记名]] 的 wiki-link 格式。",
+				"",
+				"## Vault 结构",
+				`- 知识库文件夹: ${knowledgeFolders.join("、")}`,
+				`- 原始笔记文件夹: ${autoTagFolders.join("、")}`,
+				`- 知识整理目标文件夹: ${distillTargetFolder}`,
+				"",
+				"## MCP 工具使用说明",
+				"你可以通过 MCP 工具操作 vault 中的笔记，路径使用 vault 内相对路径：",
+				"- read_note: 读取笔记，path 如 `Raw/文章标题.md` 或 `Wiki/概念.md`",
+				"- search_vault: 搜索笔记，query 为关键词，可用 folder 限定文件夹",
+				"- list_notes: 列出文件夹内笔记，folder 如 `Raw`、`Wiki`",
+				"- create_note: 创建笔记，path 为完整路径如 `Wiki/新条目.md`",
+				"- edit_note: 编辑笔记指定部分",
+				"- append_to_note: 在笔记末尾追加内容",
+				"- update_frontmatter: 更新笔记的 frontmatter 属性",
+				"- rename_note / delete_note / get_links: 其他操作",
+				"",
+				"当用户提到笔记标题时，先用 search_vault 搜索，找到后用 read_note 读取。",
+				"回答用中文，简洁有深度。引用笔记时使用 [[笔记名]] wiki-link 格式。",
 			];
 
 			if (this.messages.length > 1) {

@@ -332,6 +332,7 @@ export interface ClaudeCodeStreamCallbacks {
 export interface ClaudeCodeOptions {
 	mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] };
 	sessionId?: string;
+	model?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -344,7 +345,7 @@ export function spawnClaudeCode(
 	callbacks: ClaudeCodeStreamCallbacks
 ): { abort: () => void } {
 	const { spawn } = require("child_process") as typeof import("child_process");
-	const { mcpConfig, sessionId } = options;
+	const { mcpConfig, sessionId, model } = options;
 	const home = process.env.HOME || process.env.USERPROFILE || "";
 
 	// Resolve node to absolute path for MCP server command
@@ -390,6 +391,9 @@ export function spawnClaudeCode(
 		"--tools", "ReadFile,Grep,Glob,WebSearch,WebFetch,TodoWrite",
 		"--mcp-config", mcpConfigPath,
 	];
+	if (model) {
+		args.push("--model", model);
+	}
 	if (sessionId) {
 		args.push("--resume", sessionId);
 	}

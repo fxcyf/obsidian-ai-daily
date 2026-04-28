@@ -1144,7 +1144,7 @@ export class ChatView extends ItemView {
 			}
 		}
 
-		this.runClaudeCodeStream(prompt, this.getMcpConfig(), this.claudeCodeSessionId);
+		this.runClaudeCodeStream(prompt, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.model);
 	}
 
 	private async initClient(): Promise<void> {
@@ -1449,10 +1449,10 @@ export class ChatView extends ItemView {
 		this.setSendButtonState(true);
 		this.addMessage("user", userText);
 		if (!this.sessionId) this.sessionId = newSessionId();
-		this.runClaudeCodeStream(userText, this.getMcpConfig());
+		this.runClaudeCodeStream(userText, this.getMcpConfig(), undefined, this.plugin.settings.model);
 	}
 
-	private runClaudeCodeStream(prompt: string, mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] }, sessionId?: string): void {
+	private runClaudeCodeStream(prompt: string, mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] }, sessionId?: string, model?: string): void {
 		const loadingEl = this.messagesEl.createDiv({ cls: "ai-daily-loading" });
 		loadingEl.createSpan({ text: "Claude Code 处理中" });
 		const dotsEl = loadingEl.createSpan({ cls: "ai-daily-loading-dots" });
@@ -1487,7 +1487,7 @@ export class ChatView extends ItemView {
 			}, STREAM_MARKDOWN_RENDER_INTERVAL_MS);
 		};
 
-		const handle = spawnClaudeCode(prompt, { mcpConfig, sessionId }, {
+		const handle = spawnClaudeCode(prompt, { mcpConfig, sessionId, model }, {
 			onText: (delta) => {
 				loadingEl.remove();
 				if (!assistantEl) {

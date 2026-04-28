@@ -1064,7 +1064,9 @@ export class ChatView extends ItemView {
 		let renderTimer: number | null = null;
 		let toolCallsEl: HTMLElement | null = null;
 		const toolCallEls = new Map<string, HTMLElement>();
-		let toolCallCounter = 0;
+		let thinkingEl: HTMLElement | null = null;
+		let thinkingContentEl: HTMLElement | null = null;
+		let thinkingText = "";
 
 		const renderMarkdown = async (content: string) => {
 			if (!assistantEl) return;
@@ -1092,22 +1094,20 @@ export class ChatView extends ItemView {
 				accumulated += delta;
 				scheduleRender();
 			},
-			onToolCall: (name, input, status) => {
+			onToolCall: (id, name, input, status) => {
 				if (status === "running") {
 					loadingEl.remove();
 					if (!toolCallsEl) {
 						toolCallsEl = this.messagesEl.createDiv({ cls: "ai-daily-tool-calls" });
 					}
-					const key = `${name}-${toolCallCounter++}`;
 					const el = toolCallsEl.createDiv({ cls: "ai-daily-tool-call ai-daily-tool-call-running" });
 					const iconSpan = el.createSpan({ cls: "ai-daily-tool-call-icon" });
 					setIcon(iconSpan, "loader");
 					el.createSpan({ cls: "ai-daily-tool-call-text", text: toolCallSummary(name, input) });
-					toolCallEls.set(key, el);
+					toolCallEls.set(id, el);
 					this.scrollToBottomIfFollowing();
 				} else {
-					const lastKey = `${name}-${toolCallCounter - 1}`;
-					const el = toolCallEls.get(lastKey);
+					const el = toolCallEls.get(id);
 					if (el) {
 						el.removeClass("ai-daily-tool-call-running");
 						el.addClass(status === "done" ? "ai-daily-tool-call-done" : "ai-daily-tool-call-error");
@@ -1118,6 +1118,28 @@ export class ChatView extends ItemView {
 						}
 					}
 				}
+			},
+			onToolResult: (id, result, isError) => {
+				const el = toolCallEls.get(id);
+				if (!el || !result) return;
+				const details = el.createEl("details", { cls: "ai-daily-tool-result" });
+				details.createEl("summary", { text: isError ? "错误" : "结果" });
+				const pre = details.createEl("pre", { cls: "ai-daily-tool-result-content" });
+				pre.createEl("code", { text: result.length > 2000 ? result.slice(0, 2000) + "\n…(已截断)" : result });
+			},
+			onThinking: (text) => {
+				loadingEl.remove();
+				thinkingText += text;
+				if (!thinkingEl) {
+					thinkingEl = this.messagesEl.createDiv({ cls: "ai-daily-thinking" });
+					const details = thinkingEl.createEl("details", { cls: "ai-daily-thinking-details" });
+					details.createEl("summary", { text: "💭 思考过程" });
+					thinkingContentEl = details.createEl("pre", { cls: "ai-daily-thinking-content" });
+				}
+				if (thinkingContentEl) {
+					thinkingContentEl.textContent = thinkingText;
+				}
+				this.scrollToBottomIfFollowing();
 			},
 			onError: (error) => {
 				loadingEl.remove();

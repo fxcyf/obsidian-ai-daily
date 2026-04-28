@@ -313,7 +313,9 @@ export function resetClaudeCodeCache(): void {
 
 export interface ClaudeCodeStreamCallbacks {
 	onText: (delta: string) => void;
-	onToolCall?: (name: string, input: Record<string, unknown>, status: "running" | "done" | "error") => void;
+	onToolCall?: (id: string, name: string, input: Record<string, unknown>, status: "running" | "done" | "error") => void;
+	onToolResult?: (id: string, result: string, isError: boolean) => void;
+	onThinking?: (text: string) => void;
 	onError: (error: string) => void;
 	onDone: (fullText: string) => void;
 	onSessionId?: (id: string) => void;
@@ -464,13 +466,26 @@ export function spawnClaudeCode(
 
 const pendingTools = new Map<string, string>();
 
+function extractToolResultText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (Array.isArray(content)) {
+		return content
+			.map((b: Record<string, unknown>) => {
+				if (b.type === "text" && typeof b.text === "string") return b.text;
+				return "";
+			})
+			.filter(Boolean)
+			.join("\n");
+	}
+	return "";
+}
+
 function handleStreamEvent(
 	event: Record<string, unknown>,
 	callbacks: ClaudeCodeStreamCallbacks,
 	appendText: (t: string) => void
 ): void {
 	const type = event.type as string | undefined;
-	console.log("[ai-daily] stream event:", type, type === "assistant" ? "(content blocks: " + ((event.message as Record<string, unknown>)?.content as unknown[])?.length + ")" : "");
 
 	switch (type) {
 		case "assistant": {
@@ -481,11 +496,13 @@ function handleStreamEvent(
 					if (b.type === "text" && typeof b.text === "string") {
 						callbacks.onText(b.text);
 						appendText(b.text);
+					} else if (b.type === "thinking" && typeof b.thinking === "string") {
+						callbacks.onThinking?.(b.thinking);
 					} else if (b.type === "tool_use" && typeof b.name === "string") {
 						const input = (b.input as Record<string, unknown>) || {};
-						const id = b.id as string | undefined;
-						if (id) pendingTools.set(id, b.name);
-						callbacks.onToolCall?.(b.name, input, "running");
+						const id = (b.id as string) || `tool-${Date.now()}`;
+						pendingTools.set(id, b.name);
+						callbacks.onToolCall?.(id, b.name, input, "running");
 					}
 				}
 			}
@@ -498,6 +515,8 @@ function handleStreamEvent(
 			if (delta?.type === "text_delta" && typeof delta.text === "string") {
 				callbacks.onText(delta.text);
 				appendText(delta.text);
+			} else if (delta?.type === "thinking_delta" && typeof delta.thinking === "string") {
+				callbacks.onThinking?.(delta.thinking);
 			}
 			break;
 		}
@@ -512,23 +531,25 @@ function handleStreamEvent(
 			pendingTools.clear();
 			break;
 		}
-	}
-
-	// Handle tool_result from user messages (tool completion)
-	if (type === "user") {
-		const msg = event.message as Record<string, unknown> | undefined;
-		if (msg?.content && Array.isArray(msg.content)) {
-			for (const block of msg.content) {
-				const b = block as Record<string, unknown>;
-				if (b.type === "tool_result" && typeof b.tool_use_id === "string") {
-					const toolName = pendingTools.get(b.tool_use_id);
-					if (toolName) {
+		case "user": {
+			const msg = event.message as Record<string, unknown> | undefined;
+			if (msg?.content && Array.isArray(msg.content)) {
+				for (const block of msg.content) {
+					const b = block as Record<string, unknown>;
+					if (b.type === "tool_result" && typeof b.tool_use_id === "string") {
+						const toolId = b.tool_use_id;
+						const toolName = pendingTools.get(toolId);
 						const isError = b.is_error === true;
-						callbacks.onToolCall?.(toolName, {}, isError ? "error" : "done");
-						pendingTools.delete(b.tool_use_id);
+						const resultText = extractToolResultText(b.content);
+						if (toolName) {
+							callbacks.onToolCall?.(toolId, toolName, {}, isError ? "error" : "done");
+							callbacks.onToolResult?.(toolId, resultText, isError);
+							pendingTools.delete(toolId);
+						}
 					}
 				}
 			}
+			break;
 		}
 	}
 }

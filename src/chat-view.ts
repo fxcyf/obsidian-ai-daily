@@ -1048,6 +1048,9 @@ export class ChatView extends ItemView {
 		let assistantEl: HTMLDivElement | null = null;
 		let accumulated = "";
 		let renderTimer: number | null = null;
+		let toolCallsEl: HTMLElement | null = null;
+		const toolCallEls = new Map<string, HTMLElement>();
+		let toolCallCounter = 0;
 
 		const renderMarkdown = async (content: string) => {
 			if (!assistantEl) return;
@@ -1074,6 +1077,33 @@ export class ChatView extends ItemView {
 				}
 				accumulated += delta;
 				scheduleRender();
+			},
+			onToolCall: (name, input, status) => {
+				if (status === "running") {
+					loadingEl.remove();
+					if (!toolCallsEl) {
+						toolCallsEl = this.messagesEl.createDiv({ cls: "ai-daily-tool-calls" });
+					}
+					const key = `${name}-${toolCallCounter++}`;
+					const el = toolCallsEl.createDiv({ cls: "ai-daily-tool-call ai-daily-tool-call-running" });
+					const iconSpan = el.createSpan({ cls: "ai-daily-tool-call-icon" });
+					setIcon(iconSpan, "loader");
+					el.createSpan({ cls: "ai-daily-tool-call-text", text: toolCallSummary(name, input) });
+					toolCallEls.set(key, el);
+					this.scrollToBottomIfFollowing();
+				} else {
+					const lastKey = `${name}-${toolCallCounter - 1}`;
+					const el = toolCallEls.get(lastKey);
+					if (el) {
+						el.removeClass("ai-daily-tool-call-running");
+						el.addClass(status === "done" ? "ai-daily-tool-call-done" : "ai-daily-tool-call-error");
+						const iconSpan = el.querySelector(".ai-daily-tool-call-icon");
+						if (iconSpan) {
+							iconSpan.empty();
+							setIcon(iconSpan as HTMLElement, status === "done" ? "check" : "x");
+						}
+					}
+				}
 			},
 			onError: (error) => {
 				loadingEl.remove();

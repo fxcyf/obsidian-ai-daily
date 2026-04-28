@@ -273,7 +273,7 @@ export function resetClaudeCodeCache(): void {
 
 export interface ClaudeCodeStreamCallbacks {
 	onText: (delta: string) => void;
-	onToolCall?: (name: string, status: "running" | "done" | "error") => void;
+	onToolCall?: (name: string, input: Record<string, unknown>, status: "running" | "done" | "error") => void;
 	onError: (error: string) => void;
 	onDone: (fullText: string) => void;
 	onSessionId?: (id: string) => void;
@@ -410,6 +410,8 @@ export function spawnClaudeCode(
 // Stream event parsing
 // ---------------------------------------------------------------------------
 
+const pendingTools = new Map<string, string>();
+
 function handleStreamEvent(
 	event: Record<string, unknown>,
 	callbacks: ClaudeCodeStreamCallbacks,
@@ -427,7 +429,10 @@ function handleStreamEvent(
 						callbacks.onText(b.text);
 						appendText(b.text);
 					} else if (b.type === "tool_use" && typeof b.name === "string") {
-						callbacks.onToolCall?.(b.name, "running");
+						const input = (b.input as Record<string, unknown>) || {};
+						const id = b.id as string | undefined;
+						if (id) pendingTools.set(id, b.name);
+						callbacks.onToolCall?.(b.name, input, "running");
 					}
 				}
 			}
@@ -451,7 +456,26 @@ function handleStreamEvent(
 			}
 			const sid = event.session_id as string | undefined;
 			if (sid) callbacks.onSessionId?.(sid);
+			pendingTools.clear();
 			break;
+		}
+	}
+
+	// Handle tool_result from user messages (tool completion)
+	if (type === "user") {
+		const msg = event.message as Record<string, unknown> | undefined;
+		if (msg?.content && Array.isArray(msg.content)) {
+			for (const block of msg.content) {
+				const b = block as Record<string, unknown>;
+				if (b.type === "tool_result" && typeof b.tool_use_id === "string") {
+					const toolName = pendingTools.get(b.tool_use_id);
+					if (toolName) {
+						const isError = b.is_error === true;
+						callbacks.onToolCall?.(toolName, {}, isError ? "error" : "done");
+						pendingTools.delete(b.tool_use_id);
+					}
+				}
+			}
 		}
 	}
 }

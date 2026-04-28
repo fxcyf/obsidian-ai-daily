@@ -335,8 +335,27 @@ export class ChatView extends ItemView {
 	// ── Post-processing: wiki-links & code copy buttons ───
 
 	private postProcessAssistantEl(el: HTMLElement): void {
+		this.processMarkdownLinks(el);
 		this.processWikiLinks(el);
 		this.processCodeBlocks(el);
+	}
+
+	private processMarkdownLinks(el: HTMLElement): void {
+		el.querySelectorAll("a.internal-link").forEach((link) => {
+			const href = link.getAttr("data-href") ?? link.getAttr("href");
+			if (!href) return;
+			link.addEventListener("click", (e) => {
+				e.preventDefault();
+				this.app.workspace.openLinkText(href, "", false);
+			});
+		});
+		el.querySelectorAll("a.external-link").forEach((link) => {
+			link.addEventListener("click", (e) => {
+				e.preventDefault();
+				const href = link.getAttr("href");
+				if (href) window.open(href, "_blank");
+			});
+		});
 	}
 
 	private processWikiLinks(el: HTMLElement): void {

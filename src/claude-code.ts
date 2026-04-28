@@ -1,29 +1,68 @@
 import { Platform } from "obsidian";
 import { ChildProcess } from "child_process";
 
-let cachedAvailable: boolean | null = null;
+let cachedClaudePath: string | false | null = null;
+
+const CLAUDE_SEARCH_PATHS = [
+	"/usr/local/bin/claude",
+	"/usr/bin/claude",
+];
+
+function getUserSearchPaths(): string[] {
+	const home = process.env.HOME || process.env.USERPROFILE || "";
+	if (!home) return [];
+	return [
+		`${home}/.local/bin/claude`,
+		`${home}/.npm-global/bin/claude`,
+		`${home}/.nvm/current/bin/claude`,
+	];
+}
+
+async function findClaudeBinary(): Promise<string | false> {
+	const { existsSync } = require("fs") as typeof import("fs");
+	const { execFile } = require("child_process") as typeof import("child_process");
+
+	const candidates = [...getUserSearchPaths(), ...CLAUDE_SEARCH_PATHS];
+	for (const p of candidates) {
+		if (existsSync(p)) {
+			console.log(`[ai-daily] found claude at: ${p}`);
+			return p;
+		}
+	}
+
+	// fallback: try PATH
+	return new Promise<string | false>((resolve) => {
+		execFile("claude", ["--version"], { timeout: 5000 }, (err: Error | null) => {
+			if (!err) {
+				console.log("[ai-daily] found claude in PATH");
+				resolve("claude");
+			} else {
+				console.log("[ai-daily] claude not found");
+				resolve(false);
+			}
+		});
+	});
+}
 
 export async function isClaudeCodeAvailable(): Promise<boolean> {
 	if (!Platform.isDesktopApp) return false;
-	if (cachedAvailable !== null) return cachedAvailable;
+	if (cachedClaudePath !== null) return cachedClaudePath !== false;
 
 	try {
-		const { execFile } = require("child_process") as typeof import("child_process");
-		const result = await new Promise<boolean>((resolve) => {
-			execFile("claude", ["--version"], { timeout: 5000 }, (err: Error | null) => {
-				resolve(!err);
-			});
-		});
-		cachedAvailable = result;
-		return result;
+		cachedClaudePath = await findClaudeBinary();
+		return cachedClaudePath !== false;
 	} catch {
-		cachedAvailable = false;
+		cachedClaudePath = false;
 		return false;
 	}
 }
 
+export function getClaudePath(): string {
+	return cachedClaudePath || "claude";
+}
+
 export function resetClaudeCodeCache(): void {
-	cachedAvailable = null;
+	cachedClaudePath = null;
 }
 
 export interface ClaudeCodeStreamCallbacks {
@@ -53,9 +92,10 @@ export function spawnClaudeCode(
 		"--mcp", mcpFlag,
 	];
 
+	const claudeBin = getClaudePath();
 	let child: ChildProcess;
 	try {
-		child = spawn("claude", args, {
+		child = spawn(claudeBin, args, {
 			stdio: ["ignore", "pipe", "pipe"],
 			env: { ...process.env },
 		});

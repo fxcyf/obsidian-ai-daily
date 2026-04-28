@@ -8,7 +8,7 @@ const production = process.argv[2] === "production";
 const buildOptions = {
 	entryPoints: ["src/main.ts"],
 	bundle: true,
-	external: ["obsidian", "child_process", "path"],
+	external: ["obsidian", "child_process", "path", "fs"],
 	format: "cjs",
 	target: "es2018",
 	logLevel: "info",

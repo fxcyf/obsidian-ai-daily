@@ -45,7 +45,7 @@ async function findClaudeBinary(): Promise<string | false> {
 }
 
 export async function isClaudeCodeAvailable(): Promise<boolean> {
-	if (!Platform.isDesktopApp) return false;
+	if (Platform.isMobile) return false;
 	if (cachedClaudePath !== null) return cachedClaudePath !== false;
 
 	try {

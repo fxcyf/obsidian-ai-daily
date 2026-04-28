@@ -385,6 +385,7 @@ export function spawnClaudeCode(
 		"-p", prompt,
 		"--output-format", "stream-json",
 		"--verbose",
+		"--include-partial-messages",
 		"--permission-mode", "bypassPermissions",
 		"--tools", "ReadFile,Grep,Glob,WebSearch,WebFetch,TodoWrite",
 		"--mcp-config", mcpConfigPath,
@@ -412,6 +413,7 @@ export function spawnClaudeCode(
 	}
 
 	let fullText = "";
+	let resultText = "";
 	let buffer = "";
 
 	child.stdout?.on("data", (chunk: Buffer) => {
@@ -424,6 +426,9 @@ export function spawnClaudeCode(
 			if (!line.trim()) continue;
 			try {
 				const event = JSON.parse(line);
+				if (event.type === "result" && typeof event.result === "string") {
+					resultText = event.result;
+				}
 				handleStreamEvent(event, callbacks, (t) => { fullText += t; });
 			} catch {
 				callbacks.onText(line);
@@ -443,11 +448,20 @@ export function spawnClaudeCode(
 		if (buffer.trim()) {
 			try {
 				const event = JSON.parse(buffer);
+				if (event.type === "result" && typeof event.result === "string") {
+					resultText = event.result;
+				}
 				handleStreamEvent(event, callbacks, (t) => { fullText += t; });
 			} catch {
 				callbacks.onText(buffer);
 				fullText += buffer;
 			}
+		}
+
+		// Fallback: if no deltas were received, use the result text
+		if (!fullText && resultText) {
+			callbacks.onText(resultText);
+			fullText = resultText;
 		}
 
 		if (code !== 0 && code !== null && !fullText) {
@@ -511,17 +525,27 @@ function handleStreamEvent(
 	const type = event.type as string | undefined;
 
 	switch (type) {
+		case "stream_event": {
+			const inner = event.event as Record<string, unknown> | undefined;
+			if (!inner) break;
+			const innerType = inner.type as string | undefined;
+			if (innerType === "content_block_delta") {
+				const delta = inner.delta as Record<string, unknown> | undefined;
+				if (delta?.type === "text_delta" && typeof delta.text === "string") {
+					callbacks.onText(delta.text);
+					appendText(delta.text);
+				} else if (delta?.type === "thinking_delta" && typeof delta.thinking === "string") {
+					callbacks.onThinking?.(delta.thinking);
+				}
+			}
+			break;
+		}
 		case "assistant": {
 			const msg = event.message as Record<string, unknown> | undefined;
 			if (msg?.content && Array.isArray(msg.content)) {
 				for (const block of msg.content) {
 					const b = block as Record<string, unknown>;
-					if (b.type === "text" && typeof b.text === "string") {
-						callbacks.onText(b.text);
-						appendText(b.text);
-					} else if (b.type === "thinking" && typeof b.thinking === "string") {
-						callbacks.onThinking?.(b.thinking);
-					} else if (b.type === "tool_use" && typeof b.name === "string") {
+					if (b.type === "tool_use" && typeof b.name === "string") {
 						const input = (b.input as Record<string, unknown>) || {};
 						const id = (b.id as string) || `tool-${Date.now()}`;
 						pendingTools.set(id, b.name);
@@ -544,11 +568,6 @@ function handleStreamEvent(
 			break;
 		}
 		case "result": {
-			const result = event.result as string | undefined;
-			if (typeof result === "string" && result.length > 0) {
-				callbacks.onText(result);
-				appendText(result);
-			}
 			const sid = event.session_id as string | undefined;
 			if (sid) callbacks.onSessionId?.(sid);
 			pendingTools.clear();

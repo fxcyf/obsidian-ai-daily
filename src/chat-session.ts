@@ -72,8 +72,13 @@ export async function saveChatSession(
 	session: ChatSessionFile
 ): Promise<void> {
 	await ensureFolderAdapter(vault, folderPath);
-	const path = normalizePath(`${folderPath}/${session.id}.json`);
+	const path = normalizePath(`${folderPath}/${session.id}.md`);
 	await vault.adapter.write(path, JSON.stringify(session, null, 2));
+	// remove legacy .json file if it exists
+	const legacy = normalizePath(`${folderPath}/${session.id}.json`);
+	try {
+		if (await vault.adapter.exists(legacy)) await vault.adapter.remove(legacy);
+	} catch { /* ignore */ }
 }
 
 export async function loadChatSession(
@@ -81,10 +86,17 @@ export async function loadChatSession(
 	folderPath: string,
 	id: string
 ): Promise<ChatSessionFile | null> {
-	const path = normalizePath(`${folderPath}/${id}.json`);
+	const path = normalizePath(`${folderPath}/${id}.md`);
+	const legacyPath = normalizePath(`${folderPath}/${id}.json`);
 	try {
-		if (!(await vault.adapter.exists(path))) return null;
-		const raw = await vault.adapter.read(path);
+		let raw: string;
+		if (await vault.adapter.exists(path)) {
+			raw = await vault.adapter.read(path);
+		} else if (await vault.adapter.exists(legacyPath)) {
+			raw = await vault.adapter.read(legacyPath);
+		} else {
+			return null;
+		}
 		const parsed: unknown = JSON.parse(raw);
 		if (!isValidChatSession(parsed)) return null;
 		return parsed;
@@ -102,12 +114,14 @@ export async function listChatSessions(
 		if (!(await vault.adapter.exists(p))) return [];
 		const listed = await vault.adapter.list(p);
 		const out: ChatSessionFile[] = [];
+		const seen = new Set<string>();
 		for (const filePath of listed.files) {
-			if (!filePath.endsWith(".json")) continue;
+			if (!filePath.endsWith(".md") && !filePath.endsWith(".json")) continue;
 			try {
 				const raw = await vault.adapter.read(filePath);
 				const parsed: unknown = JSON.parse(raw);
-				if (isValidChatSession(parsed)) {
+				if (isValidChatSession(parsed) && !seen.has(parsed.id)) {
+					seen.add(parsed.id);
 					out.push(parsed);
 				}
 			} catch {
@@ -126,11 +140,11 @@ export async function deleteChatSessionFile(
 	folderPath: string,
 	id: string
 ): Promise<void> {
-	const path = normalizePath(`${folderPath}/${id}.json`);
+	const path = normalizePath(`${folderPath}/${id}.md`);
+	const legacy = normalizePath(`${folderPath}/${id}.json`);
 	try {
-		if (await vault.adapter.exists(path)) {
-			await vault.adapter.remove(path);
-		}
+		if (await vault.adapter.exists(path)) await vault.adapter.remove(path);
+		if (await vault.adapter.exists(legacy)) await vault.adapter.remove(legacy);
 	} catch {
 		/* ignore */
 	}

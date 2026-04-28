@@ -22,9 +22,18 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Install MCP server dependencies
+        run: cd mcp-server && npm install
+
       - name: Deploy to Obsidian vault
         run: |
           PLUGIN_DIR="$HOME/MyFiles/Obsidian/All in One/.obsidian/plugins/ai-daily-chat"
           mkdir -p "$PLUGIN_DIR"
           cp main.js manifest.json styles.css "$PLUGIN_DIR/"
-          echo "Deployed to $PLUGIN_DIR"
+          if [ -d mcp-dist ]; then
+            cp -r mcp-dist "$PLUGIN_DIR/"
+            echo "Deployed with mcp-dist to $PLUGIN_DIR"
+          else
+            echo "WARNING: mcp-dist not found, skipping"
+            echo "Deployed to $PLUGIN_DIR"
+          fi

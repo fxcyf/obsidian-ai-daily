@@ -8,13 +8,29 @@ let cachedNodePath: string | null = null;
 // NVM alias resolution (filesystem-based, no env vars needed in Electron)
 // ---------------------------------------------------------------------------
 
+const MIN_NODE_MAJOR = 18;
+
+function nodeMajorVersion(versionDir: string): number {
+	const m = versionDir.match(/^v(\d+)/);
+	return m ? parseInt(m[1], 10) : 0;
+}
+
 function resolveNvmNodeBin(home: string): string | null {
 	const { existsSync, readFileSync, readdirSync } = require("fs") as typeof import("fs");
 	const nvmDir = process.env.NVM_DIR || `${home}/.nvm`;
 
-	// Fast path: symlinked current
+	// Fast path: symlinked current (verify version is new enough)
 	const current = `${nvmDir}/current/bin`;
-	if (existsSync(current)) return current;
+	if (existsSync(current)) {
+		try {
+			const target = require("fs").readlinkSync(`${nvmDir}/current`);
+			if (nodeMajorVersion(require("path").basename(target)) >= MIN_NODE_MAJOR) {
+				return current;
+			}
+		} catch {
+			return current;
+		}
+	}
 
 	// Read alias/default and resolve the chain (up to 5 levels, matching Claudian)
 	const aliasDir = `${nvmDir}/alias`;
@@ -40,7 +56,9 @@ function resolveNvmNodeBin(home: string): string | null {
 	}
 
 	try {
-		const installed = readdirSync(versionsDir).sort();
+		const installed = readdirSync(versionsDir)
+			.filter((v: string) => nodeMajorVersion(v) >= MIN_NODE_MAJOR)
+			.sort();
 		if (installed.length === 0) return null;
 
 		let match: string | undefined;

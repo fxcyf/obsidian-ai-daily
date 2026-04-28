@@ -1,8 +1,30 @@
 import { Platform } from "obsidian";
 import { ChildProcess } from "child_process";
 
+declare const __MCP_SERVER_CODE__: string | undefined;
+
 let cachedClaudePath: string | false | null = null;
 let cachedNodePath: string | null = null;
+let cachedMcpServerPath: string | null = null;
+
+export function getMcpServerPath(): string {
+	if (cachedMcpServerPath) return cachedMcpServerPath;
+
+	const { writeFileSync, mkdirSync, existsSync } = require("fs") as typeof import("fs");
+	const { join } = require("path") as typeof import("path");
+	const tmpDir = join(process.env.TMPDIR || "/tmp", "ai-daily-mcp");
+	try { mkdirSync(tmpDir, { recursive: true }); } catch { /* exists */ }
+	const serverPath = join(tmpDir, "mcp-server.js");
+
+	if (typeof __MCP_SERVER_CODE__ === "string" && __MCP_SERVER_CODE__.length > 0) {
+		writeFileSync(serverPath, __MCP_SERVER_CODE__);
+		cachedMcpServerPath = serverPath;
+		return serverPath;
+	}
+
+	// Fallback: try to find mcp-server.js alongside the plugin
+	return serverPath;
+}
 
 // ---------------------------------------------------------------------------
 // NVM alias resolution (filesystem-based, no env vars needed in Electron)

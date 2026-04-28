@@ -20,7 +20,7 @@ import type { PromptTemplate } from "./settings";
 import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
 import type { PreparedImage } from "./image-tools";
 import { distillConversation } from "./knowledge-agent";
-import { isClaudeCodeAvailable, spawnClaudeCode } from "./claude-code";
+import { isClaudeCodeAvailable, spawnClaudeCode, getMcpServerPath } from "./claude-code";
 import {
 	newSessionId,
 	titleFromMessages,
@@ -823,11 +823,9 @@ export class ChatView extends ItemView {
 
 	private getMcpConfig(): { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] } {
 		const { knowledgeFolders } = this.plugin.settings;
-		const { join } = require("path") as typeof import("path");
 		const adapter = this.app.vault.adapter as { basePath?: string };
 		const vaultPath = adapter.basePath || "";
-		const pluginRelDir = (this.plugin.manifest as { dir?: string }).dir || "";
-		const mcpServerPath = join(vaultPath, pluginRelDir, "mcp-server.js");
+		const mcpServerPath = getMcpServerPath();
 		return { vaultPath, mcpServerPath, knowledgeFolders };
 	}
 

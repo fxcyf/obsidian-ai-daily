@@ -829,7 +829,7 @@ export class ChatView extends ItemView {
 		return { vaultPath, mcpServerPath, knowledgeFolders };
 	}
 
-	private handleSendViaClaudeCode(text: string): void {
+	private async handleSendViaClaudeCode(text: string): Promise<void> {
 		this.addMessage("user", text);
 		if (!this.sessionId) this.sessionId = newSessionId();
 
@@ -845,6 +845,25 @@ export class ChatView extends ItemView {
 				`- 知识库文件夹: ${knowledgeFolders.join("、")}`,
 				`- 原始笔记文件夹: ${autoTagFolders.join("、")}`,
 				`- 知识整理目标文件夹: ${distillTargetFolder}`,
+			];
+
+			const activeFile = this.app.workspace.getActiveFile();
+			if (activeFile) {
+				try {
+					const content = await this.app.vault.cachedRead(activeFile);
+					parts.push(
+						"",
+						"## 当前打开的笔记",
+						`文件路径: ${activeFile.path}`,
+						"",
+						content,
+					);
+				} catch {
+					parts.push("", `## 当前打开的笔记: ${activeFile.path}`);
+				}
+			}
+
+			parts.push(
 				"",
 				"## MCP 工具使用说明",
 				"你可以通过 MCP 工具操作 vault 中的笔记，路径使用 vault 内相对路径：",
@@ -857,9 +876,10 @@ export class ChatView extends ItemView {
 				"- update_frontmatter: 更新笔记的 frontmatter 属性",
 				"- rename_note / delete_note / get_links: 其他操作",
 				"",
-				"当用户提到笔记标题时，先用 search_vault 搜索，找到后用 read_note 读取。",
+				"当用户提到「这篇笔记」「这篇文章」「当前笔记」时，直接使用上方「当前打开的笔记」的内容，无需再用工具读取。",
+				"当用户提到其他笔记标题时，先用 search_vault 搜索，找到后用 read_note 读取。",
 				"回答用中文，简洁有深度。引用笔记时使用 [[笔记名]] wiki-link 格式。",
-			];
+			);
 
 			if (this.messages.length > 1) {
 				const history = this.messages.slice(0, -1);

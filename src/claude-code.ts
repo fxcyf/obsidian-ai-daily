@@ -14,7 +14,7 @@ export function getMcpServerPath(): string {
 	const { join } = require("path") as typeof import("path");
 	const tmpDir = join(process.env.TMPDIR || "/tmp", "ai-daily-mcp");
 	try { mkdirSync(tmpDir, { recursive: true }); } catch { /* exists */ }
-	const serverPath = join(tmpDir, "mcp-server.js");
+	const serverPath = join(tmpDir, "mcp-server.mjs");
 
 	if (typeof __MCP_SERVER_CODE__ === "string" && __MCP_SERVER_CODE__.length > 0) {
 		writeFileSync(serverPath, __MCP_SERVER_CODE__);

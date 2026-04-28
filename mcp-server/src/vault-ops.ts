@@ -80,7 +80,7 @@ export class VaultOps {
 		}
 		const existing = await fs.readFile(abs, "utf-8");
 		await fs.writeFile(abs, existing + "\n\n" + content, "utf-8");
-		return `Content appended to ${notePath}`;
+		return `Content appended to ${notePath}\n${undoTag("append_to_note", notePath, existing)}`;
 	}
 
 	async listNotes(folder?: string, limit: number = 20): Promise<string> {
@@ -136,7 +136,7 @@ export class VaultOps {
 		const dir = path.dirname(abs);
 		await fs.mkdir(dir, { recursive: true });
 		await fs.writeFile(abs, body, "utf-8");
-		return `Created: ${normalized}`;
+		return `Created: ${normalized}\n${undoTag("create_note", normalized)}`;
 	}
 
 	async editNote(
@@ -153,6 +153,8 @@ export class VaultOps {
 			return `File not found: ${notePath}`;
 		}
 
+		const undo = undoTag("edit_note", notePath, content);
+
 		switch (mode) {
 			case "search_replace": {
 				const search = typeof target === "string" ? target : "";
@@ -165,7 +167,7 @@ export class VaultOps {
 					replacement +
 					content.substring(idx + search.length);
 				await fs.writeFile(abs, newContent, "utf-8");
-				return `Replaced text in ${notePath}`;
+				return `Replaced text in ${notePath}\n${undo}`;
 			}
 			case "heading": {
 				const heading = typeof target === "string" ? target : "";
@@ -179,7 +181,7 @@ export class VaultOps {
 					replacement +
 					content.substring(end);
 				await fs.writeFile(abs, newContent, "utf-8");
-				return `Replaced heading section "${heading}" in ${notePath}`;
+				return `Replaced heading section "${heading}" in ${notePath}\n${undo}`;
 			}
 			case "line_range": {
 				if (typeof target !== "object" || target === null) {
@@ -202,7 +204,7 @@ export class VaultOps {
 					"\n"
 				);
 				await fs.writeFile(abs, newContent, "utf-8");
-				return `Replaced lines ${startLine}-${endLine} in ${notePath}`;
+				return `Replaced lines ${startLine}-${endLine} in ${notePath}\n${undo}`;
 			}
 			default:
 				return `Error: unknown edit mode "${mode}". Use heading, line_range, or search_replace`;
@@ -231,7 +233,7 @@ export class VaultOps {
 
 		await fs.mkdir(path.dirname(absNew), { recursive: true });
 		await fs.rename(abs, absNew);
-		return `Renamed: ${notePath} → ${normalized}`;
+		return `Renamed: ${notePath} → ${normalized}\n${undoTag("rename_note", normalized, undefined, notePath)}`;
 	}
 
 	async deleteNote(
@@ -258,7 +260,7 @@ export class VaultOps {
 		await fs.mkdir(trashDir, { recursive: true });
 		const trashPath = path.join(trashDir, path.basename(notePath));
 		await fs.rename(abs, trashPath);
-		return `Deleted (moved to .trash): ${notePath}`;
+		return `Deleted (moved to .trash): ${notePath}\n${undoTag("delete_note", notePath, content)}`;
 	}
 
 	async getLinks(notePath: string): Promise<string> {
@@ -350,7 +352,7 @@ export class VaultOps {
 		const changes: string[] = [];
 		if (set) changes.push(`set: ${Object.keys(set).join(", ")}`);
 		if (del) changes.push(`deleted: ${del.join(", ")}`);
-		return `Updated frontmatter of ${notePath} (${changes.join("; ")})`;
+		return `Updated frontmatter of ${notePath} (${changes.join("; ")})\n${undoTag("update_frontmatter", notePath, content)}`;
 	}
 
 	private async listMarkdownFiles(): Promise<string[]> {
@@ -482,6 +484,15 @@ export function findHeadingRange(
 		return { start: startIdx, end: content.length };
 	}
 	return { start: -1, end: -1 };
+}
+
+const UNDO_MARKER = "__undo__";
+
+function undoTag(tool: string, filePath: string, previousContent?: string, oldPath?: string): string {
+	const data: Record<string, unknown> = { tool, path: filePath };
+	if (previousContent !== undefined) data.previous = previousContent;
+	if (oldPath !== undefined) data.oldPath = oldPath;
+	return `${UNDO_MARKER}${JSON.stringify(data)}`;
 }
 
 function getTagsFromContent(content: string): string[] {

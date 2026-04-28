@@ -21,7 +21,7 @@ import type { PromptTemplate } from "./settings";
 import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
 import type { PreparedImage } from "./image-tools";
 import { distillConversation } from "./knowledge-agent";
-import { isClaudeCodeAvailable, spawnClaudeCode, getMcpServerPath } from "./claude-code";
+import { isClaudeCodeAvailable, spawnClaudeCode, getMcpServerPath, type UndoData } from "./claude-code";
 import {
 	newSessionId,
 	titleFromMessages,
@@ -1205,13 +1205,30 @@ export class ChatView extends ItemView {
 		const existing = this.messagesEl.querySelector(".ai-daily-undo-bar");
 		if (existing) existing.remove();
 
-		if (!this.vaultTools) return;
-		const history = this.vaultTools.getUndoHistory();
-		if (history.length === 0) return;
+		// API mode undo
+		if (this.vaultTools) {
+			const history = this.vaultTools.getUndoHistory();
+			if (history.length > 0) {
+				const last = history[history.length - 1];
+				this.createUndoBarEl(last.description, async () => {
+					return await this.vaultTools!.undoById(last.id) || "已撤销";
+				});
+				return;
+			}
+		}
 
-		const last = history[history.length - 1];
+		// Claude Code mode undo
+		if (this.claudeCodeUndoHistory.length > 0) {
+			const last = this.claudeCodeUndoHistory[this.claudeCodeUndoHistory.length - 1];
+			this.createUndoBarEl(last.description, async () => {
+				return await this.executeClaudeCodeUndo(last.id);
+			});
+		}
+	}
+
+	private createUndoBarEl(description: string, onUndo: () => Promise<string>): void {
 		const bar = this.messagesEl.createDiv({ cls: "ai-daily-undo-bar" });
-		const textSpan = bar.createSpan({ cls: "ai-daily-undo-text", text: last.description });
+		bar.createSpan({ cls: "ai-daily-undo-text", text: description });
 
 		const undoBtn = bar.createEl("button", { cls: "ai-daily-undo-btn", text: "撤销" });
 		const iconSpan = undoBtn.createSpan({ cls: "ai-daily-undo-btn-icon" });
@@ -1222,10 +1239,8 @@ export class ChatView extends ItemView {
 			undoBtn.disabled = true;
 			undoBtn.setText("撤销中...");
 			try {
-				const result = await this.vaultTools!.undoById(last.id);
-				if (result) {
-					new Notice(result, 3000);
-				}
+				const result = await onUndo();
+				new Notice(result, 3000);
 			} catch (e) {
 				new Notice(`撤销失败: ${e instanceof Error ? e.message : String(e)}`, 4000);
 			}
@@ -1234,6 +1249,73 @@ export class ChatView extends ItemView {
 		});
 
 		this.scrollToBottomIfFollowing();
+	}
+
+	private pushClaudeCodeUndo(data: UndoData): void {
+		const TOOL_LABELS: Record<string, string> = {
+			append_to_note: "追加内容",
+			create_note: "创建笔记",
+			edit_note: "编辑笔记",
+			rename_note: "重命名笔记",
+			delete_note: "删除笔记",
+			update_frontmatter: "更新属性",
+		};
+		const label = TOOL_LABELS[data.tool] || data.tool;
+		const description = `${label}: ${data.path}`;
+		this.claudeCodeUndoHistory.push({
+			id: this.claudeCodeUndoCounter++,
+			data,
+			description,
+		});
+		if (this.claudeCodeUndoHistory.length > 20) {
+			this.claudeCodeUndoHistory.shift();
+		}
+	}
+
+	private async executeClaudeCodeUndo(id: number): Promise<string> {
+		const idx = this.claudeCodeUndoHistory.findIndex((e) => e.id === id);
+		if (idx === -1) return "撤销条目不存在";
+		const [entry] = this.claudeCodeUndoHistory.splice(idx, 1);
+		const { data } = entry;
+		const adapter = this.app.vault.adapter as { basePath?: string };
+		const vaultPath = adapter.basePath || "";
+		const { join } = require("path") as typeof import("path");
+		const { writeFileSync, readFileSync, renameSync, mkdirSync } = require("fs") as typeof import("fs");
+
+		switch (data.tool) {
+			case "create_note": {
+				const abs = join(vaultPath, data.path);
+				const trashDir = join(vaultPath, ".trash");
+				try { mkdirSync(trashDir, { recursive: true }); } catch { /* exists */ }
+				renameSync(abs, join(trashDir, data.path.split("/").pop()!));
+				return `已撤销创建: ${data.path}`;
+			}
+			case "delete_note": {
+				if (data.previous === undefined) return "无法撤销: 缺少原始内容";
+				const abs = join(vaultPath, data.path);
+				const dir = join(vaultPath, data.path.substring(0, data.path.lastIndexOf("/")));
+				try { mkdirSync(dir, { recursive: true }); } catch { /* exists */ }
+				writeFileSync(abs, data.previous, "utf-8");
+				return `已恢复: ${data.path}`;
+			}
+			case "rename_note": {
+				if (!data.oldPath) return "无法撤销: 缺少原路径";
+				const absNew = join(vaultPath, data.path);
+				const absOld = join(vaultPath, data.oldPath);
+				renameSync(absNew, absOld);
+				return `已撤销重命名: ${data.path} → ${data.oldPath}`;
+			}
+			case "append_to_note":
+			case "edit_note":
+			case "update_frontmatter": {
+				if (data.previous === undefined) return "无法撤销: 缺少原始内容";
+				const abs = join(vaultPath, data.path);
+				writeFileSync(abs, data.previous, "utf-8");
+				return `已恢复: ${data.path}`;
+			}
+			default:
+				return `不支持的撤销操作: ${data.tool}`;
+		}
 	}
 
 	sendMessage(text: string): void {
@@ -1340,6 +1422,9 @@ export class ChatView extends ItemView {
 				}
 				this.scrollToBottomIfFollowing();
 			},
+			onUndoData: (data) => {
+				this.pushClaudeCodeUndo(data);
+			},
 			onError: (error) => {
 				loadingEl.remove();
 				if (renderTimer !== null) { window.clearTimeout(renderTimer); renderTimer = null; }
@@ -1352,6 +1437,7 @@ export class ChatView extends ItemView {
 				this.addMessage("assistant", `Claude Code 出错: ${error}`);
 				this.isLoading = false;
 				this.setSendButtonState(false);
+				this.renderUndoBar();
 			},
 			onDone: (fullText) => {
 				loadingEl.remove();
@@ -1369,6 +1455,7 @@ export class ChatView extends ItemView {
 				void this.persistSession();
 				this.isLoading = false;
 				this.setSendButtonState(false);
+				this.renderUndoBar();
 			},
 			onSessionId: (id) => {
 				this.claudeCodeSessionId = id;
@@ -1381,6 +1468,8 @@ export class ChatView extends ItemView {
 
 	private claudeCodeAbort: (() => void) | null = null;
 	private claudeCodeSessionId: string | undefined;
+	private claudeCodeUndoHistory: { id: number; data: UndoData; description: string }[] = [];
+	private claudeCodeUndoCounter = 0;
 
 	private async handleDistill(): Promise<void> {
 		if (this.messages.length < 2) {
@@ -1425,6 +1514,7 @@ export class ChatView extends ItemView {
 		this.client = null;
 		this.vaultTools = null;
 		this.claudeCodeSessionId = undefined;
+		this.claudeCodeUndoHistory = [];
 		this.attachedFiles = [];
 		this.renderAttachBar();
 		this.messagesEl.empty();

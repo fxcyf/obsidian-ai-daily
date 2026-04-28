@@ -311,11 +311,19 @@ export function resetClaudeCodeCache(): void {
 // Stream callbacks & options
 // ---------------------------------------------------------------------------
 
+export interface UndoData {
+	tool: string;
+	path: string;
+	previous?: string;
+	oldPath?: string;
+}
+
 export interface ClaudeCodeStreamCallbacks {
 	onText: (delta: string) => void;
 	onToolCall?: (id: string, name: string, input: Record<string, unknown>, status: "running" | "done" | "error") => void;
 	onToolResult?: (id: string, result: string, isError: boolean) => void;
 	onThinking?: (text: string) => void;
+	onUndoData?: (data: UndoData) => void;
 	onError: (error: string) => void;
 	onDone: (fullText: string) => void;
 	onSessionId?: (id: string) => void;
@@ -466,6 +474,8 @@ export function spawnClaudeCode(
 
 const pendingTools = new Map<string, string>();
 
+const UNDO_MARKER = "__undo__";
+
 function extractToolResultText(content: unknown): string {
 	if (typeof content === "string") return content;
 	if (Array.isArray(content)) {
@@ -478,6 +488,19 @@ function extractToolResultText(content: unknown): string {
 			.join("\n");
 	}
 	return "";
+}
+
+function extractUndoData(text: string): { clean: string; undo: UndoData | null } {
+	const idx = text.indexOf(UNDO_MARKER);
+	if (idx === -1) return { clean: text, undo: null };
+	const jsonStr = text.slice(idx + UNDO_MARKER.length);
+	const clean = text.slice(0, idx).trimEnd();
+	try {
+		const data = JSON.parse(jsonStr) as UndoData;
+		return { clean, undo: data };
+	} catch {
+		return { clean: text, undo: null };
+	}
 }
 
 function handleStreamEvent(
@@ -540,10 +563,14 @@ function handleStreamEvent(
 						const toolId = b.tool_use_id;
 						const toolName = pendingTools.get(toolId);
 						const isError = b.is_error === true;
-						const resultText = extractToolResultText(b.content);
+						const rawText = extractToolResultText(b.content);
+						const { clean: resultText, undo } = extractUndoData(rawText);
 						if (toolName) {
 							callbacks.onToolCall?.(toolId, toolName, {}, isError ? "error" : "done");
 							callbacks.onToolResult?.(toolId, resultText, isError);
+							if (undo && !isError) {
+								callbacks.onUndoData?.(undo);
+							}
 							pendingTools.delete(toolId);
 						}
 					}

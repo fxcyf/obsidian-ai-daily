@@ -20,6 +20,42 @@ function getUserSearchPaths(): string[] {
 	];
 }
 
+function getNodePaths(home: string): string[] {
+	const { existsSync, readdirSync } = require("fs") as typeof import("fs");
+	const paths: string[] = [
+		"/usr/local/bin",
+		"/opt/homebrew/bin",
+		`${home}/.local/bin`,
+		`${home}/.npm-global/bin`,
+		`${home}/Library/pnpm`,
+	];
+
+	const nvmDir = process.env.NVM_DIR || `${home}/.nvm`;
+	const nvmCurrent = `${nvmDir}/current/bin`;
+	if (existsSync(nvmCurrent)) {
+		paths.unshift(nvmCurrent);
+	} else {
+		try {
+			const versions = readdirSync(`${nvmDir}/versions/node`);
+			if (versions.length > 0) {
+				const latest = versions.sort().pop()!;
+				paths.unshift(`${nvmDir}/versions/node/${latest}/bin`);
+			}
+		} catch { /* nvm not installed */ }
+	}
+
+	const fnmDir = `${home}/Library/Application Support/fnm/node-versions`;
+	try {
+		const versions = readdirSync(fnmDir);
+		if (versions.length > 0) {
+			const latest = versions.sort().pop()!;
+			paths.unshift(`${fnmDir}/${latest}/installation/bin`);
+		}
+	} catch { /* fnm not installed */ }
+
+	return paths;
+}
+
 async function findClaudeBinary(): Promise<string | false> {
 	const { existsSync } = require("fs") as typeof import("fs");
 	const { execFile } = require("child_process") as typeof import("child_process");
@@ -111,11 +147,18 @@ export function spawnClaudeCode(
 	}
 
 	const claudeBin = getClaudePath();
+	const env = { ...process.env };
+	const home = env.HOME || env.USERPROFILE || "";
+	if (home) {
+		const extraPaths = getNodePaths(home);
+		env.PATH = [...extraPaths, env.PATH || ""].join(":");
+	}
+
 	let child: ChildProcess;
 	try {
 		child = spawn(claudeBin, args, {
 			stdio: ["ignore", "pipe", "pipe"],
-			env: { ...process.env },
+			env,
 		});
 	} catch (e) {
 		callbacks.onError(`Failed to spawn claude: ${e instanceof Error ? e.message : String(e)}`);

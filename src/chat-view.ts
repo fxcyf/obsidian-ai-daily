@@ -880,6 +880,7 @@ export class ChatView extends ItemView {
 		}
 
 		this.isLoading = true;
+		this.readImageCount = 0;
 		this.setSendButtonState(true);
 		this.inputEl.value = "";
 		this.inputEl.style.height = "auto";
@@ -1155,9 +1156,16 @@ export class ChatView extends ItemView {
 		this.runClaudeCodeStream(prompt, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.model);
 	}
 
+	private readImageCount = 0;
+	private static readonly MAX_IMAGES_PER_TURN = 3;
+
 	private async executeReadImage(input: Record<string, unknown>): Promise<ToolResultContent> {
 		const path = typeof input.path === "string" ? input.path : "";
 		if (!path) return "Error: path is required";
+
+		if (this.readImageCount >= ChatView.MAX_IMAGES_PER_TURN) {
+			return `[已达本轮图片上限 ${ChatView.MAX_IMAGES_PER_TURN} 张，无法读取 ${path}。请先基于已读取的图片回复用户，用户可在后续消息中要求继续读取。]`;
+		}
 
 		const refs = [{ raw: path, path }];
 		const { images, skipped } = await prepareLocalImages(this.app, refs, {
@@ -1168,6 +1176,7 @@ export class ChatView extends ItemView {
 		if (skipped.length > 0) return `Error: ${skipped[0].reason} (${path})`;
 		if (images.length === 0) return `Error: 无法读取图片 (${path})`;
 
+		this.readImageCount++;
 		const img = images[0];
 		return [
 			{
@@ -1178,7 +1187,7 @@ export class ChatView extends ItemView {
 					data: img.base64,
 				},
 			},
-			{ type: "text", text: `图片: ${path}` },
+			{ type: "text", text: `图片: ${path} (${this.readImageCount}/${ChatView.MAX_IMAGES_PER_TURN})` },
 		];
 	}
 

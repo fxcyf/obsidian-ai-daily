@@ -314,6 +314,17 @@ export class ChatView extends ItemView {
 			attr: { placeholder: "问点什么… @ 引用笔记，/ 选择模板", rows: "1" },
 		});
 
+		if (!Platform.isMobile) {
+			const attachBtn = inputRow.createEl("button", {
+				cls: "ai-daily-attach-btn",
+				attr: { "aria-label": "添加笔记" },
+			});
+			setIcon(attachBtn, "paperclip");
+			attachBtn.addEventListener("click", () => {
+				this.openFilePicker();
+			});
+		}
+
 		this.sendBtn = inputRow.createEl("button", {
 			cls: "ai-daily-send-btn",
 		});
@@ -799,20 +810,7 @@ export class ChatView extends ItemView {
 	}
 
 	private showWelcome(): void {
-		const activeFile = this.app.workspace.getActiveFile();
-		const { knowledgeFolders } = this.plugin.settings;
-
-		let hint = "打开任意笔记，或直接提问来探索你的知识库。";
-		if (activeFile) {
-			const inKnowledge = knowledgeFolders.some((f) =>
-				activeFile.path.startsWith(f)
-			);
-			if (inKnowledge) {
-				hint = `已加载: ${activeFile.basename}。直接提问吧！`;
-			} else {
-				hint = `当前笔记: ${activeFile.basename}。可以对它提问。`;
-			}
-		}
+		const hint = "直接提问来探索你的知识库，或用工具读取特定笔记。";
 
 		const welcomeEl = this.messagesEl.createDiv({
 			cls: "ai-daily-welcome",
@@ -1004,6 +1002,18 @@ export class ChatView extends ItemView {
 				}
 			};
 
+			const imageResolverFn = this.plugin.settings.enableLocalImages
+				? async (toolResultText: string): Promise<PreparedImage[]> => {
+						const refs = extractLocalImageRefs(toolResultText);
+						if (refs.length === 0) return [];
+						const { images } = await prepareLocalImages(this.app, refs, {
+							maxImages: this.plugin.settings.maxImagesPerMessage,
+							maxBytes: this.plugin.settings.maxImageBytes,
+						});
+						return images;
+					}
+				: undefined;
+
 			const reply = await this.client!.chat(
 				text,
 				(name, input) => {
@@ -1022,7 +1032,8 @@ export class ChatView extends ItemView {
 						}
 					: undefined,
 				preparedImages,
-				onToolCall
+				onToolCall,
+				imageResolverFn
 			);
 
 			loadingEl.remove();
@@ -1086,25 +1097,12 @@ export class ChatView extends ItemView {
 				`- 知识整理目标文件夹: ${distillTargetFolder}`,
 			];
 
-			const activeFile = this.app.workspace.getActiveFile();
-			if (activeFile) {
-				try {
-					const content = await this.app.vault.cachedRead(activeFile);
-					parts.push(
-						"",
-						"## 当前打开的笔记",
-						`文件路径: ${activeFile.path}`,
-						"",
-						content,
-					);
-				} catch {
-					parts.push("", `## 当前打开的笔记: ${activeFile.path}`);
-				}
-			}
-
 			if (attachedContent) {
 				parts.push("", attachedContent);
 			}
+
+			const adapter = this.app.vault.adapter as { basePath?: string };
+			const vaultAbsPath = adapter.basePath || "";
 
 			parts.push(
 				"",
@@ -1119,8 +1117,14 @@ export class ChatView extends ItemView {
 				"- update_frontmatter: 更新笔记的 frontmatter 属性",
 				"- rename_note / delete_note / get_links: 其他操作",
 				"",
-				"当用户提到「这篇笔记」「这篇文章」「当前笔记」时，直接使用上方「当前打开的笔记」的内容，无需再用工具读取。",
-				"当用户提到其他笔记标题时，先用 search_vault 搜索，找到后用 read_note 读取。",
+				"## 图片处理",
+				`Vault 绝对路径: ${vaultAbsPath}`,
+				"当 read_note 返回的内容包含图片引用（如 `![[image.png]]` 或 `![](path/to/image.jpg)`）时，",
+				"用 ReadFile 工具直接读取图片文件来查看内容。图片的绝对路径 = Vault绝对路径 + 图片相对路径。",
+				"例如: `![[attachments/photo.png]]` → ReadFile(`" + vaultAbsPath + "/attachments/photo.png`)",
+				"支持的格式: png, jpg, jpeg, webp, gif",
+				"",
+				"当用户提到某篇笔记时，先用 search_vault 搜索，找到后用 read_note 读取。",
 				"回答用中文，简洁有深度。引用笔记时使用 [[笔记名]] wiki-link 格式。",
 			);
 
@@ -1136,11 +1140,6 @@ export class ChatView extends ItemView {
 			prompt = parts.join("\n");
 		} else {
 			const contextParts: string[] = [];
-
-			const activeFile = this.app.workspace.getActiveFile();
-			if (activeFile) {
-				contextParts.push(`[当前笔记: ${activeFile.path}]`);
-			}
 
 			if (attachedContent) {
 				contextParts.push(attachedContent);
@@ -1168,12 +1167,6 @@ export class ChatView extends ItemView {
 
 		const knowledgeContext = await this.vaultTools.loadKnowledgeContext(5);
 
-		const activeFile = this.app.workspace.getActiveFile();
-		let currentNote = "";
-		if (activeFile) {
-			currentNote = await this.app.vault.cachedRead(activeFile);
-		}
-
 		const allFolders = knowledgeFolders.join("、");
 
 		const systemPrompt = [
@@ -1185,10 +1178,7 @@ export class ChatView extends ItemView {
 				: "",
 			"回答用中文，简洁有深度。如果用户想保存洞察，用 append_to_note 工具写回笔记。",
 			"��回复中引用笔记时，请使用 [[笔记名]] 的 wiki-link 格式，以便用户可以直接点击跳转。",
-			"",
-			currentNote
-				? `## 当前打开的笔记\n\n文件: ${activeFile!.path}\n\n${currentNote}`
-				: "",
+			"当用户提到某篇笔记时，先用 search_vault 搜索，找到后用 read_note 读取。",
 			knowledgeContext ? `## 最近的知识库笔记\n\n${knowledgeContext}` : "",
 		]
 			.filter(Boolean)

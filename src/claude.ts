@@ -348,13 +348,6 @@ export type ToolExecutor = (
 	input: Record<string, unknown>
 ) => Promise<string | ToolResultContent>;
 
-export interface ImageResolverResult {
-	images: PreparedImage[];
-	skippedCount: number;
-}
-
-export type ImageResolver = (text: string) => Promise<ImageResolverResult>;
-
 export type StreamMode = "auto" | "real" | "typewriter" | "off";
 
 export function estimateTextTokens(text: string): number {
@@ -558,8 +551,7 @@ export class ClaudeClient {
 		executeTool: ToolExecutor,
 		onAssistantDelta?: (delta: string, accumulated: string) => void,
 		images?: PreparedImage[],
-		onToolCall?: (name: string, input: Record<string, unknown>, status: "start" | "done" | "error") => void,
-		imageResolver?: ImageResolver
+		onToolCall?: (name: string, input: Record<string, unknown>, status: "start" | "done" | "error") => void
 	): Promise<string> {
 		if (images && images.length > 0) {
 			const content: Record<string, unknown>[] = images.map((img) => ({
@@ -643,35 +635,10 @@ export class ClaudeClient {
 				try {
 					const result = await executeTool(tool.name, tool.input);
 					onToolCall?.(tool.name, tool.input, "done");
-
-					let content: ToolResultContent = result;
-					if (typeof result === "string" && imageResolver) {
-						const { images: resolved, skippedCount } = await imageResolver(result);
-						if (resolved.length > 0) {
-							const blocks: { type: string; [key: string]: unknown }[] = [];
-							for (const img of resolved) {
-								blocks.push({
-									type: "image",
-									source: {
-										type: "base64",
-										media_type: img.mediaType,
-										data: img.base64,
-									},
-								});
-							}
-							let text = result;
-							if (skippedCount > 0) {
-								text += `\n\n[注意: 还有 ${skippedCount} 张图片未自动加载，可用 read_image 工具逐个读取]`;
-							}
-							blocks.push({ type: "text", text });
-							content = blocks;
-						}
-					}
-
 					results.push({
 						type: "tool_result",
 						tool_use_id: tool.id,
-						content,
+						content: result,
 					});
 				} catch (e) {
 					onToolCall?.(tool.name, tool.input, "error");

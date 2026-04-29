@@ -19,6 +19,7 @@ const COMPRESS_BLOB_MAX_CHARS = 120_000;
 
 const RETRY_MAX = 3;
 const RETRY_BASE_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 180_000;
 
 function isRetryableStatus(status: number): boolean {
 	return status === 429 || status === 529;
@@ -26,6 +27,15 @@ function isRetryableStatus(status: number): boolean {
 
 async function sleepMs(ms: number): Promise<void> {
 	return new Promise((r) => setTimeout(r, ms));
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+	return Promise.race([
+		promise,
+		new Promise<never>((_, reject) =>
+			setTimeout(() => reject(new Error(`请求超时（${Math.round(ms / 1000)}s），请稍后重试`)), ms)
+		),
+	]);
 }
 
 function retryDelayMs(attempt: number, status: number, retryAfterHeader?: string): number {
@@ -309,10 +319,12 @@ export interface ClaudeMessage {
 	content: string | ContentBlock[];
 }
 
+export type ToolResultContent = string | { type: string; [key: string]: unknown }[];
+
 export interface ToolResult {
 	type: "tool_result";
 	tool_use_id: string;
-	content: string;
+	content: ToolResultContent;
 	is_error?: boolean;
 }
 
@@ -320,6 +332,8 @@ export type ToolExecutor = (
 	name: string,
 	input: Record<string, unknown>
 ) => Promise<string>;
+
+export type ImageResolver = (text: string) => Promise<PreparedImage[]>;
 
 export type StreamMode = "auto" | "real" | "typewriter" | "off";
 
@@ -371,7 +385,7 @@ export async function callClaudeSimple(options: SimpleCallOptions): Promise<stri
 	const { apiKey, model, systemPrompt, userMessage, maxTokens = MAX_TOKENS } = options;
 
 	for (let attempt = 0; ; attempt++) {
-		const resp = await requestUrl({
+		const resp = await withTimeout(requestUrl({
 			url: API_URL,
 			method: "POST",
 			headers: {
@@ -385,7 +399,7 @@ export async function callClaudeSimple(options: SimpleCallOptions): Promise<stri
 				system: systemPrompt,
 				messages: [{ role: "user", content: userMessage }],
 			}),
-		});
+		}), REQUEST_TIMEOUT_MS);
 
 		if (isRetryableStatus(resp.status) && attempt < RETRY_MAX) {
 			await sleepMs(retryDelayMs(attempt, resp.status, resp.headers?.["retry-after"]));
@@ -491,7 +505,8 @@ export class ClaudeClient {
 		executeTool: ToolExecutor,
 		onAssistantDelta?: (delta: string, accumulated: string) => void,
 		images?: PreparedImage[],
-		onToolCall?: (name: string, input: Record<string, unknown>, status: "start" | "done" | "error") => void
+		onToolCall?: (name: string, input: Record<string, unknown>, status: "start" | "done" | "error") => void,
+		imageResolver?: ImageResolver
 	): Promise<string> {
 		if (images && images.length > 0) {
 			const content: Record<string, unknown>[] = images.map((img) => ({
@@ -574,10 +589,31 @@ export class ClaudeClient {
 				try {
 					const result = await executeTool(tool.name, tool.input);
 					onToolCall?.(tool.name, tool.input, "done");
+
+					let content: ToolResultContent = result;
+					if (imageResolver) {
+						const resolved = await imageResolver(result);
+						if (resolved.length > 0) {
+							const blocks: { type: string; [key: string]: unknown }[] = [];
+							for (const img of resolved) {
+								blocks.push({
+									type: "image",
+									source: {
+										type: "base64",
+										media_type: img.mediaType,
+										data: img.base64,
+									},
+								});
+							}
+							blocks.push({ type: "text", text: result });
+							content = blocks;
+						}
+					}
+
 					results.push({
 						type: "tool_result",
 						tool_use_id: tool.id,
-						content: result,
+						content,
 					});
 				} catch (e) {
 					onToolCall?.(tool.name, tool.input, "error");
@@ -786,7 +822,7 @@ export class ClaudeClient {
 
 		for (let attempt = 0; ; attempt++) {
 			if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-			const resp = await requestUrl({
+			const resp = await withTimeout(requestUrl({
 				url: API_URL,
 				method: "POST",
 				headers: {
@@ -795,7 +831,7 @@ export class ClaudeClient {
 					"anthropic-version": ANTHROPIC_VERSION,
 				},
 				body: JSON.stringify(body),
-			});
+			}), REQUEST_TIMEOUT_MS);
 
 			if (isRetryableStatus(resp.status) && attempt < RETRY_MAX) {
 				await sleepMs(retryDelayMs(attempt, resp.status, resp.headers?.["retry-after"]));

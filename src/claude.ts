@@ -384,32 +384,65 @@ function extractTextFromResponse(json: unknown): string {
 export async function callClaudeSimple(options: SimpleCallOptions): Promise<string> {
 	const { apiKey, model, systemPrompt, userMessage, maxTokens = MAX_TOKENS } = options;
 
+	const bodyObj = {
+		model,
+		max_tokens: maxTokens,
+		system: systemPrompt,
+		messages: [{ role: "user", content: userMessage }],
+		stream: true,
+	};
+
+	let res: Response | undefined;
 	for (let attempt = 0; ; attempt++) {
-		const resp = await withTimeout(requestUrl({
-			url: API_URL,
+		res = await fetch(API_URL, {
 			method: "POST",
 			headers: {
-				"Content-Type": "application/json",
+				"content-type": "application/json",
 				"x-api-key": apiKey,
 				"anthropic-version": ANTHROPIC_VERSION,
+				"anthropic-dangerous-direct-browser-access": "true",
 			},
-			body: JSON.stringify({
-				model,
-				max_tokens: maxTokens,
-				system: systemPrompt,
-				messages: [{ role: "user", content: userMessage }],
-			}),
-		}), REQUEST_TIMEOUT_MS);
+			body: JSON.stringify(bodyObj),
+		});
 
-		if (isRetryableStatus(resp.status) && attempt < RETRY_MAX) {
-			await sleepMs(retryDelayMs(attempt, resp.status, resp.headers?.["retry-after"]));
+		if (isRetryableStatus(res.status) && attempt < RETRY_MAX) {
+			await sleepMs(retryDelayMs(attempt, res.status, res.headers.get("retry-after") ?? undefined));
 			continue;
 		}
-		if (resp.status >= 400) {
-			throw new Error(`Claude API error ${resp.status}: ${resp.text}`);
-		}
-		return extractTextFromResponse(resp.json) || "";
+		break;
 	}
+
+	if (!res!.ok) {
+		let errText = "";
+		try { errText = await res!.text(); } catch { /* ignore */ }
+		throw new Error(`Claude API error ${res!.status}: ${errText.slice(0, 500)}`);
+	}
+
+	if (!res!.body) {
+		throw new Error("Claude API: response has no body (no ReadableStream)");
+	}
+
+	const assembler = new AnthropicStreamAssembler({});
+	const reader = res!.body!.getReader();
+	const decoder = new TextDecoder();
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			const text = decoder.decode(value, { stream: true });
+			if (text) assembler.push(text);
+		}
+		const tail = decoder.decode();
+		if (tail) assembler.push(tail);
+	} finally {
+		try { reader.releaseLock(); } catch { /* ignore */ }
+	}
+
+	const response = assembler.finalize();
+	for (const block of response.content) {
+		if (block.type === "text") return block.text;
+	}
+	return "";
 }
 
 // ── Client ──────────────────────────────────────────────────────────

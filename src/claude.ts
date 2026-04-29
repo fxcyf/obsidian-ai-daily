@@ -308,6 +308,21 @@ export const VAULT_TOOLS = [
 			required: ["path"],
 		},
 	},
+	{
+		name: "read_image",
+		description:
+			"读取 vault 中的图片文件并返回图片内容。当 read_note 返回的笔记中包含图片引用（如 ![[photo.png]]）时，使用此工具查看图片内容。支持 png/jpg/jpeg/webp/gif 格式。",
+		input_schema: {
+			type: "object" as const,
+			properties: {
+				path: {
+					type: "string",
+					description: "图片在 vault 中的相对路径，如 attachments/photo.png 或 images/screenshot.jpg",
+				},
+			},
+			required: ["path"],
+		},
+	},
 ];
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -331,7 +346,7 @@ export interface ToolResult {
 export type ToolExecutor = (
 	name: string,
 	input: Record<string, unknown>
-) => Promise<string>;
+) => Promise<string | ToolResultContent>;
 
 export interface ImageResolverResult {
 	images: PreparedImage[];
@@ -629,7 +644,7 @@ export class ClaudeClient {
 					onToolCall?.(tool.name, tool.input, "done");
 
 					let content: ToolResultContent = result;
-					if (imageResolver) {
+					if (typeof result === "string" && imageResolver) {
 						const { images: resolved, skippedCount } = await imageResolver(result);
 						if (resolved.length > 0) {
 							const blocks: { type: string; [key: string]: unknown }[] = [];
@@ -645,7 +660,7 @@ export class ClaudeClient {
 							}
 							let text = result;
 							if (skippedCount > 0) {
-								text += `\n\n[注意: 还有 ${skippedCount} 张图片因大小或数量限制未能加载]`;
+								text += `\n\n[注意: 还有 ${skippedCount} 张图片未自动加载，可用 read_image 工具逐个读取]`;
 							}
 							blocks.push({ type: "text", text });
 							content = blocks;

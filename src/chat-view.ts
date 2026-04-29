@@ -14,7 +14,7 @@ import {
 	TFile,
 } from "obsidian";
 import type AIDailyChat from "./main";
-import { ClaudeClient, estimateTextTokens } from "./claude";
+import { ClaudeClient, estimateTextTokens, type ToolResultContent } from "./claude";
 import { VaultTools, type UndoEntry } from "./vault-tools";
 import { WebTools } from "./web-tools";
 import type { PromptTemplate } from "./settings";
@@ -53,6 +53,7 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
 	delete_note: "删除笔记",
 	get_links: "获取链接",
 	update_frontmatter: "更新属性",
+	read_image: "读取图片",
 	web_search: "网络搜索",
 	web_fetch: "抓取网页",
 };
@@ -1019,9 +1020,8 @@ export class ChatView extends ItemView {
 				? async (toolResultText: string) => {
 						const refs = extractLocalImageRefs(toolResultText);
 						if (refs.length === 0) return { images: [], skippedCount: 0 };
-						const maxToolImages = Math.max(this.plugin.settings.maxImagesPerMessage, 20);
 						const { images, skipped } = await prepareLocalImages(this.app, refs, {
-							maxImages: maxToolImages,
+							maxImages: 5,
 							maxBytes: this.plugin.settings.maxImageBytes,
 						});
 						return { images, skippedCount: skipped.length };
@@ -1030,8 +1030,9 @@ export class ChatView extends ItemView {
 
 			const reply = await this.client!.chat(
 				userMessage,
-				(name, input) => {
+				async (name, input) => {
 					if (name === "web_fetch") return this.webTools.execute(name, input);
+					if (name === "read_image") return this.executeReadImage(input);
 					return this.vaultTools!.execute(name, input);
 				},
 				useStream
@@ -1165,6 +1166,33 @@ export class ChatView extends ItemView {
 		}
 
 		this.runClaudeCodeStream(prompt, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.model);
+	}
+
+	private async executeReadImage(input: Record<string, unknown>): Promise<ToolResultContent> {
+		const path = typeof input.path === "string" ? input.path : "";
+		if (!path) return "Error: path is required";
+
+		const refs = [{ raw: path, path }];
+		const { images, skipped } = await prepareLocalImages(this.app, refs, {
+			maxImages: 1,
+			maxBytes: this.plugin.settings.maxImageBytes,
+		});
+
+		if (skipped.length > 0) return `Error: ${skipped[0].reason} (${path})`;
+		if (images.length === 0) return `Error: 无法读取图片 (${path})`;
+
+		const img = images[0];
+		return [
+			{
+				type: "image",
+				source: {
+					type: "base64",
+					media_type: img.mediaType,
+					data: img.base64,
+				},
+			},
+			{ type: "text", text: `图片: ${path}` },
+		];
 	}
 
 	private async initClient(): Promise<void> {

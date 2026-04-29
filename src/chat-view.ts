@@ -1157,7 +1157,7 @@ export class ChatView extends ItemView {
 	}
 
 	private readImageCount = 0;
-	private static readonly MAX_IMAGES_PER_TURN = 3;
+	private static readonly MAX_IMAGES_PER_TURN = 1;
 
 	private async executeReadImage(input: Record<string, unknown>): Promise<ToolResultContent> {
 		const path = typeof input.path === "string" ? input.path : "";

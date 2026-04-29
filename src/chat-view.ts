@@ -560,6 +560,16 @@ export class ChatView extends ItemView {
 		items[next]?.scrollIntoView({ block: "nearest" });
 	}
 
+	private openFilePicker(): void {
+		const allFiles = this.app.vault.getMarkdownFiles()
+			.sort((a, b) => b.stat.mtime - a.stat.mtime)
+			.slice(0, 20);
+		if (allFiles.length > 0) {
+			this.mentionStartPos = this.inputEl.selectionStart ?? this.inputEl.value.length;
+			this.showMentionPopup(allFiles);
+		}
+	}
+
 	private closeMentionPopup(): void {
 		if (this.mentionPopupEl) {
 			this.mentionPopupEl.remove();

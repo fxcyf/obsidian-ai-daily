@@ -61,6 +61,71 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
 	return btoa(binary);
 }
 
+const TARGET_BYTES = 300_000;
+const MAX_DIMENSION = 1200;
+const JPEG_QUALITY_START = 0.75;
+const JPEG_QUALITY_MIN = 0.4;
+
+function loadImage(buf: ArrayBuffer, mediaType: string): Promise<HTMLImageElement> {
+	return new Promise((resolve, reject) => {
+		const blob = new Blob([buf], { type: mediaType });
+		const url = URL.createObjectURL(blob);
+		const img = new Image();
+		img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+		img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("图片加载失败")); };
+		img.src = url;
+	});
+}
+
+function compressToJpeg(img: HTMLImageElement, maxDim: number, quality: number): string {
+	let w = img.naturalWidth;
+	let h = img.naturalHeight;
+	if (w > maxDim || h > maxDim) {
+		const scale = maxDim / Math.max(w, h);
+		w = Math.round(w * scale);
+		h = Math.round(h * scale);
+	}
+	const canvas = document.createElement("canvas");
+	canvas.width = w;
+	canvas.height = h;
+	const ctx = canvas.getContext("2d")!;
+	ctx.drawImage(img, 0, 0, w, h);
+	const dataUrl = canvas.toDataURL("image/jpeg", quality);
+	return dataUrl.split(",")[1];
+}
+
+async function compressImage(
+	buf: ArrayBuffer,
+	mediaType: string,
+): Promise<{ base64: string; mediaType: PreparedImage["mediaType"] }> {
+	const originalBase64 = arrayBufferToBase64(buf);
+	const originalBytes = Math.ceil(originalBase64.length * 3 / 4);
+
+	if (originalBytes <= TARGET_BYTES) {
+		return { base64: originalBase64, mediaType: mediaType as PreparedImage["mediaType"] };
+	}
+
+	if (mediaType === "image/gif") {
+		return { base64: originalBase64, mediaType: "image/gif" };
+	}
+
+	try {
+		const img = await loadImage(buf, mediaType);
+
+		let quality = JPEG_QUALITY_START;
+		let base64 = compressToJpeg(img, MAX_DIMENSION, quality);
+
+		while (Math.ceil(base64.length * 3 / 4) > TARGET_BYTES && quality > JPEG_QUALITY_MIN) {
+			quality -= 0.1;
+			base64 = compressToJpeg(img, MAX_DIMENSION, quality);
+		}
+
+		return { base64, mediaType: "image/jpeg" };
+	} catch {
+		return { base64: originalBase64, mediaType: mediaType as PreparedImage["mediaType"] };
+	}
+}
+
 export interface PrepareOptions {
 	maxImages?: number;
 	maxBytes?: number;
@@ -72,7 +137,7 @@ export async function prepareLocalImages(
 	opts?: PrepareOptions
 ): Promise<{ images: PreparedImage[]; skipped: SkippedImage[] }> {
 	const maxImages = opts?.maxImages ?? 3;
-	const maxBytes = opts?.maxBytes ?? 3_145_728;
+	const maxBytes = opts?.maxBytes ?? 10_485_760;
 
 	const images: PreparedImage[] = [];
 	const skipped: SkippedImage[] = [];
@@ -114,10 +179,11 @@ export async function prepareLocalImages(
 				continue;
 			}
 
+			const compressed = await compressImage(buf, mediaType);
 			images.push({
 				ref,
-				mediaType,
-				base64: arrayBufferToBase64(buf),
+				mediaType: compressed.mediaType,
+				base64: compressed.base64,
 			});
 		} catch {
 			skipped.push({ ref, reason: "读取失败" });

@@ -311,7 +311,7 @@ export const VAULT_TOOLS = [
 	{
 		name: "read_image",
 		description:
-			"读取 vault 中的图片文件并返回图片内容。当 read_note 返回的笔记中包含图片引用（如 ![[photo.png]]）时，使用此工具查看图片内容。支持 png/jpg/jpeg/webp/gif 格式。注意：每轮对话最多读取 3 张图片，请优先选择最关键的图片读取，不要尝试一次读取所有图片。",
+			"读取 vault 中的图片文件并返回图片内容（自动压缩）。当 read_note 返回的笔记中包含图片引用（如 ![[photo.png]]）时，使用此工具查看图片内容。支持 png/jpg/jpeg/webp/gif 格式。每轮对话最多读取 5 张图片。",
 		input_schema: {
 			type: "object" as const,
 			properties: {

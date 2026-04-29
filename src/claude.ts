@@ -600,6 +600,7 @@ export class ClaudeClient {
 				: undefined;
 
 			const response = await this.callApi(onDelta, signal);
+			this.stripImageData();
 
 			let roundText = "";
 			for (const block of response.content) {
@@ -703,6 +704,34 @@ export class ClaudeClient {
 
 	clearHistory(): void {
 		this.messages = [];
+	}
+
+	private stripImageData(): void {
+		for (const msg of this.messages) {
+			if (typeof msg.content === "string" || !Array.isArray(msg.content)) continue;
+			for (let i = msg.content.length - 1; i >= 0; i--) {
+				const block = msg.content[i] as Record<string, unknown>;
+				if (block.type === "image") {
+					msg.content.splice(i, 1, {
+						type: "text",
+						text: "[图片已发送，已从上下文中移除以节省空间]",
+					} as unknown as ContentBlock);
+				} else if (block.type === "tool_result") {
+					const inner = block.content;
+					if (Array.isArray(inner)) {
+						block.content = (inner as Record<string, unknown>[])
+							.filter((b) => b.type !== "image")
+							.map((b) => {
+								if (b.type === "text" && typeof b.text === "string") return b;
+								return b;
+							});
+						if ((block.content as unknown[]).length === 0) {
+							block.content = "[图片已发送，已从上下文中移除以节省空间]";
+						}
+					}
+				}
+			}
+		}
 	}
 
 	private async maybeCompressHistory(): Promise<void> {

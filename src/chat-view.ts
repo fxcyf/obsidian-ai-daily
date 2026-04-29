@@ -1016,14 +1016,15 @@ export class ChatView extends ItemView {
 			};
 
 			const imageResolverFn = this.plugin.settings.enableLocalImages
-				? async (toolResultText: string): Promise<PreparedImage[]> => {
+				? async (toolResultText: string) => {
 						const refs = extractLocalImageRefs(toolResultText);
-						if (refs.length === 0) return [];
-						const { images } = await prepareLocalImages(this.app, refs, {
-							maxImages: this.plugin.settings.maxImagesPerMessage,
+						if (refs.length === 0) return { images: [], skippedCount: 0 };
+						const maxToolImages = Math.max(this.plugin.settings.maxImagesPerMessage, 20);
+						const { images, skipped } = await prepareLocalImages(this.app, refs, {
+							maxImages: maxToolImages,
 							maxBytes: this.plugin.settings.maxImageBytes,
 						});
-						return images;
+						return { images, skippedCount: skipped.length };
 					}
 				: undefined;
 

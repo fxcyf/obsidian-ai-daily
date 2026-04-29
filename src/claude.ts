@@ -333,7 +333,12 @@ export type ToolExecutor = (
 	input: Record<string, unknown>
 ) => Promise<string>;
 
-export type ImageResolver = (text: string) => Promise<PreparedImage[]>;
+export interface ImageResolverResult {
+	images: PreparedImage[];
+	skippedCount: number;
+}
+
+export type ImageResolver = (text: string) => Promise<ImageResolverResult>;
 
 export type StreamMode = "auto" | "real" | "typewriter" | "off";
 
@@ -625,7 +630,7 @@ export class ClaudeClient {
 
 					let content: ToolResultContent = result;
 					if (imageResolver) {
-						const resolved = await imageResolver(result);
+						const { images: resolved, skippedCount } = await imageResolver(result);
 						if (resolved.length > 0) {
 							const blocks: { type: string; [key: string]: unknown }[] = [];
 							for (const img of resolved) {
@@ -638,7 +643,11 @@ export class ClaudeClient {
 									},
 								});
 							}
-							blocks.push({ type: "text", text: result });
+							let text = result;
+							if (skippedCount > 0) {
+								text += `\n\n[注意: 还有 ${skippedCount} 张图片因大小或数量限制未能加载]`;
+							}
+							blocks.push({ type: "text", text });
 							content = blocks;
 						}
 					}

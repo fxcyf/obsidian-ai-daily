@@ -314,16 +314,14 @@ export class ChatView extends ItemView {
 			attr: { placeholder: "问点什么… @ 引用笔记，/ 选择模板", rows: "1" },
 		});
 
-		if (!Platform.isMobile) {
-			const attachBtn = inputRow.createEl("button", {
-				cls: "ai-daily-attach-btn",
-				attr: { "aria-label": "添加笔记" },
-			});
-			setIcon(attachBtn, "paperclip");
-			attachBtn.addEventListener("click", () => {
-				this.openFilePicker();
-			});
-		}
+		const attachBtn = inputRow.createEl("button", {
+			cls: "ai-daily-attach-btn",
+			attr: { "aria-label": "添加笔记" },
+		});
+		setIcon(attachBtn, "paperclip");
+		attachBtn.addEventListener("click", () => {
+			this.openFilePicker();
+		});
 
 		this.sendBtn = inputRow.createEl("button", {
 			cls: "ai-daily-send-btn",
@@ -890,6 +888,11 @@ export class ChatView extends ItemView {
 			return;
 		}
 
+		const attachedContent = await this.consumeAttachedFiles();
+		const userMessage = attachedContent
+			? attachedContent + "\n\n" + text
+			: text;
+
 		this.addMessage("user", text);
 
 		if (!this.sessionId) {
@@ -1025,7 +1028,7 @@ export class ChatView extends ItemView {
 				: undefined;
 
 			const reply = await this.client!.chat(
-				text,
+				userMessage,
 				(name, input) => {
 					if (name === "web_fetch") return this.webTools.execute(name, input);
 					return this.vaultTools!.execute(name, input);

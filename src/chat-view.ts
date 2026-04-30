@@ -200,6 +200,7 @@ export class ChatView extends ItemView {
 	private attachBarEl: HTMLElement | null = null;
 	private mentionPopupEl: HTMLElement | null = null;
 	private mentionStartPos: number | null = null;
+	private mentionCursorPos: number | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AIDailyChat) {
 		super(leaf);
@@ -489,6 +490,7 @@ export class ChatView extends ItemView {
 		const atMatch = before.match(/@([^\s@]*)$/);
 		if (atMatch) {
 			this.mentionStartPos = cursor - atMatch[1].length - 1;
+			this.mentionCursorPos = cursor;
 			const query = atMatch[1].toLowerCase();
 			const allFiles = this.app.vault.getMarkdownFiles();
 			const filtered = query
@@ -511,7 +513,10 @@ export class ChatView extends ItemView {
 	}
 
 	private showMentionPopup(files: TFile[]): void {
-		this.closeMentionPopup();
+		if (this.mentionPopupEl) {
+			this.mentionPopupEl.remove();
+			this.mentionPopupEl = null;
+		}
 		const popup = this.inputAreaEl.createDiv({ cls: "ai-daily-mention-popup" });
 		this.mentionPopupEl = popup;
 
@@ -542,11 +547,13 @@ export class ChatView extends ItemView {
 			this.attachedFiles.push(file);
 			this.renderAttachBar();
 		}
-		const value = this.inputEl.value;
-		const start = this.mentionStartPos ?? 0;
-		const cursor = this.inputEl.selectionStart ?? value.length;
-		this.inputEl.value = value.slice(0, start) + value.slice(cursor);
-		this.inputEl.selectionStart = this.inputEl.selectionEnd = start;
+		if (this.mentionStartPos !== null) {
+			const value = this.inputEl.value;
+			const start = this.mentionStartPos;
+			const end = this.mentionCursorPos ?? this.inputEl.selectionStart ?? value.length;
+			this.inputEl.value = value.slice(0, start) + value.slice(end);
+			this.inputEl.selectionStart = this.inputEl.selectionEnd = start;
+		}
 		this.closeMentionPopup();
 		this.inputEl.focus();
 	}
@@ -566,7 +573,8 @@ export class ChatView extends ItemView {
 			.sort((a, b) => b.stat.mtime - a.stat.mtime)
 			.slice(0, 20);
 		if (allFiles.length > 0) {
-			this.mentionStartPos = this.inputEl.selectionStart ?? this.inputEl.value.length;
+			this.mentionStartPos = null;
+			this.mentionCursorPos = null;
 			this.showMentionPopup(allFiles);
 		}
 	}
@@ -577,6 +585,7 @@ export class ChatView extends ItemView {
 			this.mentionPopupEl = null;
 		}
 		this.mentionStartPos = null;
+		this.mentionCursorPos = null;
 	}
 
 	private renderAttachBar(): void {

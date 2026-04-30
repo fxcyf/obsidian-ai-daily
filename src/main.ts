@@ -8,7 +8,7 @@ import { ChatView, VIEW_TYPE } from "./chat-view";
 import { generateFeed, checkExistingFeed } from "./feed-generator";
 import { DEFAULT_FEEDS } from "./feeds";
 import { AutoTagger } from "./auto-tagger";
-import { findUnorganizedNotes, MAX_NOTES_PER_RUN, wikiHealthCheck, formatHealthCheckReport } from "./knowledge-agent";
+import { findUnorganizedNotes, MAX_NOTES_PER_RUN, wikiHealthCheck, formatHealthCheckReport, hasFixableIssues } from "./knowledge-agent";
 import { isClaudeCodeAvailable } from "./claude-code";
 
 class FeedConfirmModal extends Modal {
@@ -261,7 +261,7 @@ export default class AIDailyChat extends Plugin {
 			const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
 			if (!leaf) return;
 			const view = leaf.view as ChatView;
-			view.addHealthCheckReport(report);
+			view.addHealthCheckReport(report, hasFixableIssues(result) ? result : undefined);
 		} catch (e) {
 			notice.hide();
 			const msg = e instanceof Error ? e.message : String(e);

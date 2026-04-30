@@ -208,6 +208,63 @@ export function computeHealthScore(r: HealthCheckResult): number {
 	return Math.max(0, Math.round(score));
 }
 
+export function hasFixableIssues(r: HealthCheckResult): boolean {
+	return r.missingFrontmatter.length > 0
+		|| r.orphanNotes.length > 0
+		|| r.emptyNotes.length > 0
+		|| r.brokenLinks.length > 0;
+}
+
+export function prepareHealthFix(
+	result: HealthCheckResult,
+	knowledgeFolders: string[]
+): { systemPrompt: string; userMessage: string } {
+	const systemPrompt = `你是一个知识库维护 Agent。你的任务是根据健康检查报告修复知识库中的问题。
+
+你可以使用工具来读取、编辑、删除笔记和更新 frontmatter。
+
+修复规则：
+1. **缺少 tags/summary 的笔记**：用 read_note 读取内容，分析后用 update_frontmatter 补充合适的 tags 和 summary
+   - tags 应简洁、概念化，优先复用已有 tag
+   - summary 用中文，1-2 句话概括笔记内容
+2. **孤岛笔记（无入链）**：用 read_note 读取内容，用 search_vault 找相关笔记，在相关笔记中用 edit_note 添加 [[wiki-link]] 指向孤岛笔记
+3. **空笔记**：用 delete_note 删除空笔记
+4. **断链**：用 read_note 检查源笔记中的断链，如果能找到正确目标则修复链接，否则移除断链
+
+知识库文件夹: ${knowledgeFolders.join("、")}
+
+重要约束：
+- 每个操作前先 read_note 确认当前内容
+- tags 优先复用已有 tag，保持一致性
+- 编辑笔记时保持原有结构和格式
+- 完成后简要汇报修复了哪些问题`;
+
+	const issues: string[] = [];
+	if (result.missingFrontmatter.length > 0) {
+		const items = result.missingFrontmatter.slice(0, 30).map(
+			(e) => `- ${e.path} — 缺少: ${e.missing.join(", ")}`
+		);
+		issues.push(`### 缺少 Frontmatter (${result.missingFrontmatter.length} 篇)\n${items.join("\n")}`);
+	}
+	if (result.orphanNotes.length > 0) {
+		const items = result.orphanNotes.slice(0, 30).map((p) => `- ${p}`);
+		issues.push(`### 孤岛笔记 (${result.orphanNotes.length} 篇)\n${items.join("\n")}`);
+	}
+	if (result.emptyNotes.length > 0) {
+		issues.push(`### 空笔记 (${result.emptyNotes.length} 篇)\n${result.emptyNotes.map((p) => `- ${p}`).join("\n")}`);
+	}
+	if (result.brokenLinks.length > 0) {
+		const items = result.brokenLinks.slice(0, 20).map(
+			(l) => `- ${l.source} → ${l.target}`
+		);
+		issues.push(`### 断链 (${result.brokenLinks.length} 条)\n${items.join("\n")}`);
+	}
+
+	const userMessage = `请根据以下健康检查报告修复知识库问题：\n\n${issues.join("\n\n")}\n\n请逐项修复，完成后汇报结果。`;
+
+	return { systemPrompt, userMessage };
+}
+
 function pathToName(path: string): string {
 	const base = path.split("/").pop() || path;
 	return base.replace(/\.md$/, "");

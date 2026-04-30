@@ -21,7 +21,7 @@ import { WebTools } from "./web-tools";
 import type { PromptTemplate } from "./settings";
 import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
 import type { PreparedImage } from "./image-tools";
-import { distillConversation, prepareDistillation } from "./knowledge-agent";
+import { distillConversation, prepareDistillation, prepareHealthFix, type HealthCheckResult } from "./knowledge-agent";
 import { isClaudeCodeAvailable, spawnClaudeCode, getMcpServerPath, type UndoData } from "./claude-code";
 import {
 	newSessionId,
@@ -1916,8 +1916,190 @@ export class ChatView extends ItemView {
 		}
 	}
 
-	addHealthCheckReport(report: string): void {
+	addHealthCheckReport(report: string, fixableResult?: HealthCheckResult): void {
 		this.addMessage("assistant", report);
+		if (fixableResult) {
+			const bar = this.messagesEl.createDiv({ cls: "ai-daily-health-fix-bar" });
+			const btn = bar.createEl("button", {
+				cls: "ai-daily-health-fix-btn",
+				text: "一键修复",
+			});
+			setIcon(btn.createSpan({ cls: "ai-daily-health-fix-icon" }), "wrench");
+			btn.addEventListener("click", () => {
+				bar.remove();
+				this.handleHealthFix(fixableResult);
+			});
+		}
+	}
+
+	private async handleHealthFix(result: HealthCheckResult): Promise<void> {
+		if (this.isLoading) {
+			new Notice("请等待当前操作完成", 2000);
+			return;
+		}
+		if (!this.plugin.settings.apiKey) {
+			new Notice("请先在插件设置中配置 API Key", 3000);
+			return;
+		}
+
+		this.isLoading = true;
+		this.setSendButtonState(true);
+
+		this.addMessage("user", "修复知识库问题");
+		if (!this.sessionId) {
+			this.sessionId = newSessionId();
+		}
+
+		const loadingEl = this.messagesEl.createDiv({ cls: "ai-daily-loading" });
+		loadingEl.createSpan({ text: "修复中" });
+		const dotsEl = loadingEl.createSpan({ cls: "ai-daily-loading-dots" });
+		dotsEl.createEl("span");
+		dotsEl.createEl("span");
+		dotsEl.createEl("span");
+
+		const useStream = this.plugin.settings.chatStreamMode !== "off";
+		let assistantEl: HTMLElement | null = null as HTMLElement | null;
+		let streamingRenderTimer: number | null = null;
+		let latestStreamingMarkdown = "";
+		let streamingRenderQueue = Promise.resolve();
+
+		const renderStreamingMarkdown = async (content: string) => {
+			if (!assistantEl) return;
+			assistantEl.empty();
+			await MarkdownRenderer.render(this.app, content, assistantEl, "", this.plugin);
+			this.scrollToBottomIfFollowing();
+		};
+		const scheduleStreamingMarkdown = (content: string) => {
+			latestStreamingMarkdown = content;
+			if (streamingRenderTimer !== null) return;
+			streamingRenderTimer = window.setTimeout(() => {
+				streamingRenderTimer = null;
+				const snapshot = latestStreamingMarkdown;
+				streamingRenderQueue = streamingRenderQueue.then(() =>
+					renderStreamingMarkdown(snapshot)
+				);
+			}, STREAM_MARKDOWN_RENDER_INTERVAL_MS);
+		};
+		const flushStreamingMarkdown = async (content: string) => {
+			latestStreamingMarkdown = content;
+			if (streamingRenderTimer !== null) {
+				window.clearTimeout(streamingRenderTimer);
+				streamingRenderTimer = null;
+			}
+			await streamingRenderQueue;
+			await renderStreamingMarkdown(content);
+		};
+		const cancelStreamingMarkdown = () => {
+			if (streamingRenderTimer !== null) {
+				window.clearTimeout(streamingRenderTimer);
+				streamingRenderTimer = null;
+			}
+		};
+
+		try {
+			const { systemPrompt, userMessage } = prepareHealthFix(
+				result, this.plugin.settings.knowledgeFolders
+			);
+
+			const fixClient = new ClaudeClient(
+				this.plugin.settings.apiKey,
+				this.plugin.settings.model,
+				systemPrompt,
+				{ streamMode: this.plugin.settings.chatStreamMode, enableWebSearch: false }
+			);
+
+			const vaultTools = new VaultTools(this.app, this.plugin.settings.knowledgeFolders);
+
+			let toolCallsEl: HTMLElement | null = null;
+			let toolCallsSummaryEl: HTMLElement | null = null;
+			const toolCallEls = new Map<string, HTMLElement>();
+			let toolCallCounter = 0;
+			let toolTotal = 0;
+			let toolRunning = 0;
+
+			const onToolCall = (name: string, input: Record<string, unknown>, status: "start" | "done" | "error") => {
+				if (status === "start") {
+					loadingEl.remove();
+					if (!toolCallsEl) {
+						const wrapper = this.messagesEl.createDiv({ cls: "ai-daily-tool-calls" });
+						const detailsEl = wrapper.createEl("details", { cls: "ai-daily-tool-calls-details" });
+						toolCallsSummaryEl = detailsEl.createEl("summary", { cls: "ai-daily-tool-calls-summary" });
+						toolCallsEl = detailsEl.createDiv({ cls: "ai-daily-tool-calls-list" });
+					}
+					toolTotal++;
+					toolRunning++;
+					const key = `${name}-${toolCallCounter++}`;
+					const el = toolCallsEl.createDiv({ cls: "ai-daily-tool-call ai-daily-tool-call-running" });
+					const iconSpan = el.createSpan({ cls: "ai-daily-tool-call-icon" });
+					setIcon(iconSpan, "loader");
+					el.createSpan({ cls: "ai-daily-tool-call-text", text: toolCallSummary(name, input) });
+					toolCallEls.set(key, el);
+					this.updateToolCallsSummary(toolCallsSummaryEl!, toolTotal, toolRunning);
+					this.scrollToBottomIfFollowing();
+				} else {
+					const lastKey = `${name}-${toolCallCounter - 1}`;
+					const el = toolCallEls.get(lastKey);
+					if (el) {
+						el.removeClass("ai-daily-tool-call-running");
+						el.addClass(status === "done" ? "ai-daily-tool-call-done" : "ai-daily-tool-call-error");
+						const iconSpan = el.querySelector(".ai-daily-tool-call-icon");
+						if (iconSpan) {
+							iconSpan.empty();
+							setIcon(iconSpan as HTMLElement, status === "done" ? "check" : "x");
+						}
+						toolRunning--;
+						this.updateToolCallsSummary(toolCallsSummaryEl!, toolTotal, toolRunning);
+					}
+				}
+			};
+
+			const reply = await fixClient.chat(
+				userMessage,
+				(name, input) => vaultTools.execute(name, input),
+				useStream
+					? (_delta, accumulated) => {
+							loadingEl.remove();
+							if (!assistantEl) {
+								assistantEl = this.messagesEl.createDiv({
+									cls: "ai-daily-msg ai-daily-msg-assistant ai-daily-msg-streaming",
+								});
+							}
+							scheduleStreamingMarkdown(accumulated);
+						}
+					: undefined,
+				undefined,
+				onToolCall
+			);
+
+			loadingEl.remove();
+
+			if (useStream && assistantEl) {
+				await flushStreamingMarkdown(reply || "*(修复完成)*");
+				this.postProcessAssistantEl(assistantEl);
+				assistantEl.removeClass("ai-daily-msg-streaming");
+				this.messages.push({ role: "assistant", content: reply || "*(修复完成)*" });
+			} else if (reply) {
+				this.addMessage("assistant", reply);
+			}
+			this.renderUndoBar();
+			this.scrollToBottomIfFollowing();
+			await this.persistSession();
+			new Notice("知识库修复完成", 3000);
+		} catch (e) {
+			cancelStreamingMarkdown();
+			loadingEl.remove();
+			if (assistantEl && latestStreamingMarkdown) {
+				assistantEl.removeClass("ai-daily-msg-streaming");
+				this.messages.push({ role: "assistant", content: latestStreamingMarkdown });
+			} else if (assistantEl) {
+				assistantEl.remove();
+			}
+			const msg = e instanceof Error ? e.message : String(e);
+			this.addMessage("assistant", `修复失败: ${msg}`);
+		} finally {
+			this.isLoading = false;
+			this.setSendButtonState(false);
+		}
 	}
 
 	private clearChat(): void {

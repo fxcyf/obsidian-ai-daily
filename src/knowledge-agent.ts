@@ -186,19 +186,15 @@ function pathToName(path: string): string {
 	return base.replace(/\.md$/, "");
 }
 
-export async function distillConversation(
+export async function prepareDistillation(
 	app: App,
 	messages: { role: string; content: string }[],
 	opts: {
-		apiKey: string;
-		model: string;
 		knowledgeFolders: string[];
 		targetFolder: string;
 	}
-): Promise<string> {
-	const vaultTools = new VaultTools(app, opts.knowledgeFolders);
+): Promise<{ systemPrompt: string; userMessage: string }> {
 	const allFolders = opts.knowledgeFolders.join("、");
-
 	const existingStructure = await getWikiStructureSummary(app, opts.targetFolder);
 
 	const systemPrompt = `你是一个知识蒸馏 Agent。你的任务是从对话历史中提取有价值的事实性知识，保存为 Wiki 条目。
@@ -242,6 +238,25 @@ ${existingStructure}
 ${conversationText.slice(0, 12000)}
 
 完成后，请简要说明你提取了哪些知识、创建或更新了哪些条目。`;
+
+	return { systemPrompt, userMessage };
+}
+
+export async function distillConversation(
+	app: App,
+	messages: { role: string; content: string }[],
+	opts: {
+		apiKey: string;
+		model: string;
+		knowledgeFolders: string[];
+		targetFolder: string;
+	}
+): Promise<string> {
+	const vaultTools = new VaultTools(app, opts.knowledgeFolders);
+	const { systemPrompt, userMessage } = await prepareDistillation(app, messages, {
+		knowledgeFolders: opts.knowledgeFolders,
+		targetFolder: opts.targetFolder,
+	});
 
 	const client = new ClaudeClient(opts.apiKey, opts.model, systemPrompt, {
 		streamMode: "off",

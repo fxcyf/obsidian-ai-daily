@@ -22,14 +22,26 @@ export interface HealthCheckResult {
 	duplicateTitles: { title: string; paths: string[] }[];
 	brokenLinks: { source: string; target: string }[];
 	totalNotes: number;
+	searchedFolders: string[];
+	existingFolders: string[];
 }
 
 export async function wikiHealthCheck(
 	app: App,
 	folders: string[]
 ): Promise<HealthCheckResult> {
+	const normalizedFolders = folders.map((f) => f.replace(/\/+$/, "")).filter(Boolean);
+
+	const allFolders = new Set<string>();
+	for (const f of app.vault.getAllLoadedFiles()) {
+		if (f.path.includes("/")) {
+			allFolders.add(f.path.split("/")[0]);
+		}
+	}
+	const existingFolders = normalizedFolders.filter((dir) => allFolders.has(dir));
+
 	const files = app.vault.getMarkdownFiles().filter((f) =>
-		folders.some((dir) => f.path.startsWith(dir + "/") || f.path === dir)
+		normalizedFolders.some((dir) => f.path.startsWith(dir + "/"))
 	);
 
 	const result: HealthCheckResult = {
@@ -39,6 +51,8 @@ export async function wikiHealthCheck(
 		duplicateTitles: [],
 		brokenLinks: [],
 		totalNotes: files.length,
+		searchedFolders: normalizedFolders,
+		existingFolders,
 	};
 
 	const titleMap = new Map<string, string[]>();
@@ -111,6 +125,19 @@ export function formatHealthCheckReport(result: HealthCheckResult): string {
 
 	sections.push(`## Wiki 健康检查报告\n`);
 	sections.push(`**总计**: ${result.totalNotes} 篇笔记 | **健康分数**: ${score}/100\n`);
+
+	if (result.totalNotes === 0) {
+		const missing = result.searchedFolders.filter((f) => !result.existingFolders.includes(f));
+		if (result.searchedFolders.length === 0) {
+			sections.push("⚠️ 未配置知识库文件夹。请在插件设置中配置「知识库文件夹」。");
+		} else if (missing.length > 0) {
+			sections.push(`⚠️ 以下文件夹在 Vault 中不存在: ${missing.join("、")}`);
+			sections.push(`当前搜索范围: ${result.searchedFolders.join("、")}。请在插件设置中确认文件夹名称正确。`);
+		} else {
+			sections.push(`搜索范围: ${result.searchedFolders.join("、")}（文件夹存在但为空）`);
+		}
+		return sections.join("\n\n");
+	}
 
 	if (result.emptyNotes.length > 0) {
 		sections.push(`### ⚠️ 空笔记 (${result.emptyNotes.length})`);

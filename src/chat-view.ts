@@ -12,6 +12,7 @@ import {
 	Modal,
 	App,
 	TFile,
+	Menu,
 } from "obsidian";
 import type AIDailyChat from "./main";
 import { ClaudeClient, estimateTextTokens, type ToolResultContent } from "./claude";
@@ -274,43 +275,37 @@ export class ChatView extends ItemView {
 			spacer.style.flex = "1";
 		}
 
-		const feedBtn = this.headerEl.createDiv({
-			cls: "ai-daily-header-btn ai-daily-header-btn-primary",
-			attr: { "aria-label": "生成 Feed", title: "生成 Feed" },
-		});
-		setIcon(feedBtn, "rss");
-		feedBtn.addEventListener("click", () => this.plugin.generateFeed());
-
-		const historyBtn = this.headerEl.createDiv({
-			cls: "ai-daily-header-btn",
-			attr: { "aria-label": "历史", title: "历史" },
-		});
-		setIcon(historyBtn, "history");
-		historyBtn.addEventListener("click", () => this.openHistoryPanel());
-
-		const distillBtn = this.headerEl.createDiv({
-			cls: "ai-daily-header-btn",
-			attr: { "aria-label": "蒸馏知识", title: "蒸馏知识" },
-		});
-		setIcon(distillBtn, "sparkles");
-		distillBtn.addEventListener("click", () => {
-			this.inputEl.value = "/distill";
-			this.handleSend();
-		});
-
-		const healthBtn = this.headerEl.createDiv({
-			cls: "ai-daily-header-btn",
-			attr: { "aria-label": "Wiki 健康检查", title: "Wiki 健康检查" },
-		});
-		setIcon(healthBtn, "heart-pulse");
-		healthBtn.addEventListener("click", () => this.plugin.runWikiHealthCheck());
-
 		const newChatBtn = this.headerEl.createDiv({
 			cls: "ai-daily-header-btn",
 			attr: { "aria-label": "新对话", title: "新对话" },
 		});
 		setIcon(newChatBtn, "plus");
 		newChatBtn.addEventListener("click", () => this.clearChat());
+
+		const moreBtn = this.headerEl.createDiv({
+			cls: "ai-daily-header-btn",
+			attr: { "aria-label": "更多", title: "更多" },
+		});
+		setIcon(moreBtn, "more-vertical");
+		moreBtn.addEventListener("click", (e) => {
+			const menu = new Menu();
+			menu.addItem((item) =>
+				item.setTitle("生成 Feed").setIcon("rss").onClick(() => this.plugin.generateFeed())
+			);
+			menu.addItem((item) =>
+				item.setTitle("历史").setIcon("history").onClick(() => this.openHistoryPanel())
+			);
+			menu.addItem((item) =>
+				item.setTitle("蒸馏知识").setIcon("sparkles").onClick(() => {
+					this.inputEl.value = "/distill";
+					this.handleSend();
+				})
+			);
+			menu.addItem((item) =>
+				item.setTitle("Wiki 健康检查").setIcon("heart-pulse").onClick(() => this.plugin.runWikiHealthCheck())
+			);
+			menu.showAtMouseEvent(e);
+		});
 	}
 
 	private buildInputArea(container: HTMLElement): void {

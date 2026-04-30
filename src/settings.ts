@@ -569,6 +569,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 
 		const CAT_LABELS: Record<string, string> = {
 			research: "研究",
+			engineering: "工程",
 			community: "社区",
 			tools: "工具",
 			newsletter: "周刊",
@@ -667,8 +668,8 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 		catGroup.createEl("label", { text: "分类" });
 		const catSelect = catGroup.createEl("select");
 		for (const [val, label] of [
-			["research", "研究"], ["community", "社区"], ["tools", "工具"],
-			["newsletter", "周刊"], ["industry", "行业"], ["news", "新闻"],
+			["research", "研究"], ["engineering", "工程"], ["community", "社区"],
+			["tools", "工具"], ["newsletter", "周刊"], ["industry", "行业"], ["news", "新闻"],
 		]) {
 			const opt = catSelect.createEl("option", { value: val, text: label });
 			if (source.category === val) opt.selected = true;

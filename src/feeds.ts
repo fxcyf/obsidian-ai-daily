@@ -36,6 +36,13 @@ export const DEFAULT_FEEDS: FeedSource[] = [
 	// Research (kept but fewer — avoid flooding with long-tail papers)
 	{ name: "ArXiv CS.AI", url: "https://rss.arxiv.org/rss/cs.AI", category: "research" },
 	{ name: "ArXiv CS.CL (NLP)", url: "https://rss.arxiv.org/rss/cs.CL", category: "research" },
+	// Engineering blogs — practical experience & deep dives
+	{ name: "Simon Willison", url: "https://simonwillison.net/atom/everything/", category: "engineering" },
+	{ name: "Chip Huyen", url: "https://huyenchip.com/feed.xml", category: "engineering" },
+	{ name: "Eugene Yan", url: "https://eugeneyan.com/rss/", category: "engineering" },
+	{ name: "Lil'Log (Lilian Weng)", url: "https://lilianweng.github.io/index.xml", category: "engineering" },
+	{ name: "Jay Alammar", url: "https://jalammar.github.io/feed.xml", category: "engineering" },
+	{ name: "Sebastian Raschka", url: "https://sebastianraschka.com/rss_feed.xml", category: "engineering" },
 	// Community — with social signals
 	{
 		name: "Hacker News",
@@ -97,7 +104,8 @@ export const DEFAULT_FEEDS: FeedSource[] = [
 // ── Category weights ───────────────────────────────────────────────
 
 const CATEGORY_WEIGHT: Record<string, number> = {
-	research: 1.5,
+	research: 1.0,
+	engineering: 2.0,
 	tools: 1.5,
 	community: 1.8,
 	newsletter: 1.0,
@@ -129,6 +137,9 @@ const TECH_DEPTH = new RegExp(
 		"benchmark|ablation|sota|state.of.the.art|open.source|github" +
 		"|architecture|implementation|training|dataset|evaluation" +
 		"|framework|library|api|sdk|tutorial|how.to|code" +
+		"|production|deploy|scale|infra|pipeline|latency|throughput" +
+		"|lesson.learned|postmortem|case.study|best.practice|real.world" +
+		"|engineering|system.design|migration|optimization|monitoring" +
 	")\\b",
 	"gi"
 );

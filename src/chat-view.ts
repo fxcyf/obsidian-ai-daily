@@ -315,7 +315,8 @@ export class ChatView extends ItemView {
 			attr: { "aria-label": "添加笔记" },
 		});
 		setIcon(attachBtn, "paperclip");
-		attachBtn.addEventListener("click", () => {
+		attachBtn.addEventListener("pointerdown", (e) => {
+			e.preventDefault();
 			this.openFilePicker();
 		});
 
@@ -329,7 +330,8 @@ export class ChatView extends ItemView {
 		});
 		setIcon(this.sendBtn, "send");
 
-		this.sendBtn.addEventListener("click", () => {
+		this.sendBtn.addEventListener("pointerdown", (e) => {
+			e.preventDefault();
 			if (this.isLoading) {
 				this.handleStop();
 			} else {

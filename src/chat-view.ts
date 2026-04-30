@@ -310,11 +310,6 @@ export class ChatView extends ItemView {
 
 		const inputRow = this.inputAreaEl.createDiv({ cls: "ai-daily-input-row" });
 
-		this.inputEl = inputRow.createEl("textarea", {
-			cls: "ai-daily-input",
-			attr: { placeholder: "问点什么… @ 引用笔记，/ 选择模板", rows: "1" },
-		});
-
 		const attachBtn = inputRow.createEl("button", {
 			cls: "ai-daily-attach-btn",
 			attr: { "aria-label": "添加笔记" },
@@ -322,6 +317,11 @@ export class ChatView extends ItemView {
 		setIcon(attachBtn, "paperclip");
 		attachBtn.addEventListener("click", () => {
 			this.openFilePicker();
+		});
+
+		this.inputEl = inputRow.createEl("textarea", {
+			cls: "ai-daily-input",
+			attr: { placeholder: "问点什么… @ 引用笔记，/ 选择模板", rows: "1" },
 		});
 
 		this.sendBtn = inputRow.createEl("button", {

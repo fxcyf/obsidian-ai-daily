@@ -8,7 +8,7 @@ import { ChatView, VIEW_TYPE } from "./chat-view";
 import { generateFeed, checkExistingFeed } from "./feed-generator";
 import { DEFAULT_FEEDS } from "./feeds";
 import { AutoTagger } from "./auto-tagger";
-import { findUnorganizedNotes, MAX_NOTES_PER_RUN } from "./knowledge-agent";
+import { findUnorganizedNotes, MAX_NOTES_PER_RUN, wikiHealthCheck, formatHealthCheckReport } from "./knowledge-agent";
 import { isClaudeCodeAvailable } from "./claude-code";
 
 class FeedConfirmModal extends Modal {
@@ -106,6 +106,13 @@ export default class AIDailyChat extends Plugin {
 			id: "organize-knowledge",
 			name: "整理知识库",
 			callback: () => this.organizeKnowledge(),
+		});
+
+		// Command to health check wiki
+		this.addCommand({
+			id: "wiki-health-check",
+			name: "Wiki 健康检查",
+			callback: () => this.runWikiHealthCheck(),
 		});
 
 		// Settings tab
@@ -219,11 +226,13 @@ export default class AIDailyChat extends Plugin {
 			noteList,
 			"",
 			"整理流程：",
-			"1. 逐篇用 read_note 阅读笔记内容，提取核心观点和关键概念",
-			`2. 用 search_vault 在 ${targetFolder}/ 中搜索相关的已有条目`,
-			"3. 有相关条目 → edit_note 补充新信息；没有 → create_note 创建新条目",
-			"4. 新条目需包含 frontmatter（tags、summary）和指向原笔记的 wiki-link",
-			"5. 每篇整理完后用 update_frontmatter 标记 organized: true",
+			"1. 先用 list_notes 浏览目标文件夹的已有条目和结构",
+			"2. 逐篇用 read_note 阅读笔记内容，提取核心观点和关键概念",
+			`3. 用 search_vault 在 ${targetFolder}/ 中搜索相关的已有条目`,
+			"4. 有相关条目 → edit_note 补充新信息，保持原有结构；没有 → create_note 创建新条目",
+			"5. 新条目需包含 frontmatter（tags、summary）和指向原笔记的 wiki-link",
+			"6. 主动添加 [[wiki-link]] 关联相关条目，复用已有 tags 避免同义重复",
+			"7. 每篇整理完后用 update_frontmatter 标记 organized: true",
 			"",
 			"请逐篇处理，每篇完成后告诉我做了什么。",
 		].join("\n");
@@ -238,6 +247,25 @@ export default class AIDailyChat extends Plugin {
 			view.sendClaudeCodeMessage(message);
 		} else {
 			view.sendMessage(message);
+		}
+	}
+
+	async runWikiHealthCheck(): Promise<void> {
+		const notice = new Notice("正在检查知识库健康状态...", 0);
+		try {
+			const result = await wikiHealthCheck(this.app, this.settings.knowledgeFolders);
+			const report = formatHealthCheckReport(result);
+			notice.hide();
+
+			await this.activateView();
+			const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
+			if (!leaf) return;
+			const view = leaf.view as ChatView;
+			view.addHealthCheckReport(report);
+		} catch (e) {
+			notice.hide();
+			const msg = e instanceof Error ? e.message : String(e);
+			new Notice(`健康检查失败: ${msg}`, 5000);
 		}
 	}
 

@@ -91,7 +91,7 @@ rebase 发生冲突时：
 - `src/image-tools.test.ts` — image-tools 单测（extractLocalImageRefs）
 - `src/auto-tagger.ts` — 笔记自动标注（debounce + Claude API 生成 tags/summary + frontmatter 写入）
 - `src/auto-tagger.test.ts` — auto-tagger 单测（parseTaggingResponse）
-- `src/knowledge-agent.ts` — 知识整理辅助（findUnorganizedNotes 扫描 + distillConversation 对话蒸馏），整理流程通过聊天交互完成
+- `src/knowledge-agent.ts` — 知识整理辅助（findUnorganizedNotes 扫描 + distillConversation 对话蒸馏 + wikiHealthCheck 健康检查），蒸馏时自动维护 Wiki 组织结构（tag 复用、交叉引用、子文件夹归类）
 - `src/web-tools.ts` — Web 工具实现（web_fetch 网页抓取）
 - `src/settings.ts` — 插件设置（含 Feed 配置）
 - `src/feeds.ts` — 多源抓取（RSS/HN API/Reddit/GitHub Trending）、社交热度评分、时间衰减、爆发检测
@@ -101,7 +101,7 @@ rebase 发生冲突时：
 ## 版本管理
 
 - **每次 push 到远端之前，必须升级版本号**（方便在移动端验证更新是否生效）
-- 版本号需要同步更新三处：`manifest.json`、`package.json`、`src/chat-view.ts` 中的欢迎页标题
+- 版本号需要同步更新两处：`manifest.json`、`package.json`（欢迎页标题已改为动态读取 manifest.version）
 - 使用 patch 版本递增（如 0.2.1 → 0.2.2），除非是重大功能变更
 
 ## 注意事项

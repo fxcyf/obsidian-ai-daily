@@ -295,6 +295,13 @@ export class ChatView extends ItemView {
 		setIcon(distillBtn, "sparkles");
 		distillBtn.addEventListener("click", () => this.handleDistill());
 
+		const healthBtn = this.headerEl.createDiv({
+			cls: "ai-daily-header-btn",
+			attr: { "aria-label": "Wiki 健康检查", title: "Wiki 健康检查" },
+		});
+		setIcon(healthBtn, "heart-pulse");
+		healthBtn.addEventListener("click", () => this.plugin.runWikiHealthCheck());
+
 		const newChatBtn = this.headerEl.createDiv({
 			cls: "ai-daily-header-btn",
 			attr: { "aria-label": "新对话", title: "新对话" },
@@ -1239,6 +1246,7 @@ export class ChatView extends ItemView {
 			"回答用中文，简洁有深度。如果用户想保存洞察，用 append_to_note 工具写回笔记。",
 			"��回复中引用笔记时，请使用 [[笔记名]] 的 wiki-link 格式，以便用户可以直接点击跳转。",
 			"当用户提到某篇笔记时，先用 search_vault 搜索，找到后用 read_note 读取。",
+			"创建或编辑 Wiki 条目时，维护组织结构：复用已有 tags 避免同义重复，主动添加 [[wiki-link]] 关联相关条目，优先合并到已有条目而非创建重叠内容。",
 			knowledgeContext ? `## 最近的知识库笔记\n\n${knowledgeContext}` : "",
 		]
 			.filter(Boolean)
@@ -1725,6 +1733,10 @@ export class ChatView extends ItemView {
 		} finally {
 			this.isLoading = false;
 		}
+	}
+
+	addHealthCheckReport(report: string): void {
+		this.addMessage("assistant", report);
 	}
 
 	private clearChat(): void {

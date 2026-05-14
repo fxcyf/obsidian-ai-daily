@@ -1,5 +1,10 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-05-14 — Commit & Push 全流程测试（含 worktree）
+
+- **目的**：验证完整的 worktree 创建 → commit → rebase → merge → push → 清理流程
+- **结果**：流程正常（commit ID 见本条目提交）
+
 ## 2026-05-14 — Commit 流程测试
 
 - **目的**：验证 Claude Code 的完整 git commit 流程是否正常工作

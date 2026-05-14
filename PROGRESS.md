@@ -1,5 +1,10 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-05-14 — Commit 流程测试
+
+- **目的**：验证 Claude Code 的完整 git commit 流程是否正常工作
+- **结果**：基线测试 110 个全部通过，流程正常
+
 ## 2026-04-25 — 流式 Markdown 渲染与历史面板边界 (`6fda6f3`, `61dbc19`)
 
 - **问题**：真流式 + 打字机后，生成中仍用 `setText()` 展示 accumulated 文本，Markdown 只有结束后才渲染；

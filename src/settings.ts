@@ -45,6 +45,9 @@ export interface AIDailyChatSettings {
 	// Knowledge organizer settings
 	enableAutoDistill: boolean;
 	distillTargetFolder: string;
+	// WeRead settings
+	enableWeRead: boolean;
+	wereadApiKey: string;
 }
 
 export const DEFAULT_SETTINGS: AIDailyChatSettings = {
@@ -71,6 +74,8 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	autoTagPrompt: "",
 	enableAutoDistill: false,
 	distillTargetFolder: "Wiki",
+	enableWeRead: false,
+	wereadApiKey: "",
 };
 
 export class AIDailyChatSettingTab extends PluginSettingTab {
@@ -202,6 +207,49 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+
+		// ── WeRead settings ────────────────────────────────────
+
+		containerEl.createEl("h3", { text: "微信读书" });
+
+		new Setting(containerEl)
+			.setName("启用微信读书")
+			.setDesc(
+				"启用后 Claude 可以访问你的微信读书数据（书架、笔记、划线、阅读统计等）"
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enableWeRead)
+					.onChange(async (value) => {
+						this.plugin.settings.enableWeRead = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("WeRead API Key")
+			.setDesc("微信读书 API Key，格式 wrk-xxxxxxxx，在微信读书官网获取")
+			.addText((text) => {
+				text
+					.setPlaceholder("wrk-...")
+					.setValue(this.plugin.settings.wereadApiKey)
+					.onChange(async (value) => {
+						this.plugin.settings.wereadApiKey = value;
+						await this.plugin.saveSettings();
+					});
+				text.inputEl.type = "password";
+				text.inputEl.autocomplete = "off";
+			})
+			.addExtraButton((btn) => {
+				btn.setIcon("eye-off").setTooltip("显示/隐藏 API Key").onClick(() => {
+					const setting = btn.extraSettingsEl.closest(".setting-item");
+					const input = setting?.querySelector("input") as HTMLInputElement | null;
+					if (!input) return;
+					const hidden = input.type === "password";
+					input.type = hidden ? "text" : "password";
+					btn.setIcon(hidden ? "eye" : "eye-off");
+				});
+			});
 
 		new Setting(containerEl)
 			.setName("自动摘要阈值（估算 tokens）")

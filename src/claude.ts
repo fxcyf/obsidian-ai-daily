@@ -104,6 +104,23 @@ const WEB_FETCH_TOOL = {
 	},
 };
 
+const WEREAD_TOOL = {
+	name: "weread_api",
+	description:
+		"调用微信读书 API。搜索书籍、获取书架、查看笔记划线、书评、阅读统计、推荐等。通过 api_name 指定接口，其余参数平铺传入。",
+	input_schema: {
+		type: "object" as const,
+		properties: {
+			api_name: {
+				type: "string",
+				description: "API 路径，如 /store/search, /shelf/sync, /user/notebooks, /book/bookmarklist, /readdata/detail 等",
+			},
+		},
+		required: ["api_name"],
+		additionalProperties: true,
+	},
+};
+
 export const VAULT_TOOLS = [
 	{
 		name: "read_note",
@@ -460,10 +477,13 @@ export async function callClaudeSimple(options: SimpleCallOptions): Promise<stri
 
 // ── Client ──────────────────────────────────────────────────────────
 
-export function buildToolsArray(enableWebSearch: boolean): Record<string, unknown>[] {
+export function buildToolsArray(enableWebSearch: boolean, enableWeRead: boolean = false): Record<string, unknown>[] {
 	const tools: Record<string, unknown>[] = [...VAULT_TOOLS];
 	if (enableWebSearch) {
 		tools.push(WEB_SEARCH_TOOL, WEB_FETCH_TOOL);
+	}
+	if (enableWeRead) {
+		tools.push(WEREAD_TOOL);
 	}
 	return tools;
 }
@@ -471,6 +491,7 @@ export function buildToolsArray(enableWebSearch: boolean): Record<string, unknow
 export interface ClaudeClientOptions {
 	streamMode?: StreamMode;
 	enableWebSearch?: boolean;
+	enableWeRead?: boolean;
 	compressThresholdEst?: number;
 	compressKeepMessages?: number;
 	onCompress?: (detail: string) => void;
@@ -484,6 +505,7 @@ export class ClaudeClient {
 	private systemPrompt: string;
 	private streamMode: StreamMode;
 	private enableWebSearch: boolean;
+	private enableWeRead: boolean;
 	private compressThresholdEst: number;
 	private compressKeepMessages: number;
 	private onCompress?: (detail: string) => void;
@@ -501,6 +523,7 @@ export class ClaudeClient {
 		this.systemPrompt = systemPrompt;
 		this.streamMode = options?.streamMode ?? "auto";
 		this.enableWebSearch = options?.enableWebSearch ?? false;
+		this.enableWeRead = options?.enableWeRead ?? false;
 		this.compressThresholdEst =
 			options?.compressThresholdEst ?? 90_000;
 		this.compressKeepMessages = Math.max(
@@ -864,7 +887,7 @@ export class ClaudeClient {
 			model: this.model,
 			max_tokens: MAX_TOKENS,
 			system: this.systemPrompt,
-			tools: buildToolsArray(this.enableWebSearch),
+			tools: buildToolsArray(this.enableWebSearch, this.enableWeRead),
 			messages: this.messages,
 		};
 	}

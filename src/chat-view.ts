@@ -18,6 +18,8 @@ import type AIDailyChat from "./main";
 import { ClaudeClient, estimateTextTokens, type ToolResultContent } from "./claude";
 import { VaultTools, type UndoEntry } from "./vault-tools";
 import { WebTools } from "./web-tools";
+import { WeReadTools } from "./weread-tools";
+import { WEREAD_SYSTEM_PROMPT, buildWeReadClaudeCodePrompt } from "./weread-prompts";
 import type { PromptTemplate } from "./settings";
 import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
 import type { PreparedImage } from "./image-tools";
@@ -57,6 +59,7 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
 	read_image: "读取图片",
 	web_search: "网络搜索",
 	web_fetch: "抓取网页",
+	weread_api: "微信读书",
 };
 
 function normalizeToolName(raw: string): string {
@@ -185,6 +188,7 @@ export class ChatView extends ItemView {
 	private client: ClaudeClient | null = null;
 	private vaultTools: VaultTools | null = null;
 	private webTools: WebTools = new WebTools();
+	private wereadTools: WeReadTools | null = null;
 	private messagesEl!: HTMLElement;
 	private inputAreaEl!: HTMLElement;
 	private inputEl!: HTMLTextAreaElement;
@@ -1056,6 +1060,7 @@ export class ChatView extends ItemView {
 				async (name, input) => {
 					if (name === "web_fetch") return this.webTools.execute(name, input);
 					if (name === "read_image") return this.executeReadImage(input);
+					if (name === "weread_api" && this.wereadTools) return this.wereadTools.execute(name, input);
 					return this.vaultTools!.execute(name, input);
 				},
 				useStream
@@ -1165,6 +1170,10 @@ export class ChatView extends ItemView {
 				"回答用中文，简洁有深度。引用笔记时使用 [[笔记名]] wiki-link 格式。",
 			);
 
+			if (this.plugin.settings.enableWeRead && this.plugin.settings.wereadApiKey) {
+				parts.push("", buildWeReadClaudeCodePrompt(this.plugin.settings.wereadApiKey));
+			}
+
 			if (this.messages.length > 1) {
 				const history = this.messages.slice(0, -1);
 				const summary = history.map((m) =>
@@ -1233,9 +1242,14 @@ export class ChatView extends ItemView {
 			chatStreamMode,
 			chatCompressThresholdEst,
 			enableWebSearch,
+			enableWeRead,
+			wereadApiKey,
 		} = this.plugin.settings;
 
 		this.vaultTools = new VaultTools(this.app, knowledgeFolders);
+
+		const weReadActive = enableWeRead && !!wereadApiKey;
+		this.wereadTools = weReadActive ? new WeReadTools(wereadApiKey) : null;
 
 		const knowledgeContext = await this.vaultTools.loadKnowledgeContext(5);
 
@@ -1248,6 +1262,7 @@ export class ChatView extends ItemView {
 			enableWebSearch
 				? "你还可以使用 web_search 搜索互联网获取最新信息，用 web_fetch 抓取网页全文阅读。当用户提问涉及最新动态、你不确定的事实、或需要外部资料时，主动使用联网工具。"
 				: "",
+			weReadActive ? WEREAD_SYSTEM_PROMPT : "",
 			"回答用中文，简洁有深度。如果用户想保存洞察，用 append_to_note 工具写回笔记。",
 			"��回复中引用笔记时，请使用 [[笔记名]] 的 wiki-link 格式，以便用户可以直接点击跳转。",
 			"当用户提到某篇笔记时，先用 search_vault 搜索，找到后用 read_note 读取。",
@@ -1260,6 +1275,7 @@ export class ChatView extends ItemView {
 		this.client = new ClaudeClient(apiKey, model, systemPrompt, {
 			streamMode: chatStreamMode,
 			enableWebSearch,
+			enableWeRead: weReadActive,
 			compressThresholdEst: chatCompressThresholdEst,
 			onCompress: (detail) => {
 				new Notice(detail, 6000);

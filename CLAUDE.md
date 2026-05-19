@@ -93,7 +93,9 @@ rebase 发生冲突时：
 - `src/auto-tagger.test.ts` — auto-tagger 单测（parseTaggingResponse）
 - `src/knowledge-agent.ts` — 知识整理辅助（findUnorganizedNotes 扫描 + distillConversation 对话蒸馏 + wikiHealthCheck 健康检查），蒸馏时自动维护 Wiki 组织结构（tag 复用、交叉引用、子文件夹归类）
 - `src/web-tools.ts` — Web 工具实现（web_fetch 网页抓取）
-- `src/settings.ts` — 插件设置（含 Feed 配置）
+- `src/weread-tools.ts` — 微信读书 API 客户端（统一网关调用，Bearer auth）
+- `src/weread-prompts.ts` — 微信读书 system prompt（API 模式 + Claude Code 模式两套）
+- `src/settings.ts` — 插件设置（含 Feed 配置、微信读书配置）
 - `src/feeds.ts` — 多源抓取（RSS/HN API/Reddit/GitHub Trending）、社交热度评分、时间衰减、爆发检测
 - `src/feed-generator.ts` — Feed 生成器，编排 RSS + vault 搜索 + Claude 汇总
 - `mcp-server/` — 独立 MCP server，用于 Claude Code 直接操作 vault（纯 Node.js 文件操作，不依赖 Obsidian API）

@@ -179,6 +179,53 @@ server.tool(
 	}
 );
 
+// ── WeRead API gateway ──────────────────────────────────────────────
+
+const WEREAD_API_KEY = process.env.WEREAD_API_KEY || "";
+const WEREAD_GATEWAY = "https://i.weread.qq.com/api/agent/gateway";
+const WEREAD_SKILL_VERSION = "1.0.3";
+const MAX_WEREAD_CHARS = 20_000;
+
+if (WEREAD_API_KEY) {
+	server.tool(
+		"weread_api",
+		"调用微信读书 API。搜索书籍、获取书架、查看笔记划线、书评、阅读统计、推荐等。通过 api_name 指定接口，其余参数平铺传入。",
+		{
+			api_name: z.string().describe("API 路径，如 /store/search, /shelf/sync, /user/notebooks, /book/bookmarklist, /readdata/detail 等"),
+			params: z.record(z.string(), z.unknown()).optional().describe("接口业务参数，如 {keyword: '三体', count: 10}"),
+		},
+		async ({ api_name, params }) => {
+			try {
+				const body = JSON.stringify({
+					api_name,
+					skill_version: WEREAD_SKILL_VERSION,
+					...(params || {}),
+				});
+				const resp = await fetch(WEREAD_GATEWAY, {
+					method: "POST",
+					headers: {
+						"Authorization": `Bearer ${WEREAD_API_KEY}`,
+						"Content-Type": "application/json",
+					},
+					body,
+				});
+				const json = await resp.json();
+				if (json?.errcode && json.errcode !== 0) {
+					return { content: [{ type: "text" as const, text: `WeRead API error (${json.errcode}): ${json.errmsg || JSON.stringify(json)}` }] };
+				}
+				let text = JSON.stringify(json, null, 2);
+				if (text.length > MAX_WEREAD_CHARS) {
+					text = text.slice(0, MAX_WEREAD_CHARS) + `\n...(truncated, ${text.length} chars total)`;
+				}
+				return { content: [{ type: "text" as const, text }] };
+			} catch (e) {
+				const msg = e instanceof Error ? e.message : String(e);
+				return { content: [{ type: "text" as const, text: `Error calling WeRead API ${api_name}: ${msg}` }] };
+			}
+		}
+	);
+}
+
 async function main(): Promise<void> {
 	const transport = new StdioServerTransport();
 	await server.connect(transport);

@@ -19,7 +19,7 @@ import { ClaudeClient, estimateTextTokens, type ToolResultContent } from "./clau
 import { VaultTools, type UndoEntry } from "./vault-tools";
 import { WebTools } from "./web-tools";
 import { WeReadTools } from "./weread-tools";
-import { WEREAD_SYSTEM_PROMPT, buildWeReadClaudeCodePrompt } from "./weread-prompts";
+import { WEREAD_SYSTEM_PROMPT, WEREAD_CLAUDE_CODE_PROMPT } from "./weread-prompts";
 import type { PromptTemplate } from "./settings";
 import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
 import type { PreparedImage } from "./image-tools";
@@ -1112,12 +1112,12 @@ export class ChatView extends ItemView {
 		}
 	}
 
-	private getMcpConfig(): { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] } {
-		const { knowledgeFolders } = this.plugin.settings;
+	private getMcpConfig(): { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[]; wereadApiKey?: string } {
+		const { knowledgeFolders, enableWeRead, wereadApiKey } = this.plugin.settings;
 		const adapter = this.app.vault.adapter as { basePath?: string };
 		const vaultPath = adapter.basePath || "";
 		const mcpServerPath = getMcpServerPath();
-		return { vaultPath, mcpServerPath, knowledgeFolders };
+		return { vaultPath, mcpServerPath, knowledgeFolders, ...(enableWeRead && wereadApiKey ? { wereadApiKey } : {}) };
 	}
 
 	private async handleSendViaClaudeCode(text: string): Promise<void> {
@@ -1171,7 +1171,7 @@ export class ChatView extends ItemView {
 			);
 
 			if (this.plugin.settings.enableWeRead && this.plugin.settings.wereadApiKey) {
-				parts.push("", buildWeReadClaudeCodePrompt(this.plugin.settings.wereadApiKey));
+				parts.push("", WEREAD_CLAUDE_CODE_PROMPT);
 			}
 
 			if (this.messages.length > 1) {

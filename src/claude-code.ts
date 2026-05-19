@@ -330,7 +330,7 @@ export interface ClaudeCodeStreamCallbacks {
 }
 
 export interface ClaudeCodeOptions {
-	mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] };
+	mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[]; wereadApiKey?: string };
 	sessionId?: string;
 	model?: string;
 }
@@ -365,6 +365,7 @@ export function spawnClaudeCode(
 				env: {
 					VAULT_PATH: mcpConfig.vaultPath,
 					KNOWLEDGE_FOLDERS: mcpConfig.knowledgeFolders.join(","),
+					...(mcpConfig.wereadApiKey ? { WEREAD_API_KEY: mcpConfig.wereadApiKey } : {}),
 				},
 			},
 		},

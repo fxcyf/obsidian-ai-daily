@@ -85,24 +85,19 @@ export const WEREAD_SYSTEM_PROMPT = `## 微信读书 (WeRead)
 5. 导出笔记内容需同时调 /book/bookmarklist (划线) 和 /review/list/mine (想法)
 `;
 
-export function buildWeReadClaudeCodePrompt(apiKey: string): string {
-	return `## 微信读书 (WeRead)
+export const WEREAD_CLAUDE_CODE_PROMPT = `## 微信读书 (WeRead)
 
-用户已配置微信读书 API。你可以通过 WebFetch 工具直接调用微信读书网关。
+用户已配置微信读书 API。你可以通过 MCP 工具 weread_api 调用微信读书接口。
 
 ### 调用方式
 
-使用 WebFetch 发送 POST 请求:
-- URL: https://i.weread.qq.com/api/agent/gateway
-- Headers: Authorization: Bearer ${apiKey}
-- Content-Type: application/json
-- Body: {"api_name": "/接口路径", "skill_version": "${WEREAD_SKILL_VERSION}", ...其他参数}
-
-**重要**: 所有业务参数必须和 api_name 平铺在同一层 JSON 中，不要嵌套在 params/data 对象里。
+使用 weread_api 工具，传入 api_name 和 params：
+- api_name: API 路径，如 "/store/search"
+- params: 业务参数对象，如 {"keyword": "三体", "count": 10}
 
 ### 可用 API
 
-| api_name | 说明 | 关键参数 |
+| api_name | 说明 | params 关键参数 |
 |----------|------|----------|
 | /store/search | 搜索书籍 | keyword, scope(10=电子书,0=全部) |
 | /book/info | 书籍详情 | bookId |
@@ -129,4 +124,3 @@ export function buildWeReadClaudeCodePrompt(apiKey: string): string {
 - 评分 star: 20=1星, 40=2星, 60=3星, 80=4星, 100=5星
 - /user/notebooks 分页用 lastSort（上页最后一条的sort），不要用 offset/limit
 `;
-}

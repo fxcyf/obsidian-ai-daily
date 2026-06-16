@@ -93,6 +93,8 @@ rebase 发生冲突时：
 - `src/auto-tagger.test.ts` — auto-tagger 单测（parseTaggingResponse）
 - `src/knowledge-agent.ts` — 知识整理辅助（findUnorganizedNotes 扫描 + distillConversation 对话蒸馏 + wikiHealthCheck 健康检查），蒸馏时自动维护 Wiki 组织结构（tag 复用、交叉引用、子文件夹归类）
 - `src/web-tools.ts` — Web 工具实现（web_fetch 网页抓取）
+- `src/podcast-tools.ts` — 播客工具（RSS 解析、YouTube 字幕提取、iTunes 搜索），同时供聊天工具和 feed 系统使用
+- `src/podcast-tools.test.ts` — podcast-tools 单测（extractYouTubeId）
 - `src/weread-tools.ts` — 微信读书 API 客户端（统一网关调用，Bearer auth）
 - `src/weread-prompts.ts` — 微信读书 system prompt（API 模式 + Claude Code 模式两套）
 - `src/settings.ts` — 插件设置（含 Feed 配置、微信读书配置）

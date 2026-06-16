@@ -19,6 +19,7 @@ import { ClaudeClient, estimateTextTokens, type ToolResultContent } from "./clau
 import { VaultTools, type UndoEntry } from "./vault-tools";
 import { WebTools } from "./web-tools";
 import { WeReadTools } from "./weread-tools";
+import { PodcastTools } from "./podcast-tools";
 import { WEREAD_SYSTEM_PROMPT, WEREAD_CLAUDE_CODE_PROMPT } from "./weread-prompts";
 import type { PromptTemplate } from "./settings";
 import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
@@ -189,6 +190,7 @@ export class ChatView extends ItemView {
 	private vaultTools: VaultTools | null = null;
 	private webTools: WebTools = new WebTools();
 	private wereadTools: WeReadTools | null = null;
+	private podcastTools: PodcastTools | null = null;
 	private messagesEl!: HTMLElement;
 	private inputAreaEl!: HTMLElement;
 	private inputEl!: HTMLTextAreaElement;
@@ -1061,6 +1063,7 @@ export class ChatView extends ItemView {
 					if (name === "web_fetch") return this.webTools.execute(name, input);
 					if (name === "read_image") return this.executeReadImage(input);
 					if (name === "weread_api" && this.wereadTools) return this.wereadTools.execute(name, input);
+					if (name.startsWith("podcast_") && this.podcastTools) return this.podcastTools.execute(name, input);
 					return this.vaultTools!.execute(name, input);
 				},
 				useStream
@@ -1244,12 +1247,14 @@ export class ChatView extends ItemView {
 			enableWebSearch,
 			enableWeRead,
 			wereadApiKey,
+			enablePodcast,
 		} = this.plugin.settings;
 
 		this.vaultTools = new VaultTools(this.app, knowledgeFolders);
 
 		const weReadActive = enableWeRead && !!wereadApiKey;
 		this.wereadTools = weReadActive ? new WeReadTools(wereadApiKey) : null;
+		this.podcastTools = enablePodcast ? new PodcastTools() : null;
 
 		const knowledgeContext = await this.vaultTools.loadKnowledgeContext(5);
 
@@ -1263,6 +1268,9 @@ export class ChatView extends ItemView {
 				? "你还可以使用 web_search 搜索互联网获取最新信息，用 web_fetch 抓取网页全文阅读。当用户提问涉及最新动态、你不确定的事实、或需要外部资料时，主动使用联网工具。"
 				: "",
 			weReadActive ? WEREAD_SYSTEM_PROMPT : "",
+			enablePodcast
+				? "你可以使用播客工具：podcast_search 搜索播客，podcast_episodes 获取剧集列表，podcast_transcript 获取文字稿。当用户想了解、总结或翻译播客内容时，主动使用这些工具。"
+				: "",
 			"回答用中文，简洁有深度。如果用户想保存洞察，用 append_to_note 工具写回笔记。",
 			"��回复中引用笔记时，请使用 [[笔记名]] 的 wiki-link 格式，以便用户可以直接点击跳转。",
 			"当用户提到某篇笔记时，先用 search_vault 搜索，找到后用 read_note 读取。",
@@ -1276,6 +1284,7 @@ export class ChatView extends ItemView {
 			streamMode: chatStreamMode,
 			enableWebSearch,
 			enableWeRead: weReadActive,
+			enablePodcast,
 			compressThresholdEst: chatCompressThresholdEst,
 			onCompress: (detail) => {
 				new Notice(detail, 6000);

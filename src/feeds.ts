@@ -5,6 +5,7 @@
  */
 
 import { requestUrl } from "obsidian";
+import { fetchPodcastRss } from "./podcast-tools";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -12,8 +13,8 @@ export interface FeedSource {
 	name: string;
 	url: string;
 	category: string;
-	/** Source type: "rss" (default), "hn", "reddit", "github-trending" */
-	type?: "rss" | "hn" | "reddit" | "github-trending";
+	/** Source type: "rss" (default), "hn", "reddit", "github-trending", "podcast" */
+	type?: "rss" | "hn" | "reddit" | "github-trending" | "podcast";
 }
 
 export interface Article {
@@ -108,6 +109,7 @@ const CATEGORY_WEIGHT: Record<string, number> = {
 	engineering: 2.0,
 	tools: 1.5,
 	community: 1.8,
+	podcast: 1.5,
 	newsletter: 1.0,
 	news: 0.5,
 	industry: 0.8,
@@ -369,6 +371,31 @@ async function fetchGithubTrending(feed: FeedSource): Promise<Article[]> {
 	return articles;
 }
 
+// ── Podcast RSS feed ─────────────────────────────────────────────
+
+async function fetchPodcastFeed(feed: FeedSource): Promise<Article[]> {
+	try {
+		const episodes = await fetchPodcastRss(feed.url, feed.name);
+		return episodes.slice(0, 3).map((ep) => {
+			const durationStr = ep.duration ? ` (${Math.floor(ep.duration / 60)} min)` : "";
+			const epNum = ep.episodeNumber ? ` #${ep.episodeNumber}` : "";
+			return {
+				title: `🎙️ ${ep.title}${epNum}${durationStr}`,
+				url: ep.link || ep.audioUrl,
+				source: feed.name,
+				category: feed.category,
+				published: ep.published,
+				summary: ep.description.slice(0, 500),
+				relevanceScore: 0,
+				socialScore: 0,
+				commentCount: 0,
+			};
+		});
+	} catch {
+		return [];
+	}
+}
+
 // ── Unified fetch dispatcher ──────────────────────────────────────
 
 async function fetchFeed(feed: FeedSource): Promise<Article[]> {
@@ -377,6 +404,7 @@ async function fetchFeed(feed: FeedSource): Promise<Article[]> {
 		case "hn": return fetchHnFeed(feed);
 		case "reddit": return fetchRedditFeed(feed);
 		case "github-trending": return fetchGithubTrending(feed);
+		case "podcast": return fetchPodcastFeed(feed);
 		default: return fetchRssFeed(feed);
 	}
 }

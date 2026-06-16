@@ -45,6 +45,8 @@ export interface AIDailyChatSettings {
 	// Knowledge organizer settings
 	enableAutoDistill: boolean;
 	distillTargetFolder: string;
+	// Podcast settings
+	enablePodcast: boolean;
 	// WeRead settings
 	enableWeRead: boolean;
 	wereadApiKey: string;
@@ -74,6 +76,7 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	autoTagPrompt: "",
 	enableAutoDistill: false,
 	distillTargetFolder: "Wiki",
+	enablePodcast: true,
 	enableWeRead: false,
 	wereadApiKey: "",
 };
@@ -204,6 +207,24 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.enableWebSearch)
 					.onChange(async (value) => {
 						this.plugin.settings.enableWebSearch = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		// ── Podcast settings ───────────────────────────────────
+
+		containerEl.createEl("h3", { text: "播客" });
+
+		new Setting(containerEl)
+			.setName("启用播客工具")
+			.setDesc(
+				"启用后 Claude 可以搜索播客、获取剧集列表、提取文字稿并翻译总结"
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enablePodcast)
+					.onChange(async (value) => {
+						this.plugin.settings.enablePodcast = value;
 						await this.plugin.saveSettings();
 					})
 			);
@@ -613,6 +634,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 			hn: "HN",
 			reddit: "Reddit",
 			"github-trending": "GitHub",
+			podcast: "Podcast",
 		};
 
 		const CAT_LABELS: Record<string, string> = {
@@ -620,6 +642,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 			engineering: "工程",
 			community: "社区",
 			tools: "工具",
+			podcast: "播客",
 			newsletter: "周刊",
 			industry: "行业",
 			news: "新闻",
@@ -717,7 +740,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 		const catSelect = catGroup.createEl("select");
 		for (const [val, label] of [
 			["research", "研究"], ["engineering", "工程"], ["community", "社区"],
-			["tools", "工具"], ["newsletter", "周刊"], ["industry", "行业"], ["news", "新闻"],
+			["tools", "工具"], ["podcast", "播客"], ["newsletter", "周刊"], ["industry", "行业"], ["news", "新闻"],
 		]) {
 			const opt = catSelect.createEl("option", { value: val, text: label });
 			if (source.category === val) opt.selected = true;
@@ -731,7 +754,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 		const typeSelect = typeGroup.createEl("select");
 		for (const [val, label] of [
 			["rss", "RSS"], ["hn", "Hacker News"], ["reddit", "Reddit"],
-			["github-trending", "GitHub Trending"],
+			["github-trending", "GitHub Trending"], ["podcast", "Podcast"],
 		]) {
 			const opt = typeSelect.createEl("option", { value: val, text: label });
 			if ((source.type ?? "rss") === val) opt.selected = true;

@@ -121,6 +121,66 @@ const WEREAD_TOOL = {
 	},
 };
 
+const PODCAST_TOOLS = [
+	{
+		name: "podcast_search",
+		description:
+			"搜索播客节目。通过 iTunes API 搜索，返回播客名称、作者和 RSS feed URL。",
+		input_schema: {
+			type: "object" as const,
+			properties: {
+				query: {
+					type: "string",
+					description: "搜索关键词，如 'AI agents' 或 'Lex Fridman'",
+				},
+				limit: {
+					type: "number",
+					description: "返回结果数量，默认 10",
+				},
+			},
+			required: ["query"],
+		},
+	},
+	{
+		name: "podcast_episodes",
+		description:
+			"获取播客最新剧集列表。输入 RSS feed URL，返回最近几期的标题、日期、时长和链接。",
+		input_schema: {
+			type: "object" as const,
+			properties: {
+				url: {
+					type: "string",
+					description: "播客 RSS feed URL",
+				},
+				limit: {
+					type: "number",
+					description: "返回剧集数量，默认 5",
+				},
+			},
+			required: ["url"],
+		},
+	},
+	{
+		name: "podcast_transcript",
+		description:
+			"获取播客某一期的文字稿/transcript。支持 RSS feed URL（默认最新一期）或直接传入 YouTube 视频链接。优先从 RSS 内容提取，其次尝试 YouTube 字幕。",
+		input_schema: {
+			type: "object" as const,
+			properties: {
+				url: {
+					type: "string",
+					description: "播客 RSS feed URL 或 YouTube 视频链接",
+				},
+				episode_index: {
+					type: "number",
+					description: "剧集索引（0 = 最新一期），仅在 url 为 RSS feed 时有效",
+				},
+			},
+			required: ["url"],
+		},
+	},
+];
+
 export const VAULT_TOOLS = [
 	{
 		name: "read_note",
@@ -477,13 +537,16 @@ export async function callClaudeSimple(options: SimpleCallOptions): Promise<stri
 
 // ── Client ──────────────────────────────────────────────────────────
 
-export function buildToolsArray(enableWebSearch: boolean, enableWeRead: boolean = false): Record<string, unknown>[] {
+export function buildToolsArray(enableWebSearch: boolean, enableWeRead: boolean = false, enablePodcast: boolean = false): Record<string, unknown>[] {
 	const tools: Record<string, unknown>[] = [...VAULT_TOOLS];
 	if (enableWebSearch) {
 		tools.push(WEB_SEARCH_TOOL, WEB_FETCH_TOOL);
 	}
 	if (enableWeRead) {
 		tools.push(WEREAD_TOOL);
+	}
+	if (enablePodcast) {
+		tools.push(...PODCAST_TOOLS);
 	}
 	return tools;
 }
@@ -492,6 +555,7 @@ export interface ClaudeClientOptions {
 	streamMode?: StreamMode;
 	enableWebSearch?: boolean;
 	enableWeRead?: boolean;
+	enablePodcast?: boolean;
 	compressThresholdEst?: number;
 	compressKeepMessages?: number;
 	onCompress?: (detail: string) => void;
@@ -506,6 +570,7 @@ export class ClaudeClient {
 	private streamMode: StreamMode;
 	private enableWebSearch: boolean;
 	private enableWeRead: boolean;
+	private enablePodcast: boolean;
 	private compressThresholdEst: number;
 	private compressKeepMessages: number;
 	private onCompress?: (detail: string) => void;
@@ -524,6 +589,7 @@ export class ClaudeClient {
 		this.streamMode = options?.streamMode ?? "auto";
 		this.enableWebSearch = options?.enableWebSearch ?? false;
 		this.enableWeRead = options?.enableWeRead ?? false;
+		this.enablePodcast = options?.enablePodcast ?? false;
 		this.compressThresholdEst =
 			options?.compressThresholdEst ?? 90_000;
 		this.compressKeepMessages = Math.max(
@@ -887,7 +953,7 @@ export class ClaudeClient {
 			model: this.model,
 			max_tokens: MAX_TOKENS,
 			system: this.systemPrompt,
-			tools: buildToolsArray(this.enableWebSearch, this.enableWeRead),
+			tools: buildToolsArray(this.enableWebSearch, this.enableWeRead, this.enablePodcast),
 			messages: this.messages,
 		};
 	}

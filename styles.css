@@ -261,6 +261,9 @@
 }
 
 .ai-daily-attach-btn {
+	-webkit-appearance: none;
+	appearance: none;
+	padding: 0;
 	width: 36px;
 	height: 36px;
 	border-radius: 50%;
@@ -285,9 +288,13 @@
 .ai-daily-attach-btn svg {
 	width: 18px;
 	height: 18px;
+	flex-shrink: 0;
 }
 
 .ai-daily-send-btn {
+	-webkit-appearance: none;
+	appearance: none;
+	padding: 0;
 	width: 36px;
 	height: 36px;
 	border-radius: 50%;
@@ -307,6 +314,7 @@
 .ai-daily-send-btn svg {
 	width: 18px;
 	height: 18px;
+	flex-shrink: 0;
 }
 
 .ai-daily-send-btn-stop {

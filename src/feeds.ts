@@ -100,6 +100,22 @@ export const DEFAULT_FEEDS: FeedSource[] = [
 	// Industry
 	{ name: "Anthropic Research", url: "https://www.anthropic.com/research/rss.xml", category: "industry" },
 	{ name: "OpenAI Blog", url: "https://openai.com/blog/rss.xml", category: "industry" },
+	// Podcasts — AI & Tech
+	{ name: "Latent Space", url: "https://api.substack.com/feed/podcast/1084089.rss", category: "podcast", type: "podcast" },
+	{ name: "Lex Fridman Podcast", url: "https://lexfridman.com/feed/podcast/", category: "podcast", type: "podcast" },
+	{ name: "Dwarkesh Podcast", url: "https://api.substack.com/feed/podcast/1092974.rss", category: "podcast", type: "podcast" },
+	{ name: "All-In Podcast", url: "https://feeds.megaphone.fm/all-in-with-chamath-jason-sacks-friedberg", category: "podcast", type: "podcast" },
+	// Podcasts — Business & Knowledge
+	{ name: "The Diary of a CEO", url: "https://feeds.megaphone.fm/DIARYOFACEO", category: "podcast", type: "podcast" },
+	{ name: "The Knowledge Project", url: "https://theknowledgeproject.libsyn.com/rss", category: "podcast", type: "podcast" },
+	{ name: "My First Million", url: "https://feeds.megaphone.fm/HSW2989179395", category: "podcast", type: "podcast" },
+	{ name: "Founders Podcast", url: "https://feeds.transistor.fm/founders-podcast", category: "podcast", type: "podcast" },
+	// Podcasts — Science & Curiosity
+	{ name: "Search Engine", url: "https://feeds.megaphone.fm/searchengine", category: "podcast", type: "podcast" },
+	{ name: "Hidden Brain", url: "https://feeds.simplecast.com/kwWc0lhf", category: "podcast", type: "podcast" },
+	{ name: "Think Fast Talk Smart", url: "https://feeds.megaphone.fm/thinkfasttalksmart", category: "podcast", type: "podcast" },
+	{ name: "Radiolab", url: "https://feeds.simplecast.com/EmVW7VGp", category: "podcast", type: "podcast" },
+	{ name: "Freakonomics Radio", url: "https://feeds.simplecast.com/Y8lFbOT4", category: "podcast", type: "podcast" },
 ];
 
 // ── Category weights ───────────────────────────────────────────────

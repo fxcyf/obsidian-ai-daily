@@ -392,7 +392,7 @@ async function fetchGithubTrending(feed: FeedSource): Promise<Article[]> {
 async function fetchPodcastFeed(feed: FeedSource): Promise<Article[]> {
 	try {
 		const episodes = await fetchPodcastRss(feed.url, feed.name);
-		return episodes.slice(0, 3).map((ep) => {
+		return episodes.slice(0, 1).map((ep) => {
 			const durationStr = ep.duration ? ` (${Math.floor(ep.duration / 60)} min)` : "";
 			const epNum = ep.episodeNumber ? ` #${ep.episodeNumber}` : "";
 			return {
@@ -630,16 +630,26 @@ export async function fetchAllFeeds(options: FetchOptions = {}): Promise<Article
 		return dateB - dateA;
 	};
 
-	// Reserve slots for podcasts so they aren't pushed out by higher-scoring articles
+	// Reserve slots for podcasts — one per source for diversity, then fill by score
 	const podcasts = unique.filter((a) => a.category === "podcast");
 	const nonPodcasts = unique.filter((a) => a.category !== "podcast");
-	podcasts.sort(sortByRelevance);
 	nonPodcasts.sort(sortByRelevance);
 
-	const podcastSlots = Math.min(podcasts.length, Math.max(3, Math.ceil(maxArticles * 0.2)));
+	// Pick best episode per podcast source first
+	const bestPerSource = new Map<string, Article>();
+	podcasts.sort(sortByRelevance);
+	for (const p of podcasts) {
+		if (!bestPerSource.has(p.source)) {
+			bestPerSource.set(p.source, p);
+		}
+	}
+	const diversePodcasts = [...bestPerSource.values()];
+	diversePodcasts.sort(sortByRelevance);
+
+	const podcastSlots = Math.min(diversePodcasts.length, Math.max(3, Math.ceil(maxArticles * 0.25)));
 	const result = [
 		...nonPodcasts.slice(0, maxArticles - podcastSlots),
-		...podcasts.slice(0, podcastSlots),
+		...diversePodcasts.slice(0, podcastSlots),
 	];
 	result.sort(sortByRelevance);
 

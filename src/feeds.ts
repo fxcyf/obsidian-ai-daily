@@ -501,7 +501,10 @@ export function scoreRelevance(
 	const titleMatches = article.title.toLowerCase().match(AI_KEYWORDS) ?? [];
 	const titleUnique = new Set(titleMatches.map((m) => m.toLowerCase()));
 
-	let score = unique.size * 1.0 + titleUnique.size * 2.0;
+	// Podcasts are explicitly subscribed by the user — give a base score so they
+	// aren't filtered out when episode titles don't contain AI keywords.
+	const podcastBase = article.category === "podcast" ? 2.0 : 0;
+	let score = unique.size * 1.0 + titleUnique.size * 2.0 + podcastBase;
 
 	// Hot topic boost
 	for (const topic of unique) {

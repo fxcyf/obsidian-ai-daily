@@ -5,7 +5,7 @@ import {
 	AIDailyChatSettingTab,
 } from "./settings";
 import { ChatView, VIEW_TYPE } from "./chat-view";
-import { generateFeed, checkExistingFeed } from "./feed-generator";
+import { generateFeed, checkExistingFeed, generatePodcastFeed, checkExistingPodcastFeed } from "./feed-generator";
 import { DEFAULT_FEEDS } from "./feeds";
 import { AutoTagger } from "./auto-tagger";
 import { findUnorganizedNotes, MAX_NOTES_PER_RUN, wikiHealthCheck, formatHealthCheckReport, hasFixableIssues } from "./knowledge-agent";
@@ -99,6 +99,12 @@ export default class AIDailyChat extends Plugin {
 			id: "generate-feed",
 			name: "生成 AI Feed",
 			callback: () => this.generateFeed(),
+		});
+
+		this.addCommand({
+			id: "generate-podcast-feed",
+			name: "生成播客 Feed",
+			callback: () => this.generatePodcastFeed(),
 		});
 
 		// Command to organize knowledge
@@ -195,6 +201,33 @@ export default class AIDailyChat extends Plugin {
 			notice.hide();
 			const msg = e instanceof Error ? e.message : String(e);
 			new Notice(`Feed 生成失败: ${msg}`, 8000);
+		}
+	}
+
+	async generatePodcastFeed(): Promise<void> {
+		const existing = await checkExistingPodcastFeed(this.app, this.settings.feedFolder);
+
+		if (existing) {
+			const confirmed = await new FeedConfirmModal(this.app).open();
+			if (!confirmed) return;
+		}
+
+		const notice = new Notice("正在生成播客 Feed...", 0);
+		try {
+			const file = await generatePodcastFeed(
+				this.app,
+				this.settings,
+				(progress) => { notice.setMessage(progress.message); },
+				existing?.content
+			);
+			notice.hide();
+			new Notice(`播客 Feed 已生成: ${file.path}`, 5000);
+			const leaf = this.app.workspace.getLeaf(false);
+			await leaf.openFile(file);
+		} catch (e) {
+			notice.hide();
+			const msg = e instanceof Error ? e.message : String(e);
+			new Notice(`播客 Feed 生成失败: ${msg}`, 8000);
 		}
 	}
 

@@ -7,6 +7,7 @@ import { App, TFile } from "obsidian";
 import { fetchAllFeeds, type Article, type FeedSource } from "./feeds";
 import type { AIDailyChatSettings } from "./settings";
 import { callClaudeSimple } from "./claude";
+import { fetchPodcastRss, extractTranscript, type PodcastEpisode } from "./podcast-tools";
 
 // ── Claude prompt for feed generation ──────────────────────────────
 
@@ -292,6 +293,237 @@ export async function generateFeed(
 	}
 
 	onProgress?.({ stage: "done", message: `Feed 已生成: ${filePath}` });
+
+	return file;
+}
+
+// ── Podcast Feed ───────────────────────────────────────────────────
+
+const PODCAST_FEED_SYSTEM_PROMPT = `你是一个播客内容分析专家，帮助用户快速了解各播客最新一期的核心内容。
+读者是有经验的开发者和终身学习者，关注 AI/技术前沿、商业思维、科学探索。
+
+## 输出格式
+
+按播客逐个整理，每个播客一个区块：
+
+### 🎙️ 播客名称 — 本期标题
+- **嘉宾**: （如有）
+- **时长**: X 分钟
+- **核心观点**:
+  1. 第一个要点（2-3 句深入解读）
+  2. 第二个要点
+  3. ...
+- **值得关注的金句/数据**: （如有特别有启发的表述）
+- **与其他播客的交叉话题**: （如果多个播客讨论了相似话题，标注关联）
+- 🔗 [收听链接](url)
+
+## 最后加一个总结区块
+
+### 📊 本周播客趋势
+- 多个播客共同关注的话题
+- 值得深入了解的新概念或趋势
+
+## 要求
+- 用中文输出
+- 如果有 transcript 内容，深入提炼核心观点，不要只是浅层摘要
+- 如果只有描述信息，据此整理要点并标注"（基于节目简介）"
+- 按信息密度和话题重要性排序，最有价值的放前面
+- 纯闲聊/娱乐类内容简要带过即可`;
+
+export function getTodayPodcastFeedPath(feedFolder: string): string {
+	const today = new Date().toISOString().slice(0, 10);
+	return `${feedFolder}/Podcast-${today}.md`;
+}
+
+export async function checkExistingPodcastFeed(
+	app: App,
+	feedFolder: string
+): Promise<ExistingFeedInfo | null> {
+	const filePath = getTodayPodcastFeedPath(feedFolder);
+	const existing = app.vault.getAbstractFileByPath(filePath);
+	if (existing instanceof TFile) {
+		const content = await app.vault.read(existing);
+		return { file: existing, content };
+	}
+	return null;
+}
+
+interface PodcastFeedItem {
+	podcastName: string;
+	episodeTitle: string;
+	published: Date | null;
+	duration: number | null;
+	link: string;
+	description: string;
+	transcript: string | null;
+}
+
+export async function generatePodcastFeed(
+	app: App,
+	settings: AIDailyChatSettings,
+	onProgress?: (progress: FeedProgress) => void,
+	existingContent?: string
+): Promise<TFile> {
+	const { apiKey, model, feedModel, feedFolder, feedSources } = settings;
+	const effectiveModel = feedModel || model;
+
+	if (!apiKey) throw new Error("请先在设置中配置 API Key");
+
+	const podcastSources = feedSources.filter((s) => s.type === "podcast");
+	if (podcastSources.length === 0) {
+		throw new Error("没有配置播客源，请在 Feed 设置中添加播客订阅");
+	}
+
+	// Step 1: Fetch all podcast RSS feeds
+	onProgress?.({ stage: "rss", message: `正在抓取 ${podcastSources.length} 个播客源...` });
+
+	const fetchResults = await Promise.allSettled(
+		podcastSources.map((source) => fetchPodcastRss(source.url, source.name))
+	);
+
+	const items: PodcastFeedItem[] = [];
+	const failedSources: string[] = [];
+
+	for (let i = 0; i < fetchResults.length; i++) {
+		const result = fetchResults[i];
+		if (result.status === "fulfilled" && result.value.length > 0) {
+			const ep = result.value[0];
+			items.push({
+				podcastName: ep.podcastName || podcastSources[i].name,
+				episodeTitle: ep.title,
+				published: ep.published,
+				duration: ep.duration,
+				link: ep.link || ep.audioUrl,
+				description: ep.description,
+				transcript: null,
+			});
+		} else {
+			failedSources.push(podcastSources[i].name);
+		}
+	}
+
+	if (failedSources.length > 0) {
+		onProgress?.({ stage: "rss", message: `⚠️ ${failedSources.length} 个播客源抓取失败: ${failedSources.join(", ")}` });
+	}
+	onProgress?.({ stage: "rss", message: `共获取 ${items.length} 个播客最新剧集` });
+
+	if (items.length === 0) {
+		throw new Error("未能抓取到任何播客剧集");
+	}
+
+	// Step 1.5: Cross-day dedup
+	const recentUrls = await getRecentFeedUrls(app, feedFolder);
+	const beforeCount = items.length;
+	const dedupedItems = items.filter((it) => !recentUrls.has(it.link));
+	if (beforeCount > dedupedItems.length) {
+		onProgress?.({ stage: "dedup", message: `已过滤 ${beforeCount - dedupedItems.length} 个近期已报道的剧集` });
+	}
+
+	// Step 2: Try to extract transcripts for each episode
+	onProgress?.({ stage: "transcript", message: "正在提取播客 transcript..." });
+
+	const transcriptResults = await Promise.allSettled(
+		dedupedItems.map(async (item) => {
+			const episode: PodcastEpisode = {
+				title: item.episodeTitle,
+				link: item.link,
+				published: item.published,
+				description: item.description,
+				contentEncoded: "",
+				duration: item.duration,
+				audioUrl: item.link,
+				episodeNumber: "",
+				podcastName: item.podcastName,
+			};
+			return extractTranscript(episode);
+		})
+	);
+
+	for (let i = 0; i < transcriptResults.length; i++) {
+		const result = transcriptResults[i];
+		if (result.status === "fulfilled" && result.value !== "(No transcript available)") {
+			dedupedItems[i].transcript = result.value.slice(0, 8000);
+		}
+	}
+
+	const withTranscript = dedupedItems.filter((it) => it.transcript).length;
+	onProgress?.({ stage: "transcript", message: `${withTranscript}/${dedupedItems.length} 个剧集获取到 transcript` });
+
+	// Step 3: Call Claude to generate podcast feed
+	onProgress?.({ stage: "ai", message: "正在让 AI 生成播客 Feed..." });
+
+	const episodesText = dedupedItems
+		.map((item) => {
+			const durationStr = item.duration ? `${Math.floor(item.duration / 60)} 分钟` : "未知";
+			const dateStr = item.published ? item.published.toISOString().slice(0, 10) : "未知";
+			let text =
+				`播客: ${item.podcastName}\n标题: ${item.episodeTitle}\n` +
+				`日期: ${dateStr}\n时长: ${durationStr}\n链接: ${item.link}\n` +
+				`描述: ${item.description}`;
+			if (item.transcript) {
+				text += `\n\nTranscript（节选）:\n${item.transcript}`;
+			}
+			return text;
+		})
+		.join("\n\n---\n\n");
+
+	let deduplicationNote = "";
+	if (existingContent) {
+		deduplicationNote =
+			`## ⚠️ 重要：以下是今天已生成的播客 Feed，请勿重复\n\n` +
+			`${existingContent}\n\n`;
+	}
+
+	const userMessage =
+		`${deduplicationNote}` +
+		`## 最新播客剧集（共 ${dedupedItems.length} 期）\n\n${episodesText}`;
+
+	let aiContent: string;
+	if (dedupedItems.length === 0) {
+		aiContent = "今天暂无新的播客内容。";
+	} else {
+		const result = await callClaudeSimple({
+			apiKey,
+			model: effectiveModel,
+			systemPrompt: PODCAST_FEED_SYSTEM_PROMPT,
+			userMessage,
+		});
+		aiContent = result || "播客 Feed 生成失败。";
+	}
+
+	// Step 4: Write to vault
+	onProgress?.({ stage: "write", message: "正在写入笔记..." });
+
+	const today = new Date().toISOString().slice(0, 10);
+	const filePath = `${feedFolder}/Podcast-${today}.md`;
+	const existingFile = app.vault.getAbstractFileByPath(filePath);
+
+	const folderExists = app.vault.getAbstractFileByPath(feedFolder);
+	if (!folderExists) {
+		await app.vault.createFolder(feedFolder);
+	}
+
+	let file: TFile;
+	if (existingFile instanceof TFile && existingContent) {
+		const now = new Date();
+		const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+		const appendContent = `\n\n---\n\n# 播客 Feed 更新 - ${today} ${timeStr}\n\n${aiContent}\n`;
+		await app.vault.modify(existingFile, existingContent + appendContent);
+		file = existingFile;
+	} else if (existingFile instanceof TFile) {
+		const noteContent =
+			`---\ntype: podcast-feed\ndate: ${today}\n---\n\n` +
+			`# 播客 Feed - ${today}\n\n${aiContent}\n`;
+		await app.vault.modify(existingFile, noteContent);
+		file = existingFile;
+	} else {
+		const noteContent =
+			`---\ntype: podcast-feed\ndate: ${today}\n---\n\n` +
+			`# 播客 Feed - ${today}\n\n${aiContent}\n`;
+		file = await app.vault.create(filePath, noteContent);
+	}
+
+	onProgress?.({ stage: "done", message: `播客 Feed 已生成: ${filePath}` });
 
 	return file;
 }

@@ -407,7 +407,8 @@ async function fetchPodcastFeed(feed: FeedSource): Promise<Article[]> {
 				commentCount: 0,
 			};
 		});
-	} catch {
+	} catch (e) {
+		console.warn(`[ai-daily] podcast fetch failed: ${feed.name}`, e);
 		return [];
 	}
 }
@@ -579,12 +580,20 @@ export async function fetchAllFeeds(options: FetchOptions = {}): Promise<Article
 	);
 
 	const allArticles: Article[] = [];
-	for (const result of results) {
+	const failedSources: string[] = [];
+	for (let i = 0; i < results.length; i++) {
+		const result = results[i];
 		if (result.status === "fulfilled") {
 			allArticles.push(...result.value);
+		} else {
+			failedSources.push(feeds[i].name);
+			console.warn(`[ai-daily] feed fetch failed: ${feeds[i].name}`, result.reason);
 		}
 	}
 
+	if (failedSources.length > 0) {
+		onProgress?.(`⚠️ ${failedSources.length} 个源抓取失败: ${failedSources.join(", ")}`);
+	}
 	onProgress?.(`共抓取 ${allArticles.length} 篇文章，正在评分筛选...`);
 
 	// [B] Detect burst topics across all articles before scoring
@@ -612,15 +621,27 @@ export async function fetchAllFeeds(options: FetchOptions = {}): Promise<Article
 		}
 	}
 
-	// Sort by relevance, then recency
-	unique.sort((a, b) => {
+	const sortByRelevance = (a: Article, b: Article) => {
 		if (b.relevanceScore !== a.relevanceScore) {
 			return b.relevanceScore - a.relevanceScore;
 		}
 		const dateA = a.published?.getTime() ?? 0;
 		const dateB = b.published?.getTime() ?? 0;
 		return dateB - dateA;
-	});
+	};
 
-	return unique.slice(0, maxArticles);
+	// Reserve slots for podcasts so they aren't pushed out by higher-scoring articles
+	const podcasts = unique.filter((a) => a.category === "podcast");
+	const nonPodcasts = unique.filter((a) => a.category !== "podcast");
+	podcasts.sort(sortByRelevance);
+	nonPodcasts.sort(sortByRelevance);
+
+	const podcastSlots = Math.min(podcasts.length, Math.max(3, Math.ceil(maxArticles * 0.2)));
+	const result = [
+		...nonPodcasts.slice(0, maxArticles - podcastSlots),
+		...podcasts.slice(0, podcastSlots),
+	];
+	result.sort(sortByRelevance);
+
+	return result.slice(0, maxArticles);
 }

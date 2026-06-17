@@ -299,6 +299,9 @@ export class ChatView extends ItemView {
 				item.setTitle("生成 Feed").setIcon("rss").onClick(() => this.plugin.generateFeed())
 			);
 			menu.addItem((item) =>
+				item.setTitle("生成播客 Feed").setIcon("mic").onClick(() => this.plugin.generatePodcastFeed())
+			);
+			menu.addItem((item) =>
 				item.setTitle("历史").setIcon("history").onClick(() => this.openHistoryPanel())
 			);
 			menu.addItem((item) =>

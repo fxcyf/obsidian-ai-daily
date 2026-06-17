@@ -730,6 +730,8 @@
 }
 
 .ai-daily-feed-source-btn {
+	-webkit-appearance: none;
+	appearance: none;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -741,6 +743,10 @@
 	background: transparent;
 	border: none;
 	padding: 0;
+}
+
+.ai-daily-feed-source-btn svg {
+	flex-shrink: 0;
 }
 
 .ai-daily-feed-source-btn:hover {
@@ -1181,6 +1187,8 @@
 }
 
 .ai-daily-health-fix-btn {
+	-webkit-appearance: none;
+	appearance: none;
 	display: flex;
 	align-items: center;
 	gap: 6px;
@@ -1241,6 +1249,8 @@
 }
 
 .ai-daily-undo-btn {
+	-webkit-appearance: none;
+	appearance: none;
 	display: flex;
 	align-items: center;
 	gap: 4px;
@@ -1268,9 +1278,12 @@
 .ai-daily-undo-btn-icon svg {
 	width: 12px;
 	height: 12px;
+	flex-shrink: 0;
 }
 
 .ai-daily-undo-diff-btn {
+	-webkit-appearance: none;
+	appearance: none;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -1293,6 +1306,7 @@
 .ai-daily-undo-diff-btn svg {
 	width: 14px;
 	height: 14px;
+	flex-shrink: 0;
 }
 
 .ai-daily-undo-diff {

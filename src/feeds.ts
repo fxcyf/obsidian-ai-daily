@@ -105,17 +105,30 @@ export const DEFAULT_FEEDS: FeedSource[] = [
 	{ name: "Lex Fridman Podcast", url: "https://lexfridman.com/feed/podcast/", category: "podcast", type: "podcast" },
 	{ name: "Dwarkesh Podcast", url: "https://api.substack.com/feed/podcast/1092974.rss", category: "podcast", type: "podcast" },
 	{ name: "All-In Podcast", url: "https://feeds.megaphone.fm/all-in-with-chamath-jason-sacks-friedberg", category: "podcast", type: "podcast" },
+	{ name: "Cognitive Revolution", url: "https://feeds.buzzsprout.com/2126886.rss", category: "podcast", type: "podcast" },
+	{ name: "No Priors", url: "https://feeds.transistor.fm/no-priors-ai-machine-learning-technology-and-the-future", category: "podcast", type: "podcast" },
+	{ name: "Practical AI", url: "https://changelog.com/practicalai/feed", category: "podcast", type: "podcast" },
+	{ name: "TWIML AI", url: "https://feeds.megaphone.fm/MLN2155636147", category: "podcast", type: "podcast" },
+	{ name: "Gradient Dissent", url: "https://feeds.soundcloud.com/users/soundcloud:users:417588742/sounds.rss", category: "podcast", type: "podcast" },
 	// Podcasts — Business & Knowledge
 	{ name: "The Diary of a CEO", url: "https://feeds.megaphone.fm/DIARYOFACEO", category: "podcast", type: "podcast" },
 	{ name: "The Knowledge Project", url: "https://theknowledgeproject.libsyn.com/rss", category: "podcast", type: "podcast" },
 	{ name: "My First Million", url: "https://feeds.megaphone.fm/HSW2989179395", category: "podcast", type: "podcast" },
 	{ name: "Founders Podcast", url: "https://feeds.transistor.fm/founders-podcast", category: "podcast", type: "podcast" },
+	{ name: "Acquired", url: "https://feeds.pacific-content.com/acquired", category: "podcast", type: "podcast" },
+	{ name: "Invest Like the Best", url: "https://investlikethebest.libsyn.com/rss", category: "podcast", type: "podcast" },
+	{ name: "The Tim Ferriss Show", url: "https://rss.art19.com/tim-ferriss-show", category: "podcast", type: "podcast" },
+	{ name: "a16z Podcast", url: "https://feeds.simplecast.com/JGE3yC0V", category: "podcast", type: "podcast" },
 	// Podcasts — Science & Curiosity
 	{ name: "Search Engine", url: "https://feeds.megaphone.fm/searchengine", category: "podcast", type: "podcast" },
 	{ name: "Hidden Brain", url: "https://feeds.simplecast.com/kwWc0lhf", category: "podcast", type: "podcast" },
 	{ name: "Think Fast Talk Smart", url: "https://feeds.megaphone.fm/thinkfasttalksmart", category: "podcast", type: "podcast" },
 	{ name: "Radiolab", url: "https://feeds.simplecast.com/EmVW7VGp", category: "podcast", type: "podcast" },
 	{ name: "Freakonomics Radio", url: "https://feeds.simplecast.com/Y8lFbOT4", category: "podcast", type: "podcast" },
+	{ name: "Huberman Lab", url: "https://feeds.megaphone.fm/hubermanlab", category: "podcast", type: "podcast" },
+	{ name: "Making Sense", url: "https://wakingup.libsyn.com/rss", category: "podcast", type: "podcast" },
+	{ name: "Conversations with Tyler", url: "https://feeds.megaphone.fm/conversationswithtyler", category: "podcast", type: "podcast" },
+	{ name: "80,000 Hours", url: "https://feeds.feedburner.com/80aboradiostinp", category: "podcast", type: "podcast" },
 ];
 
 // ── Category weights ───────────────────────────────────────────────

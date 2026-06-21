@@ -384,19 +384,25 @@ export async function generatePodcastFeed(
 	const items: PodcastFeedItem[] = [];
 	const failedSources: string[] = [];
 
+	const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+
 	for (let i = 0; i < fetchResults.length; i++) {
 		const result = fetchResults[i];
 		if (result.status === "fulfilled" && result.value.length > 0) {
-			const ep = result.value[0];
-			items.push({
-				podcastName: ep.podcastName || podcastSources[i].name,
-				episodeTitle: ep.title,
-				published: ep.published,
-				duration: ep.duration,
-				link: ep.link || ep.audioUrl,
-				description: ep.description,
-				transcript: null,
-			});
+			const episodes = result.value;
+			const recent = episodes.filter((ep) => ep.published && ep.published >= threeDaysAgo);
+			const selected = recent.length > 0 ? recent : [episodes[0]];
+			for (const ep of selected) {
+				items.push({
+					podcastName: ep.podcastName || podcastSources[i].name,
+					episodeTitle: ep.title,
+					published: ep.published,
+					duration: ep.duration,
+					link: ep.link || ep.audioUrl,
+					description: ep.description,
+					transcript: null,
+				});
+			}
 		} else {
 			failedSources.push(podcastSources[i].name);
 		}

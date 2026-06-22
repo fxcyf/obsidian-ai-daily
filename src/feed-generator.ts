@@ -121,7 +121,8 @@ const URL_PATTERN = /https?:\/\/[^\s\])>"']+/g;
 async function getRecentFeedUrls(
 	app: App,
 	feedFolder: string,
-	days: number = 3
+	days: number = 3,
+	prefixes: string[] = ["Feed"]
 ): Promise<Set<string>> {
 	const urls = new Set<string>();
 	const today = new Date();
@@ -130,12 +131,14 @@ async function getRecentFeedUrls(
 		const d = new Date(today);
 		d.setDate(d.getDate() - i);
 		const dateStr = d.toISOString().slice(0, 10);
-		const filePath = `${feedFolder}/Feed-${dateStr}.md`;
-		const file = app.vault.getAbstractFileByPath(filePath);
-		if (file instanceof TFile) {
-			const content = await app.vault.cachedRead(file);
-			for (const match of content.matchAll(URL_PATTERN)) {
-				urls.add(match[0]);
+		for (const prefix of prefixes) {
+			const filePath = `${feedFolder}/${prefix}-${dateStr}.md`;
+			const file = app.vault.getAbstractFileByPath(filePath);
+			if (file instanceof TFile) {
+				const content = await app.vault.cachedRead(file);
+				for (const match of content.matchAll(URL_PATTERN)) {
+					urls.add(match[0]);
+				}
 			}
 		}
 	}
@@ -197,7 +200,7 @@ export async function generateFeed(
 
 	// Step 1.5: Cross-day deduplication
 	onProgress?.({ stage: "dedup", message: "正在去重（排除近期已报道内容）..." });
-	const recentUrls = await getRecentFeedUrls(app, feedFolder);
+	const recentUrls = await getRecentFeedUrls(app, feedFolder, 3, ["Feed", "Podcast"]);
 	const beforeCount = articles.length;
 	const dedupedArticles = articles.filter((a) => !recentUrls.has(a.url));
 	if (beforeCount > dedupedArticles.length) {
@@ -418,7 +421,7 @@ export async function generatePodcastFeed(
 	}
 
 	// Step 1.5: Cross-day dedup
-	const recentUrls = await getRecentFeedUrls(app, feedFolder);
+	const recentUrls = await getRecentFeedUrls(app, feedFolder, 3, ["Podcast", "Feed"]);
 	const beforeCount = items.length;
 	const dedupedItems = items.filter((it) => !recentUrls.has(it.link));
 	if (beforeCount > dedupedItems.length) {

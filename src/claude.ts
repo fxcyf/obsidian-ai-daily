@@ -474,13 +474,15 @@ function extractTextFromResponse(json: unknown): string {
 export async function callClaudeSimple(options: SimpleCallOptions): Promise<string> {
 	const { apiKey, model, systemPrompt, userMessage, maxTokens = MAX_TOKENS } = options;
 
-	const bodyObj = {
+	const bodyObj: Record<string, unknown> = {
 		model,
 		max_tokens: maxTokens,
-		system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
 		messages: [{ role: "user", content: userMessage }],
 		stream: true,
 	};
+	if (systemPrompt) {
+		bodyObj.system = [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }];
+	}
 
 	let res: Response | undefined;
 	for (let attempt = 0; ; attempt++) {
@@ -821,7 +823,7 @@ export class ClaudeClient {
 		try {
 			summary = await callClaudeSimple({
 				apiKey: this.apiKey,
-				model: this.model,
+				model: "claude-haiku-4-5",
 				systemPrompt: "",
 				userMessage:
 					"请将以下对话压缩为简洁的中文摘要，保留关键事实、决定与待办，省略寒暄。不超过 900 字。\n\n" +
@@ -957,12 +959,24 @@ export class ClaudeClient {
 	}
 
 	private buildRequestBody(): Record<string, unknown> {
+		const messages = this.messages.map((m) => ({ ...m }));
+		for (let i = messages.length - 1; i >= 0; i--) {
+			const m = messages[i];
+			if (m.role !== "user") continue;
+			if (typeof m.content === "string") {
+				m.content = [{ type: "text", text: m.content, cache_control: { type: "ephemeral" } }] as unknown as ContentBlock[];
+			} else if (Array.isArray(m.content) && m.content.length > 0) {
+				const last = { ...m.content[m.content.length - 1], cache_control: { type: "ephemeral" } };
+				m.content = [...m.content.slice(0, -1), last as ContentBlock];
+			}
+			break;
+		}
 		return {
 			model: this.model,
 			max_tokens: MAX_TOKENS,
 			system: [{ type: "text", text: this.systemPrompt, cache_control: { type: "ephemeral" } }],
 			tools: buildToolsArray(this.enableWebSearch, this.enableWeRead, this.enablePodcast),
-			messages: this.messages,
+			messages,
 		};
 	}
 

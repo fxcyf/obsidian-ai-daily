@@ -78,6 +78,11 @@ export default class AIDailyChat extends Plugin {
 			this.activateView();
 		});
 
+		// Ribbon icon to open harness
+		this.addRibbonIcon("brain", "Harness", () => {
+			this.activateHarnessView();
+		});
+
 		// Command to open chat
 		this.addCommand({
 			id: "open-chat",

@@ -8,14 +8,13 @@
  *   active_work_context: string   — replaces {active_work_context} in file paths
  *   Body: markdown table (项目 | 状态 | 来源 | 最近更新) for project picker
  *
- * KB/Projects/{active_project}/modes.md (frontmatter + body):
- *   Frontmatter modes[]:
- *     - id: string (required)     — unique identifier, matches ## heading in body
+ * KB/Projects/{active_project}/modes.md:
+ *   Body contains a ```yaml modes fenced block with mode definitions:
+ *     - id: string (required)     — unique identifier, matches ## heading
  *       label: string (required)  — button display text
  *       emoji: string             — defaults to "📋"
  *       files: string[]           — vault paths to inject, supports {active_project} / {active_work_context}
- *   Body:
- *     ## {mode-id} sections — each section is the system prompt for that mode
+ *   Body also has ## {mode-id} sections — each is the system prompt for that mode
  *
  * Status summary:
  *   KB/Projects/{active_project}/PROGRESS.md — last "- [x]" and first "- [ ]" from bottom
@@ -96,8 +95,7 @@ export class HarnessView extends ItemView {
 			const modesFile = this.app.vault.getAbstractFileByPath(modesPath);
 			if (modesFile instanceof TFile) {
 				const modesContent = await this.app.vault.read(modesFile);
-				const modesFm = this.app.metadataCache.getFileCache(modesFile)?.frontmatter ?? {};
-				modes = this.parseModes(modesFm, modesContent);
+				modes = this.parseModes(modesContent);
 			}
 		}
 
@@ -123,14 +121,13 @@ export class HarnessView extends ItemView {
 		return projects;
 	}
 
-	private parseModes(fm: Record<string, unknown>, body: string): HarnessMode[] {
-		const raw = fm.modes;
-		if (!Array.isArray(raw) || raw.length === 0) return [];
+	private parseModes(content: string): HarnessMode[] {
+		const raw = this.parseModesYamlBlock(content);
+		if (raw.length === 0) return [];
 
-		const sections = this.parseModeSections(body);
+		const sections = this.parseModeSections(content);
 
 		return raw
-			.filter((m): m is Record<string, unknown> => m != null && typeof m === "object")
 			.map((m) => {
 				const id = String(m.id ?? "");
 				return {
@@ -142,6 +139,43 @@ export class HarnessView extends ItemView {
 				};
 			})
 			.filter((m) => m.id && m.label);
+	}
+
+	private parseModesYamlBlock(content: string): Record<string, unknown>[] {
+		const match = content.match(/```ya?ml\s+modes\s*\n([\s\S]*?)```/);
+		if (!match) return [];
+
+		const yaml = match[1];
+		const modes: Record<string, unknown>[] = [];
+		let current: Record<string, unknown> | null = null;
+		let inFiles = false;
+
+		for (const line of yaml.split("\n")) {
+			if (line.match(/^- id:\s*/)) {
+				if (current) modes.push(current);
+				current = { id: line.replace(/^- id:\s*/, "").trim() };
+				inFiles = false;
+			} else if (current && line.match(/^\s+label:\s*/)) {
+				current.label = line.replace(/^\s+label:\s*/, "").trim();
+				inFiles = false;
+			} else if (current && line.match(/^\s+emoji:\s*/)) {
+				current.emoji = line.replace(/^\s+emoji:\s*/, "").trim().replace(/^["']|["']$/g, "");
+				inFiles = false;
+			} else if (current && line.match(/^\s+files:\s*$/)) {
+				current.files = [];
+				inFiles = true;
+			} else if (current && line.match(/^\s+files:\s*\[\s*\]\s*$/)) {
+				current.files = [];
+				inFiles = false;
+			} else if (inFiles && current && line.match(/^\s+-\s+/)) {
+				(current.files as string[]).push(line.replace(/^\s+-\s+/, "").trim());
+			} else {
+				inFiles = false;
+			}
+		}
+		if (current) modes.push(current);
+
+		return modes;
 	}
 
 	private parseModeSections(content: string): Map<string, string> {

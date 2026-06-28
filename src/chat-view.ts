@@ -648,6 +648,56 @@ export class ChatView extends ItemView {
 		this.processMarkdownLinks(el);
 		this.processWikiLinks(el);
 		this.processCodeBlocks(el);
+		this.addSaveToInboxBtn(el);
+	}
+
+	private addSaveToInboxBtn(el: HTMLElement): void {
+		if (el.querySelector(".ai-daily-save-inbox-btn")) return;
+
+		const btn = el.createDiv({ cls: "ai-daily-save-inbox-btn" });
+		setIcon(btn, "pin");
+		btn.setAttribute("aria-label", "保存到 Inbox");
+		btn.setAttribute("title", "保存到 Inbox");
+
+		btn.addEventListener("click", async () => {
+			const text = el.textContent?.trim() ?? "";
+			if (!text) return;
+
+			const today = new Date().toISOString().slice(0, 10);
+			const snippet = text.length > 200 ? text.slice(0, 200) + "…" : text;
+			const entry = `- [ ] [AI 对话] ${snippet}`;
+
+			const inboxPath = "KB/Inbox/ideas.md";
+			const file = this.app.vault.getAbstractFileByPath(inboxPath);
+
+			if (file instanceof TFile) {
+				let content = await this.app.vault.read(file);
+				const dateHeader = `## ${today}`;
+				if (content.includes(dateHeader)) {
+					content = content.replace(dateHeader, `${dateHeader}\n${entry}`);
+				} else {
+					const insertPos = content.indexOf("\n## ");
+					if (insertPos !== -1) {
+						content = content.slice(0, insertPos) + `\n${dateHeader}\n${entry}\n` + content.slice(insertPos);
+					} else {
+						content += `\n\n${dateHeader}\n${entry}`;
+					}
+				}
+				await this.app.vault.modify(file, content);
+			} else {
+				await this.app.vault.create(inboxPath, `# Inbox\n\n${dateHeader}\n${entry}\n`);
+			}
+
+			btn.empty();
+			setIcon(btn, "check");
+			btn.addClass("ai-daily-save-inbox-done");
+			new Notice("已保存到 Inbox", 2000);
+			setTimeout(() => {
+				btn.empty();
+				setIcon(btn, "pin");
+				btn.removeClass("ai-daily-save-inbox-done");
+			}, 2000);
+		});
 	}
 
 	private processMarkdownLinks(el: HTMLElement): void {

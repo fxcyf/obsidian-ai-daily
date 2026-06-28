@@ -1568,3 +1568,60 @@
 	border-radius: 4px;
 	font-family: var(--font-monospace);
 }
+
+/* ── Inbox badge ──────────────────────────────────────── */
+
+.ai-daily-harness-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 18px;
+	height: 18px;
+	padding: 0 5px;
+	border-radius: 9px;
+	background: var(--text-error);
+	color: white;
+	font-size: 11px;
+	font-weight: 600;
+	margin-left: 4px;
+}
+
+.ai-daily-harness-mode-active .ai-daily-harness-badge {
+	background: rgba(255, 255, 255, 0.3);
+}
+
+/* ── Save to Inbox button ─────────────────────────────── */
+
+.ai-daily-msg-assistant {
+	position: relative;
+}
+
+.ai-daily-save-inbox-btn {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	width: 24px;
+	height: 24px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 4px;
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 0.15s ease;
+	color: var(--text-muted);
+}
+
+.ai-daily-msg-assistant:hover .ai-daily-save-inbox-btn {
+	opacity: 1;
+}
+
+.ai-daily-save-inbox-btn:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.ai-daily-save-inbox-btn.ai-daily-save-inbox-done {
+	opacity: 1;
+	color: var(--text-success);
+}

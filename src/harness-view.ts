@@ -72,6 +72,7 @@ export class HarnessView extends ItemView {
 		container.addClass("ai-daily-harness-container");
 		this.containerDiv = container;
 
+		this.selectedModeId = localStorage.getItem("ai-daily-harness-mode") ?? null;
 		await this.loadProjectIndex();
 		this.buildUI();
 	}
@@ -127,14 +128,14 @@ export class HarnessView extends ItemView {
 			.filter((m) => m.id && m.label);
 	}
 
-	private buildUI(): void {
+	private async buildUI(): Promise<void> {
 		this.containerDiv.empty();
 
 		const header = this.containerDiv.createDiv({ cls: "ai-daily-harness-header" });
 		header.createDiv({ cls: "ai-daily-harness-title", text: "Harness" });
 
 		this.buildProjectSection();
-		this.buildModeSection();
+		await this.buildModeSection();
 		this.buildStatusSection();
 		this.buildStartButton();
 	}
@@ -161,12 +162,14 @@ export class HarnessView extends ItemView {
 		switchBtn.addEventListener("click", () => this.showProjectPicker());
 	}
 
-	private buildModeSection(): void {
+	private async buildModeSection(): Promise<void> {
 		const section = this.containerDiv.createDiv({ cls: "ai-daily-harness-section" });
 		section.createDiv({ cls: "ai-daily-harness-section-label", text: "模式" });
 
 		const grid = section.createDiv({ cls: "ai-daily-harness-mode-grid" });
 		const modes = this.projectIndex?.modes ?? this.plugin.settings.harnessModes;
+
+		const inboxCount = await this.getInboxCount();
 
 		for (const mode of modes) {
 			const btn = grid.createEl("button", {
@@ -175,12 +178,20 @@ export class HarnessView extends ItemView {
 			btn.createSpan({ text: mode.emoji });
 			btn.createSpan({ text: ` ${mode.label}` });
 
+			if (mode.id === "inbox" && inboxCount > 0) {
+				btn.createSpan({
+					cls: "ai-daily-harness-badge",
+					text: String(inboxCount),
+				});
+			}
+
 			if (this.selectedModeId === mode.id) {
 				btn.addClass("ai-daily-harness-mode-active");
 			}
 
 			btn.addEventListener("click", () => {
 				this.selectedModeId = this.selectedModeId === mode.id ? null : mode.id;
+				this.persistModeSelection();
 				this.refreshModeButtons(grid, modes);
 				this.updateStartButton();
 			});
@@ -198,6 +209,7 @@ export class HarnessView extends ItemView {
 
 		freeBtn.addEventListener("click", () => {
 			this.selectedModeId = this.selectedModeId === "__free__" ? null : "__free__";
+			this.persistModeSelection();
 			this.refreshModeButtons(grid, modes);
 			this.updateStartButton();
 		});
@@ -295,6 +307,21 @@ export class HarnessView extends ItemView {
 
 	private countUnprocessedInbox(content: string): number {
 		return content.split("\n").filter((l) => l.trim().startsWith("- [ ]")).length;
+	}
+
+	private async getInboxCount(): Promise<number> {
+		const file = this.app.vault.getAbstractFileByPath("KB/Inbox/ideas.md");
+		if (!(file instanceof TFile)) return 0;
+		const content = await this.app.vault.read(file);
+		return this.countUnprocessedInbox(content);
+	}
+
+	private persistModeSelection(): void {
+		if (this.selectedModeId) {
+			localStorage.setItem("ai-daily-harness-mode", this.selectedModeId);
+		} else {
+			localStorage.removeItem("ai-daily-harness-mode");
+		}
 	}
 
 	private buildStartButton(): void {

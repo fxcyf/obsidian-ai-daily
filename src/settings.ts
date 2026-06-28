@@ -470,6 +470,12 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
+		// ── Harness settings ───────────────────────────────────
+
+		containerEl.createEl("h3", { text: "Harness 模式" });
+
+		this.renderHarnessModes(containerEl);
+
 		// ── Feed settings ──────────────────────────────────────
 
 		containerEl.createEl("h3", { text: "Feed 设置" });
@@ -635,6 +641,151 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 		cancelBtn.addEventListener("click", () => {
 			if (!tpl.name && !tpl.prompt) {
 				this.plugin.settings.promptTemplates.splice(index, 1);
+			}
+			this.display();
+		});
+	}
+
+	private renderHarnessModes(containerEl: HTMLElement): void {
+		const wrapper = containerEl.createDiv({ cls: "ai-daily-harness-modes" });
+
+		const desc = new Setting(wrapper)
+			.setName("Harness 面板中的模式按钮，点击「开始」时注入对应文件到 Chat View")
+			.addButton((btn) =>
+				btn.setButtonText("添加模式").setCta().onClick(async () => {
+					this.plugin.settings.harnessModes.push({
+						id: `mode-${Date.now()}`,
+						label: "",
+						emoji: "📋",
+						files: [],
+						systemPromptAppend: "",
+					});
+					await this.plugin.saveSettings();
+					this.display();
+				})
+			)
+			.addButton((btn) =>
+				btn.setButtonText("恢复默认").onClick(async () => {
+					this.plugin.settings.harnessModes = [...DEFAULT_HARNESS_MODES];
+					await this.plugin.saveSettings();
+					this.display();
+				})
+			);
+		desc.settingEl.addClass("ai-daily-setting-desc-only");
+
+		for (let i = 0; i < this.plugin.settings.harnessModes.length; i++) {
+			const mode = this.plugin.settings.harnessModes[i];
+			const s = new Setting(wrapper)
+				.setName(`${mode.emoji} ${mode.label || "(未命名)"}`)
+				.setDesc(
+					mode.files.length > 0
+						? mode.files.join(", ")
+						: "(无文件)"
+				);
+
+			s.addButton((btn) =>
+				btn
+					.setIcon("pencil")
+					.setTooltip("编辑")
+					.onClick(() => {
+						this.openHarnessModeEditor(wrapper, i);
+					})
+			);
+
+			s.addButton((btn) =>
+				btn
+					.setIcon("trash-2")
+					.setTooltip("删除")
+					.onClick(async () => {
+						this.plugin.settings.harnessModes.splice(i, 1);
+						await this.plugin.saveSettings();
+						this.display();
+					})
+			);
+		}
+	}
+
+	private openHarnessModeEditor(wrapper: HTMLElement, index: number): void {
+		const mode = this.plugin.settings.harnessModes[index];
+		if (!mode) return;
+
+		wrapper
+			.querySelectorAll(".ai-daily-harness-mode-editor")
+			.forEach((el) => el.remove());
+
+		const editor = wrapper.createDiv({
+			cls: "ai-daily-harness-mode-editor ai-daily-feed-source-editor",
+		});
+
+		const emojiField = editor.createDiv({ cls: "ai-daily-feed-editor-field" });
+		emojiField.createEl("label", { text: "Emoji" });
+		const emojiInput = emojiField.createEl("input", {
+			type: "text",
+			placeholder: "📚",
+			value: mode.emoji,
+		});
+		emojiInput.style.width = "60px";
+
+		const labelField = editor.createDiv({ cls: "ai-daily-feed-editor-field" });
+		labelField.createEl("label", { text: "名称" });
+		const labelInput = labelField.createEl("input", {
+			type: "text",
+			placeholder: "学习",
+			value: mode.label,
+		});
+
+		const filesField = editor.createDiv({ cls: "ai-daily-feed-editor-field" });
+		filesField.createEl("label", { text: "注入文件" });
+		const filesDesc = filesField.createEl("div", {
+			cls: "setting-item-description",
+		});
+		filesDesc.textContent =
+			"每行一个路径，支持 {active_project} 和 {active_work_context} 变量";
+		const filesInput = filesField.createEl("textarea", {
+			placeholder: "KB/Projects/_INDEX.md\nKB/Projects/{active_project}/PROGRESS.md",
+		});
+		filesInput.value = mode.files.join("\n");
+		filesInput.rows = 3;
+		filesInput.style.width = "100%";
+		filesInput.style.resize = "vertical";
+
+		const promptField = editor.createDiv({ cls: "ai-daily-feed-editor-field" });
+		promptField.createEl("label", { text: "System Prompt 追加" });
+		const promptInput = promptField.createEl("textarea", {
+			placeholder: "你现在是 AI 老师，进入学习模式。",
+		});
+		promptInput.value = mode.systemPromptAppend;
+		promptInput.rows = 3;
+		promptInput.style.width = "100%";
+		promptInput.style.resize = "vertical";
+
+		const btnRow = editor.createDiv({ cls: "ai-daily-feed-editor-btns" });
+		const saveBtn = btnRow.createEl("button", { text: "保存", cls: "mod-cta" });
+		const cancelBtn = btnRow.createEl("button", { text: "取消" });
+
+		saveBtn.addEventListener("click", async () => {
+			const label = labelInput.value.trim();
+			if (!label) {
+				saveBtn.textContent = "请填写名称";
+				setTimeout(() => {
+					saveBtn.textContent = "保存";
+				}, 1500);
+				return;
+			}
+			mode.emoji = emojiInput.value.trim() || "📋";
+			mode.label = label;
+			mode.files = filesInput.value
+				.split("\n")
+				.map((s) => s.trim())
+				.filter(Boolean);
+			mode.systemPromptAppend = promptInput.value.trim();
+			await this.plugin.saveSettings();
+			this.display();
+		});
+
+		cancelBtn.addEventListener("click", () => {
+			if (!mode.label) {
+				this.plugin.settings.harnessModes.splice(index, 1);
 			}
 			this.display();
 		});

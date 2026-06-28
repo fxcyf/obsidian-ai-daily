@@ -1,3 +1,27 @@
+/**
+ * Harness View — reads config from KB/Projects/_INDEX.md
+ *
+ * _INDEX.md schema:
+ *
+ * Frontmatter (YAML):
+ *   active_project: string        — replaces {active_project} in file paths
+ *   active_work_context: string   — replaces {active_work_context} in file paths
+ *   modes: array (optional, falls back to settings.harnessModes)
+ *     - id: string (required)     — unique identifier
+ *       label: string (required)  — button display text
+ *       emoji: string             — defaults to "📋"
+ *       files: string[]           — vault paths to inject, supports {active_project} / {active_work_context}
+ *       prompt: string            — appended to system prompt when mode is activated
+ *
+ * Body:
+ *   Markdown table with columns: 项目 | 状态 | 来源 | 最近更新
+ *   Used by the project picker dropdown. Header row is skipped.
+ *
+ * Status summary reads from:
+ *   KB/Projects/{active_project}/PROGRESS.md — last "- [x]" and first "- [ ]" from bottom
+ *   KB/Inbox/ideas.md — count of "- [ ]" lines
+ */
+
 import { ItemView, WorkspaceLeaf, setIcon, TFile } from "obsidian";
 import type AIDailyChat from "./main";
 import type { HarnessMode } from "./settings";

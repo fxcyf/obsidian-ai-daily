@@ -477,7 +477,7 @@ export async function callClaudeSimple(options: SimpleCallOptions): Promise<stri
 	const bodyObj = {
 		model,
 		max_tokens: maxTokens,
-		system: systemPrompt,
+		system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
 		messages: [{ role: "user", content: userMessage }],
 		stream: true,
 	};
@@ -547,6 +547,9 @@ export function buildToolsArray(enableWebSearch: boolean, enableWeRead: boolean 
 	}
 	if (enablePodcast) {
 		tools.push(...PODCAST_TOOLS);
+	}
+	if (tools.length > 0) {
+		tools[tools.length - 1] = { ...tools[tools.length - 1], cache_control: { type: "ephemeral" } };
 	}
 	return tools;
 }
@@ -952,7 +955,7 @@ export class ClaudeClient {
 		return {
 			model: this.model,
 			max_tokens: MAX_TOKENS,
-			system: this.systemPrompt,
+			system: [{ type: "text", text: this.systemPrompt, cache_control: { type: "ephemeral" } }],
 			tools: buildToolsArray(this.enableWebSearch, this.enableWeRead, this.enablePodcast),
 			messages: this.messages,
 		};

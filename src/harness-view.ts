@@ -8,6 +8,7 @@ interface ProjectIndex {
 	activeProject: string;
 	activeWorkContext: string;
 	projects: { name: string; status: string; updated: string }[];
+	modes: HarnessMode[];
 }
 
 export interface HarnessContext {
@@ -59,38 +60,47 @@ export class HarnessView extends ItemView {
 		}
 
 		const content = await this.app.vault.read(file);
-		this.projectIndex = this.parseProjectIndex(content);
+		const cache = this.app.metadataCache.getFileCache(file);
+		const fm = cache?.frontmatter ?? {};
+
+		this.projectIndex = {
+			activeProject: String(fm.active_project ?? ""),
+			activeWorkContext: String(fm.active_work_context ?? ""),
+			projects: this.parseProjectTable(content),
+			modes: this.parseModes(fm),
+		};
 	}
 
-	private parseProjectIndex(content: string): ProjectIndex {
-		const result: ProjectIndex = {
-			activeProject: "",
-			activeWorkContext: "",
-			projects: [],
-		};
-
-		for (const line of content.split("\n")) {
-			const trimmed = line.trim();
-			if (trimmed.startsWith("active_project:")) {
-				result.activeProject = trimmed.slice("active_project:".length).trim();
-			} else if (trimmed.startsWith("active_work_context:")) {
-				result.activeWorkContext = trimmed.slice("active_work_context:".length).trim();
-			}
-		}
-
-		const tableLines = content.split("\n").filter((l) => l.trim().startsWith("|") && !l.includes("---"));
+	private parseProjectTable(content: string): { name: string; status: string; updated: string }[] {
+		const projects: { name: string; status: string; updated: string }[] = [];
+		const tableLines = content.split("\n").filter(
+			(l) => l.trim().startsWith("|") && !l.includes("---")
+		);
 		for (let i = 1; i < tableLines.length; i++) {
 			const cols = tableLines[i].split("|").map((c) => c.trim()).filter(Boolean);
 			if (cols.length >= 4) {
-				result.projects.push({
-					name: cols[0],
-					status: cols[1],
-					updated: cols[3],
-				});
+				projects.push({ name: cols[0], status: cols[1], updated: cols[3] });
 			}
 		}
+		return projects;
+	}
 
-		return result;
+	private parseModes(fm: Record<string, unknown>): HarnessMode[] {
+		const raw = fm.modes;
+		if (!Array.isArray(raw) || raw.length === 0) {
+			return this.plugin.settings.harnessModes;
+		}
+
+		return raw
+			.filter((m): m is Record<string, unknown> => m != null && typeof m === "object")
+			.map((m) => ({
+				id: String(m.id ?? ""),
+				label: String(m.label ?? ""),
+				emoji: String(m.emoji ?? "📋"),
+				files: Array.isArray(m.files) ? m.files.map(String) : [],
+				systemPromptAppend: String(m.prompt ?? m.systemPromptAppend ?? ""),
+			}))
+			.filter((m) => m.id && m.label);
 	}
 
 	private buildUI(): void {
@@ -132,7 +142,7 @@ export class HarnessView extends ItemView {
 		section.createDiv({ cls: "ai-daily-harness-section-label", text: "模式" });
 
 		const grid = section.createDiv({ cls: "ai-daily-harness-mode-grid" });
-		const modes = this.plugin.settings.harnessModes;
+		const modes = this.projectIndex?.modes ?? this.plugin.settings.harnessModes;
 
 		for (const mode of modes) {
 			const btn = grid.createEl("button", {
@@ -288,7 +298,8 @@ export class HarnessView extends ItemView {
 			return;
 		}
 
-		const mode = this.plugin.settings.harnessModes.find((m) => m.id === this.selectedModeId);
+		const modes = this.projectIndex?.modes ?? this.plugin.settings.harnessModes;
+		const mode = modes.find((m) => m.id === this.selectedModeId);
 		if (!mode) return;
 
 		const injectedFiles = await this.resolveFiles(mode.files);

@@ -45,7 +45,12 @@ export type ContentBlock = TextBlock | ToolUseBlock | ServerToolUseBlock | Opaqu
 export interface ApiResponse {
 	content: ContentBlock[];
 	stop_reason: string;
-	usage: { input_tokens: number; output_tokens: number };
+	usage: {
+		input_tokens: number;
+		output_tokens: number;
+		cache_creation_input_tokens?: number;
+		cache_read_input_tokens?: number;
+	};
 }
 
 export interface StreamCallbacks {
@@ -147,7 +152,7 @@ export class AnthropicStreamAssembler {
 	private blocks: (ContentBlock | undefined)[] = [];
 	private toolJsonBuffers = new Map<number, string>();
 	private stopReason = "";
-	private usage = { input_tokens: 0, output_tokens: 0 };
+	private usage: ApiResponse["usage"] = { input_tokens: 0, output_tokens: 0 };
 	private gotMessageStop = false;
 	private callbacks: StreamCallbacks;
 
@@ -199,6 +204,8 @@ export class AnthropicStreamAssembler {
 						input_tokens: u.input_tokens ?? this.usage.input_tokens,
 						output_tokens:
 							u.output_tokens ?? this.usage.output_tokens,
+						cache_creation_input_tokens: (u as Record<string, unknown>).cache_creation_input_tokens as number | undefined,
+						cache_read_input_tokens: (u as Record<string, unknown>).cache_read_input_tokens as number | undefined,
 					};
 				}
 				return;

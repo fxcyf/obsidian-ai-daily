@@ -686,6 +686,11 @@ export class ClaudeClient {
 			this.stripImageData();
 			const response = await this.callApi(onDelta, signal);
 
+			const u = response.usage;
+			if (u.cache_read_input_tokens || u.cache_creation_input_tokens) {
+				console.log(`[ai-daily] cache: read=${u.cache_read_input_tokens ?? 0} created=${u.cache_creation_input_tokens ?? 0} input=${u.input_tokens}`);
+			}
+
 			let roundText = "";
 			for (const block of response.content) {
 				if (block.type === "text") {

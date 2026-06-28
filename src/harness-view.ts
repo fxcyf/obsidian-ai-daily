@@ -6,7 +6,7 @@
  * Frontmatter (YAML):
  *   active_project: string        — replaces {active_project} in file paths
  *   active_work_context: string   — replaces {active_work_context} in file paths
- *   modes: array (optional, falls back to settings.harnessModes)
+ *   modes: array (required for mode buttons to appear)
  *     - id: string (required)     — unique identifier
  *       label: string (required)  — button display text
  *       emoji: string             — defaults to "📋"
@@ -113,7 +113,7 @@ export class HarnessView extends ItemView {
 	private parseModes(fm: Record<string, unknown>): HarnessMode[] {
 		const raw = fm.modes;
 		if (!Array.isArray(raw) || raw.length === 0) {
-			return this.plugin.settings.harnessModes;
+			return [];
 		}
 
 		return raw
@@ -167,7 +167,7 @@ export class HarnessView extends ItemView {
 		section.createDiv({ cls: "ai-daily-harness-section-label", text: "模式" });
 
 		const grid = section.createDiv({ cls: "ai-daily-harness-mode-grid" });
-		const modes = this.projectIndex?.modes ?? this.plugin.settings.harnessModes;
+		const modes = this.projectIndex?.modes ?? [];
 
 		const inboxCount = await this.getInboxCount();
 
@@ -349,7 +349,7 @@ export class HarnessView extends ItemView {
 			return;
 		}
 
-		const modes = this.projectIndex?.modes ?? this.plugin.settings.harnessModes;
+		const modes = this.projectIndex?.modes ?? [];
 		const mode = modes.find((m) => m.id === this.selectedModeId);
 		if (!mode) return;
 

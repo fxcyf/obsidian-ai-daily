@@ -97,7 +97,8 @@ rebase 发生冲突时：
 - `src/podcast-tools.test.ts` — podcast-tools 单测（extractYouTubeId）
 - `src/weread-tools.ts` — 微信读书 API 客户端（统一网关调用，Bearer auth）
 - `src/weread-prompts.ts` — 微信读书 system prompt（API 模式 + Claude Code 模式两套）
-- `src/settings.ts` — 插件设置（含 Feed 配置、微信读书配置）
+- `src/harness-view.ts` — Harness View 面板（模式切换、项目管理、状态摘要、context 注入到 Chat View）
+- `src/settings.ts` — 插件设置（含 Feed 配置、微信读书配置、Harness 模式配置）
 - `src/feeds.ts` — 多源抓取（RSS/HN API/Reddit/GitHub Trending）、社交热度评分、时间衰减、爆发检测
 - `src/feed-generator.ts` — Feed 生成器，编排 RSS + vault 搜索 + Claude 汇总；含独立播客 Feed 生成（transcript 提取 + Claude 深度分析）
 - `mcp-server/` — 独立 MCP server，用于 Claude Code 直接操作 vault（纯 Node.js 文件操作，不依赖 Obsidian API）

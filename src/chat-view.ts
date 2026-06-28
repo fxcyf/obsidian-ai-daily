@@ -22,6 +22,7 @@ import { WeReadTools } from "./weread-tools";
 import { PodcastTools } from "./podcast-tools";
 import { WEREAD_SYSTEM_PROMPT, WEREAD_CLAUDE_CODE_PROMPT } from "./weread-prompts";
 import type { PromptTemplate } from "./settings";
+import type { HarnessContext } from "./harness-view";
 import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
 import type { PreparedImage } from "./image-tools";
 import { distillConversation, prepareDistillation, prepareHealthFix, type HealthCheckResult } from "./knowledge-agent";
@@ -205,6 +206,7 @@ export class ChatView extends ItemView {
 	private sessionId: string | null = null;
 	private attachedFiles: TFile[] = [];
 	private attachBarEl: HTMLElement | null = null;
+	private harnessContext: HarnessContext | null = null;
 	private mentionPopupEl: HTMLElement | null = null;
 	private mentionStartPos: number | null = null;
 	private mentionCursorPos: number | null = null;
@@ -1279,6 +1281,7 @@ export class ChatView extends ItemView {
 			"当用户提到某篇笔记时，先用 search_vault 搜索，找到后用 read_note 读取。",
 			"创建或编辑 Wiki 条目时，维护组织结构：复用已有 tags 避免同义重复，主动添加 [[wiki-link]] 关联相关条目，优先合并到已有条目而非创建重叠内容。",
 			knowledgeContext ? `## 最近的知识库笔记\n\n${knowledgeContext}` : "",
+			this.harnessContext ? this.buildHarnessPrompt() : "",
 		]
 			.filter(Boolean)
 			.join("\n\n");
@@ -1296,6 +1299,26 @@ export class ChatView extends ItemView {
 				console.warn("[ai-daily] stream fallback:", reason);
 			},
 		});
+	}
+
+	private buildHarnessPrompt(): string {
+		if (!this.harnessContext) return "";
+
+		const { mode, injectedFiles } = this.harnessContext;
+		const parts: string[] = [
+			`## Harness 模式：${mode.emoji} ${mode.label}`,
+			"",
+			mode.systemPromptAppend,
+		];
+
+		if (injectedFiles.length > 0) {
+			parts.push("", "## 注入的文件内容");
+			for (const file of injectedFiles) {
+				parts.push("", `### ${file.path}`, "", file.content);
+			}
+		}
+
+		return parts.join("\n");
 	}
 
 	private async persistSession(): Promise<void> {
@@ -1533,6 +1556,35 @@ export class ChatView extends ItemView {
 			}
 			default:
 				return `不支持的撤销操作: ${data.tool}`;
+		}
+	}
+
+	startWithContext(context: HarnessContext | null): void {
+		this.clearChat();
+		this.harnessContext = context;
+
+		if (context) {
+			const modeLabel = `${context.mode.emoji} ${context.mode.label}`;
+			const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
+			if (welcome) welcome.remove();
+
+			const harnessEl = this.messagesEl.createDiv({ cls: "ai-daily-harness-banner" });
+			harnessEl.createDiv({
+				cls: "ai-daily-harness-banner-mode",
+				text: `模式：${modeLabel}`,
+			});
+			if (context.injectedFiles.length > 0) {
+				const filesEl = harnessEl.createDiv({ cls: "ai-daily-harness-banner-files" });
+				filesEl.createSpan({ text: "已注入：" });
+				for (const f of context.injectedFiles) {
+					filesEl.createSpan({
+						cls: "ai-daily-harness-banner-file",
+						text: f.path,
+					});
+				}
+			}
+
+			this.inputEl.focus();
 		}
 	}
 
@@ -2136,6 +2188,7 @@ export class ChatView extends ItemView {
 		this.cachedTokenCount = 0;
 		this.client = null;
 		this.vaultTools = null;
+		this.harnessContext = null;
 		this.claudeCodeSessionId = undefined;
 		this.claudeCodeUndoHistory = [];
 		this.attachedFiles = [];

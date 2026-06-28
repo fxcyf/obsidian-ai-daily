@@ -3,6 +3,44 @@ import type AIDailyChat from "./main";
 import { DEFAULT_FEEDS, type FeedSource } from "./feeds";
 import type { StreamMode } from "./claude";
 
+export interface HarnessMode {
+	id: string;
+	label: string;
+	emoji: string;
+	files: string[];
+	systemPromptAppend: string;
+}
+
+export const DEFAULT_HARNESS_MODES: HarnessMode[] = [
+	{
+		id: "learning",
+		label: "学习",
+		emoji: "📚",
+		files: [
+			"KB/Projects/_INDEX.md",
+			"KB/Projects/{active_project}/PROGRESS.md",
+		],
+		systemPromptAppend:
+			"你现在是 AI 老师，进入学习模式。已注入学习进度，从 PROGRESS.md 找到下一步，直接开始教学。",
+	},
+	{
+		id: "inbox",
+		label: "Inbox",
+		emoji: "📥",
+		files: ["KB/Inbox/ideas.md"],
+		systemPromptAppend:
+			"你现在是整理助手，帮用户 triage Inbox 里的新想法。列出未处理条目，逐条讨论是否值得升级为项目。",
+	},
+	{
+		id: "work",
+		label: "工作",
+		emoji: "💼",
+		files: ["KB/Work/{active_work_context}.md"],
+		systemPromptAppend:
+			"你现在是工程顾问，结合用户的实际工程问题提供建议。把当前话题联系到注入的工作上下文里的实际约束。",
+	},
+];
+
 export interface PromptTemplate {
 	name: string;
 	prompt: string;
@@ -50,6 +88,8 @@ export interface AIDailyChatSettings {
 	// WeRead settings
 	enableWeRead: boolean;
 	wereadApiKey: string;
+	// Harness settings
+	harnessModes: HarnessMode[];
 }
 
 export const DEFAULT_SETTINGS: AIDailyChatSettings = {
@@ -79,6 +119,7 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	enablePodcast: true,
 	enableWeRead: false,
 	wereadApiKey: "",
+	harnessModes: DEFAULT_HARNESS_MODES,
 };
 
 export class AIDailyChatSettingTab extends PluginSettingTab {

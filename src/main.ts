@@ -5,6 +5,7 @@ import {
 	AIDailyChatSettingTab,
 } from "./settings";
 import { ChatView, VIEW_TYPE } from "./chat-view";
+import { HarnessView, HARNESS_VIEW_TYPE, type HarnessContext } from "./harness-view";
 import { generateFeed, checkExistingFeed, generatePodcastFeed, checkExistingPodcastFeed } from "./feed-generator";
 import { DEFAULT_FEEDS } from "./feeds";
 import { AutoTagger } from "./auto-tagger";
@@ -69,6 +70,9 @@ export default class AIDailyChat extends Plugin {
 		// Register the chat sidebar view
 		this.registerView(VIEW_TYPE, (leaf) => new ChatView(leaf, this));
 
+		// Register the harness view
+		this.registerView(HARNESS_VIEW_TYPE, (leaf) => new HarnessView(leaf, this));
+
 		// Ribbon icon to open chat
 		this.addRibbonIcon("message-circle", "AI Knowledge Chat", () => {
 			this.activateView();
@@ -79,6 +83,13 @@ export default class AIDailyChat extends Plugin {
 			id: "open-chat",
 			name: "打开 AI Knowledge Chat",
 			callback: () => this.activateView(),
+		});
+
+		// Command to open harness
+		this.addCommand({
+			id: "open-harness",
+			name: "打开 Harness",
+			callback: () => this.activateHarnessView(),
 		});
 
 		// Command to chat about the current note
@@ -175,6 +186,41 @@ export default class AIDailyChat extends Plugin {
 		if (leaf) {
 			workspace.revealLeaf(leaf);
 		}
+	}
+
+	async activateHarnessView(): Promise<void> {
+		const { workspace } = this.app;
+
+		let leaf = workspace.getLeavesOfType(HARNESS_VIEW_TYPE)[0];
+
+		if (leaf && Platform.isMobile && this.isLeafInSidebar(leaf)) {
+			leaf.detach();
+			leaf = undefined as unknown as import("obsidian").WorkspaceLeaf;
+		}
+
+		if (!leaf) {
+			if (Platform.isMobile) {
+				leaf = workspace.getLeaf(true);
+			} else {
+				const rightLeaf = workspace.getRightLeaf(false);
+				if (rightLeaf) leaf = rightLeaf;
+			}
+			if (leaf) {
+				await leaf.setViewState({ type: HARNESS_VIEW_TYPE, active: true });
+			}
+		}
+
+		if (leaf) {
+			workspace.revealLeaf(leaf);
+		}
+	}
+
+	async startChatWithContext(context: HarnessContext | null): Promise<void> {
+		await this.activateView();
+		const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
+		if (!leaf) return;
+		const view = leaf.view as ChatView;
+		view.startWithContext(context);
 	}
 
 	async generateFeed(): Promise<void> {

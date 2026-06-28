@@ -1342,3 +1342,229 @@
 	color: var(--text-faint);
 	font-style: italic;
 }
+
+/* ── Harness View ─────────────────────────────────────── */
+
+.ai-daily-harness-container {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	padding: 16px;
+	gap: 16px;
+	overflow-y: auto;
+}
+
+.ai-daily-harness-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.ai-daily-harness-title {
+	font-size: 18px;
+	font-weight: 600;
+}
+
+.ai-daily-harness-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.ai-daily-harness-section-label {
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.ai-daily-harness-project-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 8px 12px;
+	background: var(--background-secondary);
+	border-radius: 8px;
+}
+
+.ai-daily-harness-project-name {
+	font-size: 15px;
+	font-weight: 500;
+}
+
+.ai-daily-harness-switch-btn {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 8px;
+	font-size: 12px;
+	cursor: pointer;
+	background: none;
+	border: none;
+	color: var(--text-muted);
+	border-radius: 4px;
+}
+
+.ai-daily-harness-switch-btn:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.ai-daily-harness-mode-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px;
+}
+
+.ai-daily-harness-mode-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	padding: 12px 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-secondary);
+	cursor: pointer;
+	font-size: 14px;
+	transition: all 0.15s ease;
+}
+
+.ai-daily-harness-mode-btn:hover {
+	background: var(--background-modifier-hover);
+	border-color: var(--interactive-accent);
+}
+
+.ai-daily-harness-mode-btn.ai-daily-harness-mode-active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
+}
+
+.ai-daily-harness-status {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 10px 12px;
+	background: var(--background-secondary);
+	border-radius: 8px;
+	font-size: 13px;
+}
+
+.ai-daily-harness-status-row {
+	display: flex;
+	gap: 4px;
+	line-height: 1.4;
+}
+
+.ai-daily-harness-status-label {
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
+.ai-daily-harness-muted {
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+.ai-daily-harness-start-section {
+	margin-top: auto;
+	padding-top: 16px;
+}
+
+.ai-daily-harness-start-btn {
+	width: 100%;
+	padding: 12px;
+	font-size: 16px;
+	font-weight: 500;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border: none;
+	border-radius: 8px;
+	cursor: pointer;
+	transition: opacity 0.15s ease;
+}
+
+.ai-daily-harness-start-btn:hover:not(:disabled) {
+	opacity: 0.9;
+}
+
+.ai-daily-harness-start-btn:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+.ai-daily-harness-picker {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 8px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	box-shadow: var(--shadow-s);
+}
+
+.ai-daily-harness-picker-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-radius: 6px;
+	cursor: pointer;
+	font-size: 14px;
+}
+
+.ai-daily-harness-picker-item:hover {
+	background: var(--background-modifier-hover);
+}
+
+.ai-daily-harness-picker-item.ai-daily-harness-picker-active {
+	background: var(--background-modifier-hover);
+	font-weight: 500;
+}
+
+.ai-daily-harness-picker-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+.ai-daily-harness-picker-status {
+	margin-left: auto;
+	font-size: 12px;
+	color: var(--text-muted);
+}
+
+/* ── Harness banner in Chat View ──────────────────────── */
+
+.ai-daily-harness-banner {
+	padding: 10px 14px;
+	margin-bottom: 8px;
+	background: var(--background-secondary);
+	border-radius: 8px;
+	border-left: 3px solid var(--interactive-accent);
+	font-size: 13px;
+}
+
+.ai-daily-harness-banner-mode {
+	font-weight: 500;
+	margin-bottom: 4px;
+}
+
+.ai-daily-harness-banner-files {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	color: var(--text-muted);
+	font-size: 12px;
+}
+
+.ai-daily-harness-banner-file {
+	background: var(--background-modifier-hover);
+	padding: 1px 6px;
+	border-radius: 4px;
+	font-family: var(--font-monospace);
+}

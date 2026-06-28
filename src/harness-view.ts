@@ -1,23 +1,23 @@
 /**
- * Harness View — reads config from KB/Projects/_INDEX.md
+ * Harness View — per-project mode system.
  *
- * _INDEX.md schema:
+ * Data sources:
  *
- * Frontmatter (YAML):
- *   active_project: string        — replaces {active_project} in file paths
+ * KB/Projects/_INDEX.md (frontmatter):
+ *   active_project: string        — which project is active
  *   active_work_context: string   — replaces {active_work_context} in file paths
- *   modes: array (required for mode buttons to appear)
- *     - id: string (required)     — unique identifier
+ *   Body: markdown table (项目 | 状态 | 来源 | 最近更新) for project picker
+ *
+ * KB/Projects/{active_project}/modes.md (frontmatter + body):
+ *   Frontmatter modes[]:
+ *     - id: string (required)     — unique identifier, matches ## heading in body
  *       label: string (required)  — button display text
  *       emoji: string             — defaults to "📋"
  *       files: string[]           — vault paths to inject, supports {active_project} / {active_work_context}
- *       prompt: string            — appended to system prompt when mode is activated
+ *   Body:
+ *     ## {mode-id} sections — each section is the system prompt for that mode
  *
- * Body:
- *   Markdown table with columns: 项目 | 状态 | 来源 | 最近更新
- *   Used by the project picker dropdown. Header row is skipped.
- *
- * Status summary reads from:
+ * Status summary:
  *   KB/Projects/{active_project}/PROGRESS.md — last "- [x]" and first "- [ ]" from bottom
  *   KB/Inbox/ideas.md — count of "- [ ]" lines
  */
@@ -78,21 +78,34 @@ export class HarnessView extends ItemView {
 	}
 
 	private async loadProjectIndex(): Promise<void> {
-		const file = this.app.vault.getAbstractFileByPath("KB/Projects/_INDEX.md");
-		if (!(file instanceof TFile)) {
+		const indexFile = this.app.vault.getAbstractFileByPath("KB/Projects/_INDEX.md");
+		if (!(indexFile instanceof TFile)) {
 			this.projectIndex = null;
 			return;
 		}
 
-		const content = await this.app.vault.read(file);
-		const cache = this.app.metadataCache.getFileCache(file);
-		const fm = cache?.frontmatter ?? {};
+		const indexContent = await this.app.vault.read(indexFile);
+		const indexFm = this.app.metadataCache.getFileCache(indexFile)?.frontmatter ?? {};
+
+		const activeProject = String(indexFm.active_project ?? "");
+		const activeWorkContext = String(indexFm.active_work_context ?? "");
+
+		let modes: HarnessMode[] = [];
+		if (activeProject) {
+			const modesPath = `KB/Projects/${activeProject}/modes.md`;
+			const modesFile = this.app.vault.getAbstractFileByPath(modesPath);
+			if (modesFile instanceof TFile) {
+				const modesContent = await this.app.vault.read(modesFile);
+				const modesFm = this.app.metadataCache.getFileCache(modesFile)?.frontmatter ?? {};
+				modes = this.parseModes(modesFm, modesContent);
+			}
+		}
 
 		this.projectIndex = {
-			activeProject: String(fm.active_project ?? ""),
-			activeWorkContext: String(fm.active_work_context ?? ""),
-			projects: this.parseProjectTable(content),
-			modes: this.parseModes(fm),
+			activeProject,
+			activeWorkContext,
+			projects: this.parseProjectTable(indexContent),
+			modes,
 		};
 	}
 
@@ -110,22 +123,53 @@ export class HarnessView extends ItemView {
 		return projects;
 	}
 
-	private parseModes(fm: Record<string, unknown>): HarnessMode[] {
+	private parseModes(fm: Record<string, unknown>, body: string): HarnessMode[] {
 		const raw = fm.modes;
-		if (!Array.isArray(raw) || raw.length === 0) {
-			return [];
-		}
+		if (!Array.isArray(raw) || raw.length === 0) return [];
+
+		const sections = this.parseModeSections(body);
 
 		return raw
 			.filter((m): m is Record<string, unknown> => m != null && typeof m === "object")
-			.map((m) => ({
-				id: String(m.id ?? ""),
-				label: String(m.label ?? ""),
-				emoji: String(m.emoji ?? "📋"),
-				files: Array.isArray(m.files) ? m.files.map(String) : [],
-				systemPromptAppend: String(m.prompt ?? m.systemPromptAppend ?? ""),
-			}))
+			.map((m) => {
+				const id = String(m.id ?? "");
+				return {
+					id,
+					label: String(m.label ?? ""),
+					emoji: String(m.emoji ?? "📋"),
+					files: Array.isArray(m.files) ? m.files.map(String) : [],
+					systemPromptAppend: sections.get(id) ?? "",
+				};
+			})
 			.filter((m) => m.id && m.label);
+	}
+
+	private parseModeSections(content: string): Map<string, string> {
+		const sections = new Map<string, string>();
+		const lines = content.split("\n");
+		let currentId = "";
+		let currentLines: string[] = [];
+
+		const fmEnd = content.match(/^---\n[\s\S]*?\n---\n/);
+		const startLine = fmEnd ? fmEnd[0].split("\n").length - 1 : 0;
+
+		for (let i = startLine; i < lines.length; i++) {
+			const match = lines[i].match(/^## (.+)$/);
+			if (match) {
+				if (currentId) {
+					sections.set(currentId, currentLines.join("\n").trim());
+				}
+				currentId = match[1].trim();
+				currentLines = [];
+			} else if (currentId) {
+				currentLines.push(lines[i]);
+			}
+		}
+		if (currentId) {
+			sections.set(currentId, currentLines.join("\n").trim());
+		}
+
+		return sections;
 	}
 
 	private async buildUI(): Promise<void> {
@@ -169,6 +213,14 @@ export class HarnessView extends ItemView {
 		const grid = section.createDiv({ cls: "ai-daily-harness-mode-grid" });
 		const modes = this.projectIndex?.modes ?? [];
 
+		if (modes.length === 0) {
+			section.createDiv({
+				cls: "ai-daily-harness-muted",
+				text: "当前项目没有 modes.md",
+			});
+			return;
+		}
+
 		const inboxCount = await this.getInboxCount();
 
 		for (const mode of modes) {
@@ -196,28 +248,11 @@ export class HarnessView extends ItemView {
 				this.updateStartButton();
 			});
 		}
-
-		const freeBtn = grid.createEl("button", {
-			cls: "ai-daily-harness-mode-btn",
-		});
-		freeBtn.createSpan({ text: "💬" });
-		freeBtn.createSpan({ text: " 自由对话" });
-
-		if (this.selectedModeId === "__free__") {
-			freeBtn.addClass("ai-daily-harness-mode-active");
-		}
-
-		freeBtn.addEventListener("click", () => {
-			this.selectedModeId = this.selectedModeId === "__free__" ? null : "__free__";
-			this.persistModeSelection();
-			this.refreshModeButtons(grid, modes);
-			this.updateStartButton();
-		});
 	}
 
 	private refreshModeButtons(grid: HTMLElement, modes: HarnessMode[]): void {
 		const buttons = grid.querySelectorAll(".ai-daily-harness-mode-btn");
-		const allIds = [...modes.map((m) => m.id), "__free__"];
+		const allIds = modes.map((m) => m.id);
 		buttons.forEach((btn, i) => {
 			btn.toggleClass("ai-daily-harness-mode-active", allIds[i] === this.selectedModeId);
 		});
@@ -344,11 +379,6 @@ export class HarnessView extends ItemView {
 	private async handleStart(): Promise<void> {
 		if (!this.selectedModeId) return;
 
-		if (this.selectedModeId === "__free__") {
-			await this.plugin.startChatWithContext(null);
-			return;
-		}
-
 		const modes = this.projectIndex?.modes ?? [];
 		const mode = modes.find((m) => m.id === this.selectedModeId);
 		if (!mode) return;
@@ -437,7 +467,7 @@ export class HarnessView extends ItemView {
 		await this.app.vault.modify(file, content);
 
 		await this.loadProjectIndex();
-		this.buildUI();
+		await this.buildUI();
 	}
 
 	async onClose(): Promise<void> {

@@ -613,6 +613,14 @@ export class ClaudeClient {
 		this.proxyToken = options?.proxyToken;
 	}
 
+	getProxySessionId(): string | undefined {
+		return this.proxySessionId;
+	}
+
+	setProxySessionId(id: string): void {
+		this.proxySessionId = id;
+	}
+
 	isProxyMode(): boolean {
 		return !!(this.proxyUrl && this.proxyToken);
 	}

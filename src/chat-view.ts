@@ -991,6 +991,10 @@ export class ChatView extends ItemView {
 		);
 		if (!this.client || proxySettingsChanged) {
 			await this.initClient();
+			if (this.restoredProxySessionId) {
+				this.client!.setProxySessionId(this.restoredProxySessionId);
+				this.restoredProxySessionId = undefined;
+			}
 		}
 
 		const loadingEl = this.messagesEl.createDiv({
@@ -1425,6 +1429,7 @@ export class ChatView extends ItemView {
 			updated: now,
 			messages: persisted,
 			claudeCodeSessionId: this.claudeCodeSessionId,
+			proxySessionId: this.client?.getProxySessionId(),
 		};
 		try {
 			await saveChatSession(this.app.vault, chatHistoryFolder, file);
@@ -1897,6 +1902,7 @@ export class ChatView extends ItemView {
 
 	private claudeCodeAbort: (() => void) | null = null;
 	private claudeCodeSessionId: string | undefined;
+	private restoredProxySessionId: string | undefined;
 	private claudeCodeUndoHistory: { id: number; data: UndoData; description: string }[] = [];
 	private claudeCodeUndoCounter = 0;
 
@@ -2496,6 +2502,7 @@ export class ChatView extends ItemView {
 		}
 		this.sessionId = data.id;
 		this.claudeCodeSessionId = data.claudeCodeSessionId;
+		this.restoredProxySessionId = data.proxySessionId;
 		this.messages = data.messages.map((m) => ({
 			role: m.role,
 			content: m.content,

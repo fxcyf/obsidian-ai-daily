@@ -16,6 +16,7 @@ export interface ChatSessionFile {
 	updated: string;
 	messages: PersistedMessage[];
 	claudeCodeSessionId?: string;
+	proxySessionId?: string;
 }
 
 export function newSessionId(): string {

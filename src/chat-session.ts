@@ -8,6 +8,17 @@ export interface PersistedMessage {
 	content: string;
 }
 
+export interface PersistedHarnessContext {
+	mode: {
+		id: string;
+		label: string;
+		emoji: string;
+		files: string[];
+		systemPromptAppend: string;
+	};
+	injectedFiles: { path: string }[];
+}
+
 export interface ChatSessionFile {
 	id: string;
 	title: string;
@@ -17,6 +28,7 @@ export interface ChatSessionFile {
 	messages: PersistedMessage[];
 	claudeCodeSessionId?: string;
 	proxySessionId?: string;
+	harnessContext?: PersistedHarnessContext;
 }
 
 export function newSessionId(): string {

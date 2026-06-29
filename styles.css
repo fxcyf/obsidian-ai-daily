@@ -1660,6 +1660,10 @@
 	opacity: 1;
 }
 
+.is-mobile .ai-daily-rewind-btn {
+	opacity: 0.6;
+}
+
 .ai-daily-rewind-btn:hover {
 	background: var(--background-modifier-hover);
 	color: var(--text-normal);

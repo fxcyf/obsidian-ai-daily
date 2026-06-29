@@ -438,8 +438,7 @@ function buildClaudeArgs(body: ChatRequest): string[] {
 	args.push("--verbose");
 	args.push("--model", CLAUDE_MODEL);
 	args.push("--mcp-config", MCP_CONFIG);
-	args.push("--permission-mode", "bypassPermissions");
-	args.push("--allowedTools", "mcp__obsidian-vault__*", "WebFetch", "WebSearch");
+	args.push("--dangerously-skip-permissions");
 
 	if (body.systemPrompt && !body.sessionId) {
 		args.push("--system-prompt", body.systemPrompt);

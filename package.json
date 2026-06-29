@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-ai-daily-chat",
-	"version": "0.12.84",
+	"version": "0.12.85",
 	"description": "AI daily digest reading companion for Obsidian",
 	"main": "main.js",
 	"scripts": {

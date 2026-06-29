@@ -33,6 +33,8 @@ export function buildSystemPrompt(config: SystemPromptConfig): string {
 			"## MCP 工具使用说明",
 			"你可以通过 MCP 工具操作 vault 中的笔记，路径使用 vault 内相对路径：",
 			toolSummaryForPrompt(),
+			"",
+			"所有工具已预先授权，调用时无需用户确认权限。如果工具返回错误，直接说明错误原因，不要提示用户"批准权限"或"点击允许"。",
 		);
 
 		if (config.vaultAbsPath) {

@@ -357,7 +357,15 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 			return;
 		}
 
-		if (event.type === "assistant" && event.message?.content) {
+		if (event.type === "system" && event.subtype === "init") {
+			const mcpServers = (event as Record<string, unknown>).mcp_servers;
+			if (Array.isArray(mcpServers)) {
+				const failed = mcpServers.filter((s: Record<string, unknown>) => s.status !== "connected" && s.status !== "needs-auth");
+				if (failed.length > 0) {
+					sendEvent({ type: "mcp_status", servers: mcpServers });
+				}
+			}
+		} else if (event.type === "assistant" && event.message?.content) {
 			for (const block of event.message.content) {
 				if (block.type === "text" && block.text) {
 					const delta = block.text.slice(lastText.length);
@@ -385,7 +393,13 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 
 	let stderrOutput = "";
 	proc.stderr?.on("data", (chunk: Buffer) => {
-		stderrOutput += chunk.toString();
+		const text = chunk.toString();
+		stderrOutput += text;
+		for (const line of text.split("\n")) {
+			if (line.includes("[MCP]") || line.includes("permission")) {
+				sendEvent({ type: "debug", message: line.trim() });
+			}
+		}
 	});
 
 	req.on("close", () => {

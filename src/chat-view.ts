@@ -993,7 +993,9 @@ export class ChatView extends ItemView {
 			this.client.isProxyMode() !== (this.plugin.settings.proxyEnabled && !!this.plugin.settings.proxyUrl)
 		);
 		if (!this.client || proxySettingsChanged) {
+			new Notice("[debug4] calling initClient");
 			await this.initClient();
+			new Notice("[debug5] initClient done, isProxyMode=" + this.client!.isProxyMode());
 		}
 
 		const loadingEl = this.messagesEl.createDiv({
@@ -1146,7 +1148,9 @@ export class ChatView extends ItemView {
 					);
 
 			let reply: string;
+			new Notice("[debug6] isProxyMode=" + this.client!.isProxyMode());
 			if (this.client!.isProxyMode()) {
+				new Notice("[debug7] calling proxyChat to " + this.plugin.settings.proxyUrl);
 				try {
 					reply = await this.client!.proxyChat(userMessage, streamCb, onToolCall);
 				} catch (proxyErr) {

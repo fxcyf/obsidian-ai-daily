@@ -1,0 +1,14 @@
+{
+	"mcpServers": {
+		"obsidian-vault": {
+			"command": "node",
+			"args": ["../mcp-server/dist/index.js"],
+			"env": {
+				"OBSIDIAN_API_URL": "http://127.0.0.1:27080",
+				"VAULT_PATH": "/path/to/your/vault",
+				"KNOWLEDGE_FOLDERS": "Raw,Wiki",
+				"WEREAD_API_KEY": ""
+			}
+		}
+	}
+}

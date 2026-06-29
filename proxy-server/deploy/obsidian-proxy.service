@@ -1,0 +1,19 @@
+[Unit]
+Description=Obsidian Claude Proxy Server
+After=network.target
+
+[Service]
+Type=simple
+User=YOUR_USER
+WorkingDirectory=/path/to/obsidian-ai-daily/proxy-server
+ExecStart=/usr/bin/node dist/server.js
+Restart=always
+RestartSec=5
+Environment=PORT=27090
+Environment=AUTH_TOKEN=your-secret-token-here
+Environment=MCP_CONFIG=/path/to/obsidian-ai-daily/proxy-server/mcp-config.json
+Environment=CLAUDE_MODEL=sonnet
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target

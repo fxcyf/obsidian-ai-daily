@@ -944,6 +944,7 @@ export class ChatView extends ItemView {
 		this.closeTemplatePopup();
 
 		const text = this.inputEl.value.trim();
+		new Notice(`[debug] text="${text.slice(0,20)}" isLoading=${this.isLoading}`);
 		if (!text || this.isLoading) return;
 
 		if (text === "/distill") {

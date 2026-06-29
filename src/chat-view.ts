@@ -1112,29 +1112,48 @@ export class ChatView extends ItemView {
 				}
 			};
 
-			const reply = await this.client!.chat(
-				userMessage,
-				async (name, input) => {
-					if (name === "web_fetch") return this.webTools.execute(name, input);
-					if (name === "read_image") return this.executeReadImage(input);
-					if (name === "weread_api" && this.wereadTools) return this.wereadTools.execute(name, input);
-					if (name.startsWith("podcast_") && this.podcastTools) return this.podcastTools.execute(name, input);
-					return this.vaultTools!.execute(name, input);
-				},
-				useStream
-					? (_delta, accumulated) => {
-							loadingEl.remove();
-							if (!assistantEl) {
-								assistantEl = this.messagesEl.createDiv({
-									cls: "ai-daily-msg ai-daily-msg-assistant ai-daily-msg-streaming",
-								});
-							}
-							scheduleStreamingMarkdown(accumulated);
+			const streamCb = useStream
+				? (_delta: string, accumulated: string) => {
+						loadingEl.remove();
+						if (!assistantEl) {
+							assistantEl = this.messagesEl.createDiv({
+								cls: "ai-daily-msg ai-daily-msg-assistant ai-daily-msg-streaming",
+							});
 						}
-					: undefined,
-				preparedImages,
-				onToolCall
-			);
+						scheduleStreamingMarkdown(accumulated);
+					}
+				: undefined;
+
+			const doLocalChat = () => this.client!.chat(
+						userMessage,
+						async (name, input) => {
+							if (name === "web_fetch") return this.webTools.execute(name, input);
+							if (name === "read_image") return this.executeReadImage(input);
+							if (name === "weread_api" && this.wereadTools) return this.wereadTools.execute(name, input);
+							if (name.startsWith("podcast_") && this.podcastTools) return this.podcastTools.execute(name, input);
+							return this.vaultTools!.execute(name, input);
+						},
+						streamCb,
+						preparedImages,
+						onToolCall
+					);
+
+			let reply: string;
+			if (this.client!.isProxyMode()) {
+				try {
+					reply = await this.client!.proxyChat(userMessage, streamCb, onToolCall);
+				} catch (proxyErr) {
+					if (this.plugin.settings.proxyFallbackToApi && this.plugin.settings.apiKey) {
+						console.warn("[ai-daily] proxy failed, falling back to API:", proxyErr);
+						new Notice("代理不可用，回退到本地 API", 4000);
+						reply = await doLocalChat();
+					} else {
+						throw proxyErr;
+					}
+				}
+			} else {
+				reply = await doLocalChat();
+			}
 
 			loadingEl.remove();
 
@@ -1348,6 +1367,8 @@ export class ChatView extends ItemView {
 			onStreamFallback: (reason) => {
 				console.warn("[ai-daily] stream fallback:", reason);
 			},
+			proxyUrl: this.plugin.settings.proxyEnabled ? this.plugin.settings.proxyUrl : undefined,
+			proxyToken: this.plugin.settings.proxyEnabled ? this.plugin.settings.proxyToken : undefined,
 		});
 	}
 

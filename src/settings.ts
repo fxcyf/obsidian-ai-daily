@@ -58,6 +58,11 @@ export interface AIDailyChatSettings {
 	// WeRead settings
 	enableWeRead: boolean;
 	wereadApiKey: string;
+	// Proxy settings
+	proxyEnabled: boolean;
+	proxyUrl: string;
+	proxyToken: string;
+	proxyFallbackToApi: boolean;
 }
 
 export const DEFAULT_SETTINGS: AIDailyChatSettings = {
@@ -87,6 +92,10 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	enablePodcast: true,
 	enableWeRead: false,
 	wereadApiKey: "",
+	proxyEnabled: false,
+	proxyUrl: "",
+	proxyToken: "",
+	proxyFallbackToApi: true,
 };
 
 export class AIDailyChatSettingTab extends PluginSettingTab {
@@ -310,6 +319,74 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 						this.plugin.settings.chatContextBudgetTokens = Number.isFinite(n)
 							? Math.max(1000, n)
 							: 200_000;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		// ── Proxy settings ────────────────────────────────────
+
+		containerEl.createEl("h3", { text: "代理模式（移动端）" });
+
+		new Setting(containerEl)
+			.setName("启用代理模式")
+			.setDesc(
+				"通过桌面端 proxy-server 发送请求（使用 Claude 订阅额度，不消耗 API 费用）"
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.proxyEnabled)
+					.onChange(async (value) => {
+						this.plugin.settings.proxyEnabled = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Proxy URL")
+			.setDesc("桌面端代理服务器地址，如 https://claude.yourdomain.com")
+			.addText((text) =>
+				text
+					.setPlaceholder("https://claude.yourdomain.com")
+					.setValue(this.plugin.settings.proxyUrl)
+					.onChange(async (value) => {
+						this.plugin.settings.proxyUrl = value.trim();
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Proxy Token")
+			.setDesc("代理服务器认证令牌")
+			.addText((text) => {
+				text
+					.setPlaceholder("your-auth-token")
+					.setValue(this.plugin.settings.proxyToken)
+					.onChange(async (value) => {
+						this.plugin.settings.proxyToken = value;
+						await this.plugin.saveSettings();
+					});
+				text.inputEl.type = "password";
+				text.inputEl.autocomplete = "off";
+			})
+			.addExtraButton((btn) => {
+				btn.setIcon("eye-off").setTooltip("显示/隐藏 Token").onClick(() => {
+					const setting = btn.extraSettingsEl.closest(".setting-item");
+					const input = setting?.querySelector("input") as HTMLInputElement | null;
+					if (!input) return;
+					const hidden = input.type === "password";
+					input.type = hidden ? "text" : "password";
+					btn.setIcon(hidden ? "eye" : "eye-off");
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("代理不可用时回退本地 API")
+			.setDesc("当桌面端不可达时，自动使用 Anthropic API Key 调用")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.proxyFallbackToApi)
+					.onChange(async (value) => {
+						this.plugin.settings.proxyFallbackToApi = value;
 						await this.plugin.saveSettings();
 					})
 			);

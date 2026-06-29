@@ -565,6 +565,8 @@ export interface ClaudeClientOptions {
 	compressKeepMessages?: number;
 	onCompress?: (detail: string) => void;
 	onStreamFallback?: (reason: string) => void;
+	proxyUrl?: string;
+	proxyToken?: string;
 }
 
 export class ClaudeClient {
@@ -581,6 +583,9 @@ export class ClaudeClient {
 	private onCompress?: (detail: string) => void;
 	private onStreamFallback?: (reason: string) => void;
 	private abortController: AbortController | null = null;
+	private proxyUrl?: string;
+	private proxyToken?: string;
+	private proxySessionId?: string;
 
 	constructor(
 		apiKey: string,
@@ -603,6 +608,12 @@ export class ClaudeClient {
 		);
 		this.onCompress = options?.onCompress;
 		this.onStreamFallback = options?.onStreamFallback;
+		this.proxyUrl = options?.proxyUrl;
+		this.proxyToken = options?.proxyToken;
+	}
+
+	isProxyMode(): boolean {
+		return !!(this.proxyUrl && this.proxyToken);
 	}
 
 	getModel(): string {
@@ -766,6 +777,100 @@ export class ClaudeClient {
 		}
 
 		return collectedText.join("");
+	}
+
+	async proxyChat(
+		userMessage: string,
+		onAssistantDelta?: (delta: string, accumulated: string) => void,
+		onToolCall?: (name: string, input: Record<string, unknown>, status: "start" | "done" | "error") => void
+	): Promise<string> {
+		if (!this.proxyUrl || !this.proxyToken) {
+			throw new Error("Proxy mode not configured");
+		}
+
+		this.messages.push({ role: "user", content: userMessage });
+		this.abortController = new AbortController();
+		const signal = this.abortController.signal;
+
+		try {
+			const body: Record<string, unknown> = { message: userMessage };
+			if (this.proxySessionId) {
+				body.sessionId = this.proxySessionId;
+			} else {
+				body.systemPrompt = this.systemPrompt;
+			}
+
+			const resp = await fetch(`${this.proxyUrl}/chat`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${this.proxyToken}`,
+				},
+				body: JSON.stringify(body),
+				signal,
+			});
+
+			if (!resp.ok) {
+				const errText = await resp.text();
+				throw new Error(`Proxy error ${resp.status}: ${errText}`);
+			}
+
+			const reader = resp.body?.getReader();
+			if (!reader) throw new Error("No response stream");
+
+			const decoder = new TextDecoder();
+			let accumulated = "";
+			let buffer = "";
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				buffer += decoder.decode(value, { stream: true });
+				const lines = buffer.split("\n");
+				buffer = lines.pop() || "";
+
+				for (const line of lines) {
+					if (!line.startsWith("data: ")) continue;
+					const jsonStr = line.slice(6).trim();
+					if (!jsonStr) continue;
+
+					let event: { type: string; content?: string; name?: string; input?: Record<string, unknown>; sessionId?: string; result?: string; message?: string };
+					try {
+						event = JSON.parse(jsonStr);
+					} catch {
+						continue;
+					}
+
+					if (event.type === "text" && event.content) {
+						accumulated += event.content;
+						onAssistantDelta?.(event.content, accumulated);
+					} else if (event.type === "tool_use" && event.name) {
+						onToolCall?.(event.name, event.input || {}, "start");
+						onToolCall?.(event.name, event.input || {}, "done");
+					} else if (event.type === "done") {
+						if (event.sessionId) {
+							this.proxySessionId = event.sessionId;
+						}
+						if (event.result) {
+							accumulated = event.result;
+						}
+					} else if (event.type === "error") {
+						throw new Error(`Proxy: ${event.message || "unknown error"}`);
+					}
+				}
+			}
+
+			this.messages.push({ role: "assistant", content: accumulated });
+			return accumulated;
+		} catch (e) {
+			if (signal.aborted) {
+				return "";
+			}
+			throw e;
+		} finally {
+			this.abortController = null;
+		}
 	}
 
 	clearHistory(): void {

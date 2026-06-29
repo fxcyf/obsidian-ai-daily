@@ -427,19 +427,20 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 }
 
 function buildClaudeArgs(body: ChatRequest): string[] {
-	const args: string[] = [];
+	const args: string[] = [
+		"-p", body.message,
+		"--output-format", "stream-json",
+		"--verbose",
+		"--include-partial-messages",
+		"--permission-mode", "bypassPermissions",
+		"--tools", "ReadFile,Grep,Glob,WebSearch,WebFetch,TodoWrite",
+		"--mcp-config", MCP_CONFIG,
+		"--model", CLAUDE_MODEL,
+	];
 
 	if (body.sessionId) {
-		args.push("-r", body.sessionId);
+		args.push("--resume", body.sessionId);
 	}
-
-	args.push("-p", body.message);
-	args.push("--output-format", "stream-json");
-	args.push("--verbose");
-	args.push("--model", CLAUDE_MODEL);
-	args.push("--mcp-config", MCP_CONFIG);
-	args.push("--dangerously-skip-permissions");
-	args.push("--tools", "WebFetch,WebSearch");
 
 	if (body.systemPrompt && !body.sessionId) {
 		args.push("--system-prompt", body.systemPrompt);

@@ -903,21 +903,24 @@ export class ChatView extends ItemView {
 		});
 		welcomeEl.createDiv({ cls: "ai-daily-welcome-title", text: `AI Knowledge Chat v${this.plugin.manifest.version}` });
 		welcomeEl.createDiv({ cls: "ai-daily-welcome-hint", text: hint });
-		const examplesEl = welcomeEl.createDiv({ cls: "ai-daily-welcome-examples" });
-		for (const example of [
-			"总结一下这篇文章的要点",
-			"帮我在知识库里搜索 RAG 相关内容",
-			"最近收藏了哪些文章？",
-		]) {
-			examplesEl.createDiv({ cls: "ai-daily-example", text: example });
+
+		const shortcuts: { icon: string; label: string; action: () => void }[] = [
+			{ icon: "rss", label: "生成 Feed", action: () => this.plugin.generateFeed() },
+			{ icon: "mic", label: "生成播客 Feed", action: () => this.plugin.generatePodcastFeed() },
+			{ icon: "history", label: "历史", action: () => this.openHistoryPanel() },
+			{ icon: "sparkles", label: "蒸馏知识", action: () => { this.inputEl.value = "/distill"; this.handleSend(); } },
+			{ icon: "heart-pulse", label: "Wiki 健康检查", action: () => this.plugin.runWikiHealthCheck() },
+		];
+
+		const actionsEl = welcomeEl.createDiv({ cls: "ai-daily-welcome-actions" });
+		for (const shortcut of shortcuts) {
+			const btn = actionsEl.createDiv({ cls: "ai-daily-welcome-action" });
+			const iconEl = btn.createSpan({ cls: "ai-daily-welcome-action-icon" });
+			setIcon(iconEl, shortcut.icon);
+			btn.createSpan({ text: shortcut.label });
+			btn.addEventListener("click", shortcut.action);
 		}
 
-		welcomeEl.querySelectorAll(".ai-daily-example").forEach((el) => {
-			el.addEventListener("click", () => {
-				this.inputEl.value = el.textContent || "";
-				this.handleSend();
-			});
-		});
 		this.updateTokenBar();
 	}
 

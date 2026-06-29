@@ -393,15 +393,18 @@
 	margin-bottom: 20px;
 }
 
-.ai-daily-welcome-examples {
+.ai-daily-welcome-actions {
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	gap: 6px;
 	width: 100%;
 	max-width: 280px;
 }
 
-.ai-daily-example {
+.ai-daily-welcome-action {
+	display: flex;
+	align-items: center;
+	gap: 10px;
 	padding: 10px 14px;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 8px;
@@ -410,8 +413,19 @@
 	text-align: left;
 }
 
-.ai-daily-example:hover {
+.ai-daily-welcome-action:hover {
 	background: var(--background-modifier-hover);
+}
+
+.ai-daily-welcome-action-icon {
+	display: flex;
+	align-items: center;
+	color: var(--text-muted);
+}
+
+.ai-daily-welcome-action-icon svg {
+	width: 16px;
+	height: 16px;
 }
 
 /* ── Settings: full-width layout for textareas ────────── */

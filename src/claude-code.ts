@@ -302,11 +302,6 @@ export function getClaudePath(): string {
 	return cachedClaudePath || "claude";
 }
 
-export function resetClaudeCodeCache(): void {
-	cachedClaudePath = null;
-	cachedNodePath = null;
-}
-
 // ---------------------------------------------------------------------------
 // Stream callbacks & options
 // ---------------------------------------------------------------------------

@@ -51,7 +51,6 @@ export interface AIDailyChatSettings {
 	autoTagFolders: string[];
 	autoTagPrompt: string;
 	// Knowledge organizer settings
-	enableAutoDistill: boolean;
 	distillTargetFolder: string;
 	// Podcast settings
 	enablePodcast: boolean;
@@ -87,7 +86,6 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	enableAutoTagging: false,
 	autoTagFolders: ["Raw"],
 	autoTagPrompt: "",
-	enableAutoDistill: false,
 	distillTargetFolder: "Wiki",
 	enablePodcast: true,
 	enableWeRead: false,

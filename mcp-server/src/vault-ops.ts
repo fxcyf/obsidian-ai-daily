@@ -33,6 +33,7 @@ export class VaultOps {
 			...entry,
 		});
 		if (stack.length > MAX_UNDO_ENTRIES) stack = stack.slice(-MAX_UNDO_ENTRIES);
+		await fs.mkdir(path.dirname(stackPath), { recursive: true });
 		await fs.writeFile(stackPath, JSON.stringify(stack, null, 2), "utf-8");
 	}
 

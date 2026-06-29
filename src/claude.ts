@@ -608,7 +608,8 @@ export class ClaudeClient {
 		);
 		this.onCompress = options?.onCompress;
 		this.onStreamFallback = options?.onStreamFallback;
-		this.proxyUrl = options?.proxyUrl;
+		const rawUrl = options?.proxyUrl?.trim();
+		this.proxyUrl = rawUrl && !/^https?:\/\//i.test(rawUrl) ? `https://${rawUrl}` : rawUrl;
 		this.proxyToken = options?.proxyToken;
 	}
 

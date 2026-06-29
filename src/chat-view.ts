@@ -1178,6 +1178,8 @@ export class ChatView extends ItemView {
 				this.cachedTokenCount += estimateTextTokens(reply);
 			} else if (reply) {
 				this.addMessage("assistant", reply);
+			} else {
+				this.addMessage("assistant", "*(空回复，请检查代理配置)*");
 			}
 			this.scrollToBottomIfFollowing();
 			this.renderUndoBar();

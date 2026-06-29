@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__obsidian-vault__*",
+      "WebFetch",
+      "WebSearch",
+      "ReadFile",
+      "Grep",
+      "Glob",
+      "TodoWrite"
+    ]
+  }
+}

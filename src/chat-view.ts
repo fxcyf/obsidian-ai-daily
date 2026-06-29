@@ -944,7 +944,6 @@ export class ChatView extends ItemView {
 		this.closeTemplatePopup();
 
 		const text = this.inputEl.value.trim();
-		new Notice(`[debug] text="${text.slice(0,20)}" isLoading=${this.isLoading}`);
 		if (!text || this.isLoading) return;
 
 		if (text === "/distill") {
@@ -955,10 +954,8 @@ export class ChatView extends ItemView {
 		}
 
 		const useClaudeCode = await isClaudeCodeAvailable();
-		new Notice(`[debug2] useClaudeCode=${useClaudeCode}`);
 
 		const proxyReady = this.plugin.settings.proxyEnabled && !!this.plugin.settings.proxyUrl && !!this.plugin.settings.proxyToken;
-		new Notice(`[debug3] proxyEnabled=${this.plugin.settings.proxyEnabled} proxyReady=${proxyReady} apiKey=${!!this.plugin.settings.apiKey}`);
 		if (!useClaudeCode && !this.plugin.settings.apiKey && !proxyReady) {
 			this.addMessage(
 				"assistant",
@@ -993,9 +990,7 @@ export class ChatView extends ItemView {
 			this.client.isProxyMode() !== (this.plugin.settings.proxyEnabled && !!this.plugin.settings.proxyUrl)
 		);
 		if (!this.client || proxySettingsChanged) {
-			new Notice("[debug4] calling initClient");
 			await this.initClient();
-			new Notice("[debug5] initClient done, isProxyMode=" + this.client!.isProxyMode());
 		}
 
 		const loadingEl = this.messagesEl.createDiv({
@@ -1148,14 +1143,10 @@ export class ChatView extends ItemView {
 					);
 
 			let reply: string;
-			new Notice("[debug6] isProxyMode=" + this.client!.isProxyMode());
 			if (this.client!.isProxyMode()) {
-				new Notice("[debug7] calling proxyChat to " + this.plugin.settings.proxyUrl);
 				try {
 					reply = await this.client!.proxyChat(userMessage, streamCb, onToolCall);
-					new Notice("[debug8] proxyChat done, reply.length=" + reply.length);
 				} catch (proxyErr) {
-					new Notice("[debug8] proxyChat error: " + (proxyErr instanceof Error ? proxyErr.message : String(proxyErr)).slice(0, 80));
 					if (this.plugin.settings.proxyFallbackToApi && this.plugin.settings.apiKey) {
 						console.warn("[ai-daily] proxy failed, falling back to API:", proxyErr);
 						new Notice("代理不可用，回退到本地 API", 4000);

@@ -986,7 +986,10 @@ export class ChatView extends ItemView {
 			this.sessionId = newSessionId();
 		}
 
-		if (!this.client) {
+		const proxySettingsChanged = this.client && (
+			this.client.isProxyMode() !== (this.plugin.settings.proxyEnabled && !!this.plugin.settings.proxyUrl)
+		);
+		if (!this.client || proxySettingsChanged) {
 			await this.initClient();
 		}
 

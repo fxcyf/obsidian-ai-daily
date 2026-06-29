@@ -56,6 +56,7 @@ const server = createServer(async (req, res) => {
 	}
 
 	const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
+	console.log(`[Proxy] ${req.method} ${url.pathname} from ${req.headers["x-real-ip"] || req.socket.remoteAddress}`);
 
 	if (url.pathname === "/health" && req.method === "GET") {
 		res.setHeader("Content-Type", "application/json");

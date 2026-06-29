@@ -14,6 +14,7 @@ Environment=AUTH_TOKEN=986753421
 Environment=MCP_CONFIG=/home/fxcyf/MyFiles/random/obsidian-ai-daily/proxy-server/mcp-config.json
 Environment=CLAUDE_MODEL=sonnet
 Environment=CLAUDE_PATH=/home/fxcyf/.local/bin/claude
+Environment=VAULT_PATH=/home/fxcyf/MyFiles/Obsidian/All in One
 Environment=PATH=/home/fxcyf/.local/bin:/home/fxcyf/.nvm/versions/node/v20.19.5/bin:/usr/local/bin:/usr/bin:/bin
 
 [Install]

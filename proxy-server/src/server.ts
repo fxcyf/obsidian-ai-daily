@@ -3,6 +3,7 @@ import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+import { readFile, writeFile, mkdir } from "fs/promises";
 
 // ── Config ─────────────────────────────────────────────────────────
 
@@ -11,6 +12,10 @@ const AUTH_TOKEN = process.env.AUTH_TOKEN || "";
 const MCP_CONFIG = process.env.MCP_CONFIG || resolve(dirname(fileURLToPath(import.meta.url)), "../mcp-config.json");
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "sonnet";
 const CLAUDE_PATH = process.env.CLAUDE_PATH || "claude";
+const VAULT_PATH = process.env.VAULT_PATH || "";
+const UNDO_STACK_FILE = VAULT_PATH
+	? resolve(VAULT_PATH, ".obsidian/plugins/ai-daily-chat/.undo-stack.json")
+	: "";
 
 if (!AUTH_TOKEN) {
 	console.error("Error: AUTH_TOKEN environment variable is required");
@@ -75,10 +80,124 @@ const server = createServer(async (req, res) => {
 		return;
 	}
 
+	if (url.pathname === "/undo-history" && req.method === "GET") {
+		if (!authenticate(req)) {
+			res.statusCode = 401;
+			res.end(JSON.stringify({ error: "Unauthorized" }));
+			return;
+		}
+		await handleUndoHistory(res);
+		return;
+	}
+
+	if (url.pathname === "/undo" && req.method === "POST") {
+		if (!authenticate(req)) {
+			res.statusCode = 401;
+			res.end(JSON.stringify({ error: "Unauthorized" }));
+			return;
+		}
+		await handleUndo(req, res);
+		return;
+	}
+
 	res.statusCode = 404;
 	res.setHeader("Content-Type", "application/json");
 	res.end(JSON.stringify({ error: "Not found" }));
 });
+
+async function handleUndoHistory(res: ServerResponse): Promise<void> {
+	res.setHeader("Content-Type", "application/json");
+	if (!UNDO_STACK_FILE) {
+		res.end(JSON.stringify([]));
+		return;
+	}
+	try {
+		const raw = await readFile(UNDO_STACK_FILE, "utf-8");
+		const stack = JSON.parse(raw);
+		// return last 10, newest first, without previousContent (too large)
+		const summary = stack.slice(-10).reverse().map((e: Record<string, unknown>) => ({
+			id: e.id,
+			timestamp: e.timestamp,
+			operation: e.operation,
+			path: e.path,
+			oldPath: e.oldPath,
+		}));
+		res.end(JSON.stringify(summary));
+	} catch {
+		res.end(JSON.stringify([]));
+	}
+}
+
+async function handleUndo(req: IncomingMessage, res: ServerResponse): Promise<void> {
+	res.setHeader("Content-Type", "application/json");
+	if (!UNDO_STACK_FILE || !VAULT_PATH) {
+		res.statusCode = 400;
+		res.end(JSON.stringify({ error: "VAULT_PATH not configured" }));
+		return;
+	}
+
+	let body: { id?: string } = {};
+	try {
+		body = await readBody<{ id?: string }>(req);
+	} catch { /* use empty */ }
+
+	try {
+		const raw = await readFile(UNDO_STACK_FILE, "utf-8");
+		const stack: Array<Record<string, unknown>> = JSON.parse(raw);
+
+		// find entry to undo (by id, or last entry)
+		const idx = body.id
+			? stack.findIndex((e) => e.id === body.id)
+			: stack.length - 1;
+
+		if (idx === -1) {
+			res.statusCode = 404;
+			res.end(JSON.stringify({ error: "Entry not found" }));
+			return;
+		}
+
+		const entry = stack[idx];
+		const filePath = resolve(VAULT_PATH, entry.path as string);
+
+		switch (entry.operation) {
+			case "edit_note":
+			case "append_to_note":
+			case "update_frontmatter":
+				await writeFile(filePath, entry.previousContent as string, "utf-8");
+				break;
+			case "create_note":
+				const { unlink } = await import("fs/promises");
+				await unlink(filePath);
+				break;
+			case "delete_note": {
+				const dir = resolve(filePath, "..");
+				await mkdir(dir, { recursive: true });
+				await writeFile(filePath, entry.previousContent as string, "utf-8");
+				break;
+			}
+			case "rename_note": {
+				const { rename } = await import("fs/promises");
+				const oldAbs = resolve(VAULT_PATH, entry.oldPath as string);
+				await mkdir(resolve(oldAbs, ".."), { recursive: true });
+				await rename(filePath, oldAbs);
+				break;
+			}
+			default:
+				res.statusCode = 400;
+				res.end(JSON.stringify({ error: `Unknown operation: ${entry.operation}` }));
+				return;
+		}
+
+		// remove entry from stack
+		stack.splice(idx, 1);
+		await writeFile(UNDO_STACK_FILE, JSON.stringify(stack, null, 2), "utf-8");
+
+		res.end(JSON.stringify({ ok: true, operation: entry.operation, path: entry.path }));
+	} catch (e) {
+		res.statusCode = 500;
+		res.end(JSON.stringify({ error: String(e) }));
+	}
+}
 
 function authenticate(req: IncomingMessage): boolean {
 	const auth = req.headers.authorization;

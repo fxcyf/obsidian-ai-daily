@@ -1174,6 +1174,9 @@ export class ChatView extends ItemView {
 			}
 			this.scrollToBottomIfFollowing();
 			this.renderUndoBar();
+			if (this.client!.isProxyMode()) {
+				await this.fetchAndRenderProxyUndo();
+			}
 
 			await this.persistSession();
 			this.updateTokenBar();
@@ -1474,6 +1477,39 @@ export class ChatView extends ItemView {
 		this.updateTokenBar();
 	}
 
+	private async fetchAndRenderProxyUndo(): Promise<void> {
+		const { proxyUrl, proxyToken } = this.plugin.settings;
+		if (!proxyUrl || !proxyToken) return;
+		const base = /^https?:\/\//i.test(proxyUrl) ? proxyUrl : `https://${proxyUrl}`;
+		try {
+			const resp = await fetch(`${base}/undo-history`, {
+				headers: { Authorization: `Bearer ${proxyToken}` },
+			});
+			if (!resp.ok) return;
+			const entries: Array<{ id: string; timestamp: number; operation: string; path: string }> = await resp.json();
+			if (entries.length === 0) return;
+
+			this.messagesEl.querySelectorAll(".ai-daily-undo-bar-proxy").forEach((el) => el.remove());
+
+			for (const entry of entries.slice(0, 3)) {
+				const label = `${entry.operation.replace(/_/g, " ")}: ${entry.path.split("/").pop()}`;
+				this.createUndoBarEl(label, entry.path, async () => {
+					const r = await fetch(`${base}/undo`, {
+						method: "POST",
+						headers: {
+							Authorization: `Bearer ${proxyToken}`,
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({ id: entry.id }),
+					});
+					const data = await r.json();
+					if (!r.ok) throw new Error(data.error || "撤销失败");
+					return `已撤销: ${data.operation} ${data.path}`;
+				}, undefined, "ai-daily-undo-bar-proxy");
+			}
+		} catch { /* silent */ }
+	}
+
 	private renderUndoBar(): void {
 		this.messagesEl.querySelectorAll(".ai-daily-undo-bar").forEach((el) => el.remove());
 
@@ -1509,8 +1545,8 @@ export class ChatView extends ItemView {
 		}
 	}
 
-	private createUndoBarEl(description: string, filePath: string, onUndo: () => Promise<string>, undoData?: UndoData): void {
-		const bar = this.messagesEl.createDiv({ cls: "ai-daily-undo-bar" });
+	private createUndoBarEl(description: string, filePath: string, onUndo: () => Promise<string>, undoData?: UndoData, extraCls?: string): void {
+		const bar = this.messagesEl.createDiv({ cls: "ai-daily-undo-bar" + (extraCls ? ` ${extraCls}` : "") });
 
 		const textSpan = bar.createSpan({ cls: "ai-daily-undo-text", text: description });
 		textSpan.addEventListener("click", () => {

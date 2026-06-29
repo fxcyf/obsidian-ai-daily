@@ -2,12 +2,39 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
 const MAX_SEARCH_RESULTS = 10;
+const UNDO_STACK_PATH = ".obsidian/plugins/ai-daily-chat/.undo-stack.json";
+const MAX_UNDO_ENTRIES = 30;
+
+interface UndoEntry {
+	id: string;
+	timestamp: number;
+	operation: string;
+	path: string;
+	previousContent?: string;
+	oldPath?: string;
+}
 
 export class VaultOps {
 	constructor(
 		private vaultRoot: string,
 		private knowledgeFolders: string[] = []
 	) {}
+
+	private async pushUndo(entry: Omit<UndoEntry, "id" | "timestamp">): Promise<void> {
+		const stackPath = path.join(this.vaultRoot, UNDO_STACK_PATH);
+		let stack: UndoEntry[] = [];
+		try {
+			const raw = await fs.readFile(stackPath, "utf-8");
+			stack = JSON.parse(raw);
+		} catch { /* empty stack */ }
+		stack.push({
+			id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+			timestamp: Date.now(),
+			...entry,
+		});
+		if (stack.length > MAX_UNDO_ENTRIES) stack = stack.slice(-MAX_UNDO_ENTRIES);
+		await fs.writeFile(stackPath, JSON.stringify(stack, null, 2), "utf-8");
+	}
 
 	private resolve(notePath: string): string {
 		return path.join(this.vaultRoot, notePath);
@@ -80,6 +107,7 @@ export class VaultOps {
 		}
 		const existing = await fs.readFile(abs, "utf-8");
 		await fs.writeFile(abs, existing + "\n\n" + content, "utf-8");
+		await this.pushUndo({ operation: "append_to_note", path: notePath, previousContent: existing });
 		return `Content appended to ${notePath}\n${undoTag("append_to_note", notePath, existing)}`;
 	}
 
@@ -136,6 +164,7 @@ export class VaultOps {
 		const dir = path.dirname(abs);
 		await fs.mkdir(dir, { recursive: true });
 		await fs.writeFile(abs, body, "utf-8");
+		await this.pushUndo({ operation: "create_note", path: normalized });
 		return `Created: ${normalized}\n${undoTag("create_note", normalized)}`;
 	}
 
@@ -154,6 +183,7 @@ export class VaultOps {
 		}
 
 		const undo = undoTag("edit_note", notePath, content);
+		const pushUndoEdit = () => this.pushUndo({ operation: "edit_note", path: notePath, previousContent: content });
 
 		switch (mode) {
 			case "search_replace": {
@@ -167,6 +197,7 @@ export class VaultOps {
 					replacement +
 					content.substring(idx + search.length);
 				await fs.writeFile(abs, newContent, "utf-8");
+				await pushUndoEdit();
 				return `Replaced text in ${notePath}\n${undo}`;
 			}
 			case "heading": {
@@ -181,6 +212,7 @@ export class VaultOps {
 					replacement +
 					content.substring(end);
 				await fs.writeFile(abs, newContent, "utf-8");
+				await pushUndoEdit();
 				return `Replaced heading section "${heading}" in ${notePath}\n${undo}`;
 			}
 			case "line_range": {
@@ -204,6 +236,7 @@ export class VaultOps {
 					"\n"
 				);
 				await fs.writeFile(abs, newContent, "utf-8");
+				await pushUndoEdit();
 				return `Replaced lines ${startLine}-${endLine} in ${notePath}\n${undo}`;
 			}
 			default:
@@ -233,6 +266,7 @@ export class VaultOps {
 
 		await fs.mkdir(path.dirname(absNew), { recursive: true });
 		await fs.rename(abs, absNew);
+		await this.pushUndo({ operation: "rename_note", path: normalized, oldPath: notePath });
 		return `Renamed: ${notePath} → ${normalized}\n${undoTag("rename_note", normalized, undefined, notePath)}`;
 	}
 
@@ -260,6 +294,7 @@ export class VaultOps {
 		await fs.mkdir(trashDir, { recursive: true });
 		const trashPath = path.join(trashDir, path.basename(notePath));
 		await fs.rename(abs, trashPath);
+		await this.pushUndo({ operation: "delete_note", path: notePath, previousContent: content });
 		return `Deleted (moved to .trash): ${notePath}\n${undoTag("delete_note", notePath, content)}`;
 	}
 
@@ -348,6 +383,7 @@ export class VaultOps {
 				? serializeFrontmatter(updated) + body
 				: body;
 		await fs.writeFile(abs, newContent, "utf-8");
+		await this.pushUndo({ operation: "update_frontmatter", path: notePath, previousContent: content });
 
 		const changes: string[] = [];
 		if (set) changes.push(`set: ${Object.keys(set).join(", ")}`);

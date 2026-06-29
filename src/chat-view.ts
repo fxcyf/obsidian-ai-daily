@@ -649,6 +649,7 @@ export class ChatView extends ItemView {
 		this.processWikiLinks(el);
 		this.processCodeBlocks(el);
 		this.addSaveToInboxBtn(el);
+		this.updateRewindButtons();
 	}
 
 	private addSaveToInboxBtn(el: HTMLElement): void {
@@ -697,6 +698,25 @@ export class ChatView extends ItemView {
 				setIcon(btn, "pin");
 				btn.removeClass("ai-daily-save-inbox-done");
 			}, 2000);
+		});
+	}
+
+	private updateRewindButtons(): void {
+		this.messagesEl.querySelectorAll(".ai-daily-rewind-btn").forEach((el) => el.remove());
+
+		const msgEls = this.messagesEl.querySelectorAll(".ai-daily-msg-assistant");
+		if (msgEls.length === 0 || this.messages.length < 2) return;
+
+		const lastAssistantEl = msgEls[msgEls.length - 1];
+		if (lastAssistantEl.querySelector(".ai-daily-rewind-btn")) return;
+
+		const btn = lastAssistantEl.createDiv({ cls: "ai-daily-rewind-btn" });
+		setIcon(btn, "undo-2");
+		btn.setAttribute("aria-label", "回退此轮对话");
+		btn.setAttribute("title", "回退此轮对话");
+
+		btn.addEventListener("click", () => {
+			void this.rewindLastTurn();
 		});
 	}
 
@@ -1377,6 +1397,7 @@ export class ChatView extends ItemView {
 			messages: persisted,
 			claudeCodeSessionId: this.claudeCodeSessionId,
 			proxySessionId: this.client?.getProxySessionId(),
+			harnessContext: this.harnessContext ?? undefined,
 		};
 		try {
 			await saveChatSession(this.app.vault, chatHistoryFolder, file);
@@ -2251,6 +2272,47 @@ export class ChatView extends ItemView {
 		}
 	}
 
+	private async rewindLastTurn(): Promise<void> {
+		if (this.isLoading) return;
+		if (this.messages.length < 2) return;
+
+		const last = this.messages[this.messages.length - 1];
+		const secondLast = this.messages[this.messages.length - 2];
+		if (last.role !== "assistant" || secondLast.role !== "user") return;
+
+		const rewoundUserText = secondLast.content;
+
+		this.messages.pop();
+		this.messages.pop();
+
+		if (this.client) {
+			this.client.rewindLastTurn();
+		}
+
+		// Remove last assistant msg el, any tool-calls/undo-bars before it, and the user msg el
+		const msgEls = this.messagesEl.querySelectorAll(".ai-daily-msg");
+		const allEls = Array.from(this.messagesEl.children);
+		if (msgEls.length >= 2) {
+			const lastMsgEl = msgEls[msgEls.length - 1];
+			const secondLastMsgEl = msgEls[msgEls.length - 2];
+			const startIdx = allEls.indexOf(secondLastMsgEl);
+			for (let i = allEls.length - 1; i >= startIdx; i--) {
+				allEls[i].remove();
+			}
+		}
+
+		this.cachedTokenCount = this.messages.reduce(
+			(sum, m) => sum + estimateTextTokens(m.content), 0
+		);
+		this.updateTokenBar();
+
+		this.inputEl.value = rewoundUserText;
+		this.inputEl.focus();
+
+		await this.persistSession();
+		new Notice("已回退上一轮对话", 2000);
+	}
+
 	private clearChat(): void {
 		this.sessionId = null;
 		this.messages = [];
@@ -2450,6 +2512,7 @@ export class ChatView extends ItemView {
 		this.sessionId = data.id;
 		this.claudeCodeSessionId = data.claudeCodeSessionId;
 		this.restoredProxySessionId = data.proxySessionId;
+		this.harnessContext = data.harnessContext ?? null;
 		this.messages = data.messages.map((m) => ({
 			role: m.role,
 			content: m.content,
@@ -2462,6 +2525,16 @@ export class ChatView extends ItemView {
 		this.messagesEl.empty();
 		const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
 		if (welcome) welcome.remove();
+
+		if (this.harnessContext) {
+			const modeLabel = `${this.harnessContext.mode.emoji} ${this.harnessContext.mode.label}`;
+			const harnessEl = this.messagesEl.createDiv({ cls: "ai-daily-harness-banner" });
+			harnessEl.createDiv({
+				cls: "ai-daily-harness-banner-mode",
+				text: `模式：${modeLabel}`,
+			});
+		}
+
 		for (const m of this.messages) {
 			const msgEl = this.messagesEl.createDiv({
 				cls: `ai-daily-msg ai-daily-msg-${m.role}`,

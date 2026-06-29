@@ -606,6 +606,23 @@ export class ClaudeClient {
 		this.messages = [];
 	}
 
+	rewindLastTurn(): boolean {
+		if (this.messages.length < 2) return false;
+		while (this.messages.length > 0) {
+			const last = this.messages[this.messages.length - 1];
+			const isToolResult =
+				last.role === "user" && Array.isArray(last.content) &&
+				(last.content as Record<string, unknown>[]).some((b) => b.type === "tool_result");
+			const isAssistant = last.role === "assistant";
+			if (!isToolResult && !isAssistant) break;
+			this.messages.pop();
+		}
+		if (this.messages.length > 0 && this.messages[this.messages.length - 1].role === "user") {
+			this.messages.pop();
+		}
+		return true;
+	}
+
 	private stripImageData(): void {
 		const lastIdx = this.messages.length - 1;
 		for (let mi = 0; mi < this.messages.length; mi++) {

@@ -1639,3 +1639,28 @@
 	opacity: 1;
 	color: var(--text-success);
 }
+
+.ai-daily-rewind-btn {
+	position: absolute;
+	bottom: 4px;
+	right: 4px;
+	width: 24px;
+	height: 24px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 4px;
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 0.15s ease;
+	color: var(--text-muted);
+}
+
+.ai-daily-msg-assistant:hover .ai-daily-rewind-btn {
+	opacity: 1;
+}
+
+.ai-daily-rewind-btn:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}

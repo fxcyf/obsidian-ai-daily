@@ -1362,10 +1362,13 @@ export class ChatView extends ItemView {
 		];
 
 		if (injectedFiles.length > 0) {
-			parts.push("", "## 注入的文件内容");
-			for (const file of injectedFiles) {
-				parts.push("", `### ${file.path}`, "", file.content);
-			}
+			parts.push(
+				"",
+				"## 相关文件",
+				"",
+				"以下文件与当前模式相关，需要时请用 read_note 工具读取：",
+				...injectedFiles.map((f) => `- ${f.path}`),
+			);
 		}
 
 		return parts.join("\n");

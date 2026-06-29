@@ -36,7 +36,7 @@ interface ProjectIndex {
 
 export interface HarnessContext {
 	mode: HarnessMode;
-	injectedFiles: { path: string; content: string }[];
+	injectedFiles: { path: string }[];
 }
 
 export class HarnessView extends ItemView {
@@ -417,25 +417,17 @@ export class HarnessView extends ItemView {
 		const mode = modes.find((m) => m.id === this.selectedModeId);
 		if (!mode) return;
 
-		const injectedFiles = await this.resolveFiles(mode.files);
+		const injectedFiles = this.resolveFiles(mode.files);
 		const context: HarnessContext = { mode, injectedFiles };
 		await this.plugin.startChatWithContext(context);
 	}
 
-	private async resolveFiles(
-		filePaths: string[]
-	): Promise<{ path: string; content: string }[]> {
-		const results: { path: string; content: string }[] = [];
-
+	private resolveFiles(filePaths: string[]): { path: string }[] {
+		const results: { path: string }[] = [];
 		for (const rawPath of filePaths) {
 			const resolvedPath = this.resolveVariables(rawPath);
-			const file = this.app.vault.getAbstractFileByPath(resolvedPath);
-			if (file instanceof TFile) {
-				const content = await this.app.vault.read(file);
-				results.push({ path: resolvedPath, content });
-			}
+			results.push({ path: resolvedPath });
 		}
-
 		return results;
 	}
 

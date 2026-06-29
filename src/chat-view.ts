@@ -905,6 +905,7 @@ export class ChatView extends ItemView {
 		welcomeEl.createDiv({ cls: "ai-daily-welcome-hint", text: hint });
 
 		const shortcuts: { icon: string; label: string; action: () => void }[] = [
+			{ icon: "brain", label: "Harness", action: () => this.plugin.activateHarnessView() },
 			{ icon: "rss", label: "生成 Feed", action: () => this.plugin.generateFeed() },
 			{ icon: "mic", label: "生成播客 Feed", action: () => this.plugin.generatePodcastFeed() },
 			{ icon: "history", label: "历史", action: () => this.openHistoryPanel() },

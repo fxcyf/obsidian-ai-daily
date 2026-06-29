@@ -1153,7 +1153,9 @@ export class ChatView extends ItemView {
 				new Notice("[debug7] calling proxyChat to " + this.plugin.settings.proxyUrl);
 				try {
 					reply = await this.client!.proxyChat(userMessage, streamCb, onToolCall);
+					new Notice("[debug8] proxyChat done, reply.length=" + reply.length);
 				} catch (proxyErr) {
+					new Notice("[debug8] proxyChat error: " + (proxyErr instanceof Error ? proxyErr.message : String(proxyErr)).slice(0, 80));
 					if (this.plugin.settings.proxyFallbackToApi && this.plugin.settings.apiKey) {
 						console.warn("[ai-daily] proxy failed, falling back to API:", proxyErr);
 						new Notice("代理不可用，回退到本地 API", 4000);

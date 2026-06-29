@@ -100,6 +100,16 @@ const server = createServer(async (req, res) => {
 		return;
 	}
 
+	if (url.pathname === "/rewind" && req.method === "POST") {
+		if (!authenticate(req)) {
+			res.statusCode = 401;
+			res.end(JSON.stringify({ error: "Unauthorized" }));
+			return;
+		}
+		await handleRewind(req, res);
+		return;
+	}
+
 	res.statusCode = 404;
 	res.setHeader("Content-Type", "application/json");
 	res.end(JSON.stringify({ error: "Not found" }));
@@ -193,6 +203,90 @@ async function handleUndo(req: IncomingMessage, res: ServerResponse): Promise<vo
 		await writeFile(UNDO_STACK_FILE, JSON.stringify(stack, null, 2), "utf-8");
 
 		res.end(JSON.stringify({ ok: true, operation: entry.operation, path: entry.path }));
+	} catch (e) {
+		res.statusCode = 500;
+		res.end(JSON.stringify({ error: String(e) }));
+	}
+}
+
+async function handleRewind(req: IncomingMessage, res: ServerResponse): Promise<void> {
+	res.setHeader("Content-Type", "application/json");
+
+	let body: { sessionId?: string } = {};
+	try {
+		body = await readBody<{ sessionId?: string }>(req);
+	} catch { /* use empty */ }
+
+	if (!body.sessionId) {
+		res.statusCode = 400;
+		res.end(JSON.stringify({ error: "sessionId is required" }));
+		return;
+	}
+
+	const home = process.env.HOME || process.env.USERPROFILE || "";
+	const projectsDir = resolve(home, ".claude", "projects");
+	const filename = `${body.sessionId}.jsonl`;
+
+	let jsonlPath = "";
+	try {
+		const { readdirSync, existsSync } = await import("fs");
+		for (const dir of readdirSync(projectsDir)) {
+			const candidate = resolve(projectsDir, dir, filename);
+			if (existsSync(candidate)) { jsonlPath = candidate; break; }
+		}
+	} catch { /* fall through */ }
+
+	if (!jsonlPath) {
+		res.statusCode = 404;
+		res.end(JSON.stringify({ error: "Session not found" }));
+		return;
+	}
+
+	try {
+		const raw = await readFile(jsonlPath, "utf-8");
+		const lines = raw.split("\n").filter((l) => l.trim());
+		if (lines.length === 0) {
+			res.statusCode = 404;
+			res.end(JSON.stringify({ error: "Empty session" }));
+			return;
+		}
+
+		let lastUserIdx = -1;
+		for (let i = lines.length - 1; i >= 0; i--) {
+			try {
+				const obj = JSON.parse(lines[i]);
+				if (obj.type !== "user") continue;
+				const content = obj.message?.content;
+				const isToolResult = Array.isArray(content) &&
+					content.some((b: Record<string, unknown>) => b.type === "tool_result");
+				if (!isToolResult) {
+					lastUserIdx = i;
+					break;
+				}
+			} catch { /* skip */ }
+		}
+
+		if (lastUserIdx <= 0) {
+			res.statusCode = 400;
+			res.end(JSON.stringify({ error: "Nothing to rewind" }));
+			return;
+		}
+
+		let cutIdx = lastUserIdx;
+		for (let i = lastUserIdx - 1; i >= 0; i--) {
+			try {
+				const obj = JSON.parse(lines[i]);
+				if (obj.type === "queue-operation" || obj.type === "mode") {
+					cutIdx = i;
+				} else {
+					break;
+				}
+			} catch { break; }
+		}
+
+		const truncated = lines.slice(0, cutIdx).join("\n") + "\n";
+		await writeFile(jsonlPath, truncated, "utf-8");
+		res.end(JSON.stringify({ ok: true, removedLines: lines.length - cutIdx }));
 	} catch (e) {
 		res.statusCode = 500;
 		res.end(JSON.stringify({ error: String(e) }));

@@ -599,3 +599,75 @@ function handleStreamEvent(
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Rewind Claude Code session (truncate JSONL transcript to remove last turn)
+// ---------------------------------------------------------------------------
+
+async function findSessionJsonl(sessionId: string): Promise<string | null> {
+	const { readdirSync, existsSync } = require("fs") as typeof import("fs");
+	const { join } = require("path") as typeof import("path");
+	const home = process.env.HOME || process.env.USERPROFILE || "";
+	const projectsDir = join(home, ".claude", "projects");
+	if (!existsSync(projectsDir)) return null;
+
+	const filename = `${sessionId}.jsonl`;
+	for (const dir of readdirSync(projectsDir)) {
+		const candidate = join(projectsDir, dir, filename);
+		if (existsSync(candidate)) return candidate;
+	}
+	return null;
+}
+
+export async function rewindClaudeCodeSession(sessionId: string): Promise<boolean> {
+	const { readFile, writeFile } = require("fs/promises") as typeof import("fs/promises");
+
+	const jsonlPath = await findSessionJsonl(sessionId);
+	if (!jsonlPath) return false;
+
+	let raw: string;
+	try {
+		raw = await readFile(jsonlPath, "utf-8");
+	} catch {
+		return false;
+	}
+
+	const lines = raw.split("\n").filter((l) => l.trim());
+	if (lines.length === 0) return false;
+
+	// Find the last real user message (not a tool_result)
+	let lastUserIdx = -1;
+	for (let i = lines.length - 1; i >= 0; i--) {
+		try {
+			const obj = JSON.parse(lines[i]);
+			if (obj.type !== "user") continue;
+			const content = obj.message?.content;
+			const isToolResult = Array.isArray(content) &&
+				content.some((b: Record<string, unknown>) => b.type === "tool_result");
+			if (!isToolResult) {
+				lastUserIdx = i;
+				break;
+			}
+		} catch { /* skip unparseable lines */ }
+	}
+
+	if (lastUserIdx <= 0) return false;
+
+	// Walk backwards from lastUserIdx to find the start of this turn
+	// (include queue-operation and mode entries that precede the user message)
+	let cutIdx = lastUserIdx;
+	for (let i = lastUserIdx - 1; i >= 0; i--) {
+		try {
+			const obj = JSON.parse(lines[i]);
+			if (obj.type === "queue-operation" || obj.type === "mode") {
+				cutIdx = i;
+			} else {
+				break;
+			}
+		} catch { break; }
+	}
+
+	const truncated = lines.slice(0, cutIdx).join("\n") + "\n";
+	await writeFile(jsonlPath, truncated, "utf-8");
+	return true;
+}

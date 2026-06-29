@@ -26,7 +26,7 @@ import type { HarnessContext } from "./harness-view";
 import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
 import type { PreparedImage } from "./image-tools";
 import { distillConversation, prepareDistillation, prepareHealthFix, type HealthCheckResult } from "./knowledge-agent";
-import { isClaudeCodeAvailable, spawnClaudeCode, getMcpServerPath, type UndoData } from "./claude-code";
+import { isClaudeCodeAvailable, spawnClaudeCode, getMcpServerPath, rewindClaudeCodeSession, type UndoData } from "./claude-code";
 import {
 	newSessionId,
 	titleFromMessages,
@@ -2287,6 +2287,27 @@ export class ChatView extends ItemView {
 
 		if (this.client) {
 			this.client.rewindLastTurn();
+		}
+
+		if (this.claudeCodeSessionId) {
+			await rewindClaudeCodeSession(this.claudeCodeSessionId);
+		}
+
+		if (this.client?.isProxyMode()) {
+			const proxySessionId = this.client.getProxySessionId();
+			if (proxySessionId) {
+				try {
+					const base = this.plugin.settings.proxyUrl.replace(/\/+$/, "");
+					await fetch(`${base}/rewind`, {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							"Authorization": `Bearer ${this.plugin.settings.proxyAuthToken}`,
+						},
+						body: JSON.stringify({ sessionId: proxySessionId }),
+					});
+				} catch { /* best effort */ }
+			}
 		}
 
 		// Remove last assistant msg el, any tool-calls/undo-bars before it, and the user msg el

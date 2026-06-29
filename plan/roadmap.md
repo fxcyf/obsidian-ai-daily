@@ -66,6 +66,18 @@
 
 ---
 
+## 专项：桌面代理模式（省 API 费用）
+
+> 移动端通过桌面 Claude Code 代理请求，使用订阅额度。桌面不可用时自动回退本地 API。
+
+| 功能 | 状态 | 来源 | 说明 |
+|------|------|------|------|
+| proxy-server 基础版 | ⬜ | [代理模式](feature-proxy-mode.md) Phase 1 | HTTP server + claude CLI + SSE 转发 |
+| 插件 proxy 模式 + fallback | ⬜ | [代理模式](feature-proxy-mode.md) Phase 2 | ClaudeClient 双模式 + 自动切换 |
+| MCP server 升级 | ⬜ | [代理模式](feature-proxy-mode.md) Phase 3 | Obsidian REST API 后端 + 补齐工具 |
+
+---
+
 ## 专项计划索引
 
 | 文档 | 主题 | 状态 |
@@ -81,6 +93,7 @@
 | [feature-ux-polish.md](feature-ux-polish.md) | UX 打磨（模板 + 链接 + 代码块 + 主题） | ✅ 大部分 |
 | [feature-knowledge-enhancement.md](feature-knowledge-enhancement.md) | 知识库能力深化（语义搜索 + 图谱 + 笔记生成） | ⬜ 已归入阶段二/三 |
 | [feature-automation.md](feature-automation.md) | 工作流自动化（标注 + 日报 + 回顾） | ⬜ 已归入阶段二/四 |
+| [feature-proxy-mode.md](feature-proxy-mode.md) | 桌面代理模式（移动端免 API 费 + fallback） | ⬜ |
 
 ---
 

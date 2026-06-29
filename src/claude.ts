@@ -320,6 +320,10 @@ export class ClaudeClient {
 		this.proxySessionId = id;
 	}
 
+	clearProxySessionId(): void {
+		this.proxySessionId = undefined;
+	}
+
 	isProxyMode(): boolean {
 		return !!(this.proxyUrl && this.proxyToken);
 	}

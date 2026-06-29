@@ -11,6 +11,7 @@ import { DEFAULT_FEEDS } from "./feeds";
 import { AutoTagger } from "./auto-tagger";
 import { findUnorganizedNotes, MAX_NOTES_PER_RUN, wikiHealthCheck, formatHealthCheckReport, hasFixableIssues } from "./knowledge-agent";
 import { isClaudeCodeAvailable } from "./claude-code";
+import { PluginApiServer } from "./plugin-api-server";
 
 class FeedConfirmModal extends Modal {
 	private resolved = false;
@@ -63,6 +64,7 @@ class FeedConfirmModal extends Modal {
 export default class AIDailyChat extends Plugin {
 	settings: AIDailyChatSettings = DEFAULT_SETTINGS;
 	private autoTagger: AutoTagger | null = null;
+	private apiServer: PluginApiServer | null = null;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -142,6 +144,13 @@ export default class AIDailyChat extends Plugin {
 
 		// Auto-tagging
 		this.setupAutoTagger();
+
+		// Start local API server on desktop for MCP server bridge
+		if (Platform.isDesktop) {
+			this.apiServer = new PluginApiServer(this.app, 27080, this.settings.knowledgeFolders);
+			this.apiServer.start();
+			this.register(() => this.apiServer?.stop());
+		}
 
 		if (Platform.isMobile) {
 			this.app.workspace.onLayoutReady(() => {

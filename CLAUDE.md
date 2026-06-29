@@ -80,7 +80,8 @@ rebase 发生冲突时：
 
 ## 架构概览
 
-- `src/main.ts` — 插件入口，注册视图、命令、设置
+- `src/main.ts` — 插件入口，注册视图、命令、设置；桌面端启动 Plugin API Server
+- `src/plugin-api-server.ts` — 桌面端 localhost HTTP API（127.0.0.1:27080），桥接 MCP Server → Obsidian API
 - `src/chat-view.ts` — 聊天侧边栏 UI
 - `src/claude.ts` — Claude API client，支持 tool_use agentic loop 和 real/typewriter/off 流式调度
 - `src/anthropic-sse.ts` — Anthropic SSE 解析与组装（纯函数，单测覆盖）
@@ -101,7 +102,7 @@ rebase 发生冲突时：
 - `src/settings.ts` — 插件设置（含 Feed 配置、微信读书配置）
 - `src/feeds.ts` — 多源抓取（RSS/HN API/Reddit/GitHub Trending）、社交热度评分、时间衰减、爆发检测
 - `src/feed-generator.ts` — Feed 生成器，编排 RSS + vault 搜索 + Claude 汇总；含独立播客 Feed 生成（transcript 提取 + Claude 深度分析）
-- `mcp-server/` — 独立 MCP server，用于 Claude Code 直接操作 vault（纯 Node.js 文件操作，不依赖 Obsidian API）
+- `mcp-server/` — 独立 MCP server，用于 Claude Code 操作 vault；优先通过插件 HTTP API 使用 Obsidian API，回退到文件系统操作
 
 ## 版本管理
 

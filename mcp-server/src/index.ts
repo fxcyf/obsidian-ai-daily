@@ -4,22 +4,56 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { VaultOps, containsTraversal } from "./vault-ops.js";
+import { VaultOpsApi } from "./vault-ops-api.js";
 
-const vaultRoot = process.env.VAULT_PATH;
-if (!vaultRoot) {
-	console.error("Error: VAULT_PATH environment variable is required");
-	process.exit(1);
+// ── Backend selection ──────────────────────────────────────────────
+// Prefer Obsidian plugin HTTP API; fall back to filesystem if unavailable.
+
+const obsidianApiUrl = process.env.OBSIDIAN_API_URL || "http://127.0.0.1:27080";
+const vaultRoot = process.env.VAULT_PATH || "";
+
+interface VaultBackend {
+	readNote(path: string): Promise<string>;
+	searchVault(query: string, folder?: string, tag?: string): Promise<string>;
+	appendToNote(path: string, content: string): Promise<string>;
+	listNotes(folder?: string, limit?: number): Promise<string>;
+	createNote(path: string, content: string, frontmatter?: Record<string, unknown>): Promise<string>;
+	editNote(path: string, mode: string, target: unknown, replacement: string): Promise<string>;
+	renameNote(path: string, newPath: string): Promise<string>;
+	deleteNote(path: string, confirmed: boolean): Promise<string>;
+	getLinks(path: string): Promise<string>;
+	updateFrontmatter(path: string, set?: Record<string, unknown>, del?: string[]): Promise<string>;
 }
+
+let vault: VaultBackend;
+let apiBackend: VaultOpsApi | null = null;
+let backendName: string;
 
 const knowledgeFolders = (process.env.KNOWLEDGE_FOLDERS || "Raw,Wiki")
 	.split(",")
 	.map((s) => s.trim())
 	.filter(Boolean);
 
-const vault = new VaultOps(vaultRoot, knowledgeFolders);
+async function initBackend(): Promise<void> {
+	const api = new VaultOpsApi(obsidianApiUrl);
+	if (await api.healthCheck()) {
+		vault = api;
+		apiBackend = api;
+		backendName = `obsidian-api (${obsidianApiUrl})`;
+		console.error(`[MCP] Using Obsidian API backend: ${obsidianApiUrl}`);
+	} else if (vaultRoot) {
+		vault = new VaultOps(vaultRoot, knowledgeFolders);
+		backendName = `filesystem (${vaultRoot})`;
+		console.error(`[MCP] Obsidian API not available, falling back to filesystem: ${vaultRoot}`);
+	} else {
+		console.error("Error: Neither Obsidian API nor VAULT_PATH available");
+		process.exit(1);
+	}
+}
+
 const server = new McpServer({
 	name: "obsidian-vault",
-	version: "0.1.0",
+	version: "0.2.0",
 });
 
 function pathGuard(p: string): string | null {
@@ -28,15 +62,20 @@ function pathGuard(p: string): string | null {
 	return null;
 }
 
+function textResult(text: string) {
+	return { content: [{ type: "text" as const, text }] };
+}
+
+// ── Vault tools ────────────────────────────────────────────────────
+
 server.tool(
 	"read_note",
 	"读取 vault 中指定路径的笔记全文。可用于读取日报、采集的文章（Raw/）、整理的知识条目（Wiki/）等。",
 	{ path: z.string().describe("笔记路径，如 Raw/some-article.md 或 Wiki/concept.md") },
 	async ({ path }) => {
 		const err = pathGuard(path);
-		if (err) return { content: [{ type: "text", text: err }] };
-		const result = await vault.readNote(path);
-		return { content: [{ type: "text", text: result }] };
+		if (err) return textResult(err);
+		return textResult(await vault.readNote(path));
 	}
 );
 
@@ -49,9 +88,8 @@ server.tool(
 		tag: z.string().optional().describe("按标签过滤，如 ai、rag（匹配 frontmatter 中的 tags）"),
 	},
 	async ({ query, folder, tag }) => {
-		if (!query) return { content: [{ type: "text", text: "Error: query is required" }] };
-		const result = await vault.searchVault(query, folder, tag);
-		return { content: [{ type: "text", text: result }] };
+		if (!query) return textResult("Error: query is required");
+		return textResult(await vault.searchVault(query, folder, tag));
 	}
 );
 
@@ -64,9 +102,8 @@ server.tool(
 	},
 	async ({ path, content }) => {
 		const err = pathGuard(path);
-		if (err) return { content: [{ type: "text", text: err }] };
-		const result = await vault.appendToNote(path, content);
-		return { content: [{ type: "text", text: result }] };
+		if (err) return textResult(err);
+		return textResult(await vault.appendToNote(path, content));
 	}
 );
 
@@ -77,10 +114,7 @@ server.tool(
 		folder: z.string().optional().describe("文件夹路径，如 Raw、Wiki"),
 		limit: z.number().optional().default(20).describe("返回最近几篇（默认 20）"),
 	},
-	async ({ folder, limit }) => {
-		const result = await vault.listNotes(folder, limit);
-		return { content: [{ type: "text", text: result }] };
-	}
+	async ({ folder, limit }) => textResult(await vault.listNotes(folder, limit))
 );
 
 server.tool(
@@ -93,9 +127,8 @@ server.tool(
 	},
 	async ({ path, content, frontmatter }) => {
 		const err = pathGuard(path);
-		if (err) return { content: [{ type: "text", text: err }] };
-		const result = await vault.createNote(path, content, frontmatter);
-		return { content: [{ type: "text", text: result }] };
+		if (err) return textResult(err);
+		return textResult(await vault.createNote(path, content, frontmatter));
 	}
 );
 
@@ -110,55 +143,49 @@ server.tool(
 	},
 	async ({ path, mode, target, replacement }) => {
 		const err = pathGuard(path);
-		if (err) return { content: [{ type: "text", text: err }] };
-		const result = await vault.editNote(path, mode, target, replacement);
-		return { content: [{ type: "text", text: result }] };
+		if (err) return textResult(err);
+		return textResult(await vault.editNote(path, mode, target, replacement));
 	}
 );
 
 server.tool(
 	"rename_note",
-	"重命名或移动笔记到新路径。目标路径不能已存在。",
+	"重命名或移动笔记到新路径。通过 Obsidian API 时会自动更新所有反向链接引用。目标路径不能已存在。",
 	{
 		path: z.string().describe("当前笔记路径"),
 		new_path: z.string().describe("新路径，如 Wiki/new-name.md"),
 	},
 	async ({ path, new_path }) => {
 		const err = pathGuard(path);
-		if (err) return { content: [{ type: "text", text: err }] };
+		if (err) return textResult(err);
 		const err2 = pathGuard(new_path);
-		if (err2) return { content: [{ type: "text", text: err2 }] };
-		const result = await vault.renameNote(path, new_path);
-		return { content: [{ type: "text", text: result }] };
+		if (err2) return textResult(err2);
+		return textResult(await vault.renameNote(path, new_path));
 	}
 );
 
 server.tool(
 	"delete_note",
-	"删除笔记（两步确认）。第一次调用返回预览和确认提示，带 confirmed: true 再次调用才执行删除。文件移到 .trash 文件夹。",
+	"删除笔记（两步确认）。第一次调用返回预览和确认提示，带 confirmed: true 再次调用才执行删除。文件移到回收站。",
 	{
 		path: z.string().describe("笔记路径"),
 		confirmed: z.boolean().optional().default(false).describe("设为 true 确认删除"),
 	},
 	async ({ path, confirmed }) => {
 		const err = pathGuard(path);
-		if (err) return { content: [{ type: "text", text: err }] };
-		const result = await vault.deleteNote(path, confirmed);
-		return { content: [{ type: "text", text: result }] };
+		if (err) return textResult(err);
+		return textResult(await vault.deleteNote(path, confirmed));
 	}
 );
 
 server.tool(
 	"get_links",
 	"获取笔记的双向链接关系。返回 outlinks（该笔记链接到的）和 backlinks（链接到该笔记的）。",
-	{
-		path: z.string().describe("笔记路径，如 Wiki/concept.md"),
-	},
+	{ path: z.string().describe("笔记路径，如 Wiki/concept.md") },
 	async ({ path }) => {
 		const err = pathGuard(path);
-		if (err) return { content: [{ type: "text", text: err }] };
-		const result = await vault.getLinks(path);
-		return { content: [{ type: "text", text: result }] };
+		if (err) return textResult(err);
+		return textResult(await vault.getLinks(path));
 	}
 );
 
@@ -172,10 +199,62 @@ server.tool(
 	},
 	async ({ path, set, delete: del }) => {
 		const err = pathGuard(path);
-		if (err) return { content: [{ type: "text", text: err }] };
-		if (!set && !del) return { content: [{ type: "text", text: "Error: at least one of set or delete is required" }] };
-		const result = await vault.updateFrontmatter(path, set, del);
-		return { content: [{ type: "text", text: result }] };
+		if (err) return textResult(err);
+		if (!set && !del) return textResult("Error: at least one of set or delete is required");
+		return textResult(await vault.updateFrontmatter(path, set, del));
+	}
+);
+
+// ── Image tool (API backend only) ─────────────────────────────────
+
+server.tool(
+	"read_image",
+	"读取 vault 中的图片文件并返回图片内容（自动压缩）。当笔记中包含图片引用（如 ![[photo.png]]）时使用。支持 png/jpg/jpeg/webp/gif。需要 Obsidian API 后端。",
+	{ path: z.string().describe("图片在 vault 中的相对路径，如 attachments/photo.png") },
+	async ({ path }) => {
+		if (!apiBackend) return textResult("Error: read_image requires Obsidian API backend (not available in filesystem mode)");
+		return textResult(await apiBackend.readImage(path));
+	}
+);
+
+// ── Podcast tools (API backend only) ──────────────────────────────
+
+server.tool(
+	"podcast_search",
+	"搜索播客。输入关键词，返回匹配的播客列表（名称、作者、Feed URL）。需要 Obsidian API 后端。",
+	{
+		query: z.string().describe("搜索关键词，如 'AI news' 或 '硬地骇客'"),
+		limit: z.number().optional().default(10).describe("返回结果数量（默认 10）"),
+	},
+	async ({ query, limit }) => {
+		if (!apiBackend) return textResult("Error: podcast_search requires Obsidian API backend");
+		return textResult(await apiBackend.podcastSearch(query, limit));
+	}
+);
+
+server.tool(
+	"podcast_episodes",
+	"获取播客最近的剧集列表。传入 RSS feed URL，返回最近的剧集信息。需要 Obsidian API 后端。",
+	{
+		url: z.string().describe("播客 RSS feed URL"),
+		limit: z.number().optional().default(5).describe("返回剧集数量（默认 5）"),
+	},
+	async ({ url, limit }) => {
+		if (!apiBackend) return textResult("Error: podcast_episodes requires Obsidian API backend");
+		return textResult(await apiBackend.podcastEpisodes(url, limit));
+	}
+);
+
+server.tool(
+	"podcast_transcript",
+	"获取播客剧集的文字稿。支持 YouTube URL（直接提取字幕）或 RSS feed URL（提取指定剧集的 transcript）。需要 Obsidian API 后端。",
+	{
+		url: z.string().describe("YouTube 视频 URL 或播客 RSS feed URL"),
+		episode_index: z.number().optional().default(0).describe("RSS feed 中的剧集索引（0=最新，默认 0）"),
+	},
+	async ({ url, episode_index }) => {
+		if (!apiBackend) return textResult("Error: podcast_transcript requires Obsidian API backend");
+		return textResult(await apiBackend.podcastTranscript(url, episode_index));
 	}
 );
 
@@ -211,22 +290,25 @@ if (WEREAD_API_KEY) {
 				});
 				const json = await resp.json();
 				if (json?.errcode && json.errcode !== 0) {
-					return { content: [{ type: "text" as const, text: `WeRead API error (${json.errcode}): ${json.errmsg || JSON.stringify(json)}` }] };
+					return textResult(`WeRead API error (${json.errcode}): ${json.errmsg || JSON.stringify(json)}`);
 				}
 				let text = JSON.stringify(json, null, 2);
 				if (text.length > MAX_WEREAD_CHARS) {
 					text = text.slice(0, MAX_WEREAD_CHARS) + `\n...(truncated, ${text.length} chars total)`;
 				}
-				return { content: [{ type: "text" as const, text }] };
+				return textResult(text);
 			} catch (e) {
 				const msg = e instanceof Error ? e.message : String(e);
-				return { content: [{ type: "text" as const, text: `Error calling WeRead API ${api_name}: ${msg}` }] };
+				return textResult(`Error calling WeRead API ${api_name}: ${msg}`);
 			}
 		}
 	);
 }
 
+// ── Main ───────────────────────────────────────────────────────────
+
 async function main(): Promise<void> {
+	await initBackend();
 	const transport = new StdioServerTransport();
 	await server.connect(transport);
 }

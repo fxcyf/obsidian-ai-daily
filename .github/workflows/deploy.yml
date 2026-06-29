@@ -35,8 +35,11 @@ jobs:
           cp -r dist/* "$PLUGIN_DIR/"
           echo "Deployed plugin to $PLUGIN_DIR"
 
-      - name: Restart proxy server
-        run: sudo systemctl restart obsidian-proxy
+      - name: Update and restart proxy server
+        run: |
+          sudo cp proxy-server/deploy/obsidian-proxy.service /etc/systemd/system/obsidian-proxy.service
+          sudo systemctl daemon-reload
+          sudo systemctl restart obsidian-proxy
 
       - name: Verify proxy server
         run: |

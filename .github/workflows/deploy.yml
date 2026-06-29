@@ -19,14 +19,26 @@ jobs:
       - name: Install dependencies
         run: |
           npm install
-          cd mcp-server && npm install
+          cd mcp-server && npm install && cd ..
+          cd proxy-server && npm install && cd ..
 
       - name: Build
-        run: npm run build
+        run: |
+          npm run build
+          cd mcp-server && npm run build && cd ..
+          cd proxy-server && npm run build && cd ..
 
-      - name: Deploy to Obsidian vault
+      - name: Deploy plugin to Obsidian vault
         run: |
           PLUGIN_DIR="$HOME/MyFiles/Obsidian/All in One/.obsidian/plugins/ai-daily-chat"
           mkdir -p "$PLUGIN_DIR"
           cp -r dist/* "$PLUGIN_DIR/"
-          echo "Deployed to $PLUGIN_DIR"
+          echo "Deployed plugin to $PLUGIN_DIR"
+
+      - name: Restart proxy server
+        run: sudo systemctl restart obsidian-proxy
+
+      - name: Verify proxy server
+        run: |
+          sleep 2
+          curl -sf http://localhost:27090/health && echo "proxy server OK"

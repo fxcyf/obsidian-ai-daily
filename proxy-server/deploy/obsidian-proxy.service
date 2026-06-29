@@ -4,16 +4,17 @@ After=network.target
 
 [Service]
 Type=simple
-User=YOUR_USER
-WorkingDirectory=/path/to/obsidian-ai-daily/proxy-server
-ExecStart=/usr/bin/node dist/server.js
+User=fxcyf
+WorkingDirectory=/home/fxcyf/MyFiles/random/obsidian-ai-daily/proxy-server
+ExecStart=/home/fxcyf/.nvm/versions/node/v20.19.5/bin/node dist/server.js
 Restart=always
 RestartSec=5
 Environment=PORT=27090
-Environment=AUTH_TOKEN=your-secret-token-here
-Environment=MCP_CONFIG=/path/to/obsidian-ai-daily/proxy-server/mcp-config.json
+Environment=AUTH_TOKEN=986753421
+Environment=MCP_CONFIG=/home/fxcyf/MyFiles/random/obsidian-ai-daily/proxy-server/mcp-config.json
 Environment=CLAUDE_MODEL=sonnet
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=CLAUDE_PATH=/home/fxcyf/.local/bin/claude
+Environment=PATH=/home/fxcyf/.local/bin:/home/fxcyf/.nvm/versions/node/v20.19.5/bin:/usr/local/bin:/usr/bin:/bin
 
 [Install]
 WantedBy=multi-user.target

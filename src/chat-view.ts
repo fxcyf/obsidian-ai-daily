@@ -955,8 +955,10 @@ export class ChatView extends ItemView {
 		}
 
 		const useClaudeCode = await isClaudeCodeAvailable();
+		new Notice(`[debug2] useClaudeCode=${useClaudeCode}`);
 
 		const proxyReady = this.plugin.settings.proxyEnabled && !!this.plugin.settings.proxyUrl && !!this.plugin.settings.proxyToken;
+		new Notice(`[debug3] proxyEnabled=${this.plugin.settings.proxyEnabled} proxyReady=${proxyReady} apiKey=${!!this.plugin.settings.apiKey}`);
 		if (!useClaudeCode && !this.plugin.settings.apiKey && !proxyReady) {
 			this.addMessage(
 				"assistant",

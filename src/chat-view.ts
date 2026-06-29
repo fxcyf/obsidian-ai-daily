@@ -20,7 +20,7 @@ import { VaultTools, type UndoEntry } from "./vault-tools";
 import { WebTools } from "./web-tools";
 import { WeReadTools } from "./weread-tools";
 import { PodcastTools } from "./podcast-tools";
-import { WEREAD_SYSTEM_PROMPT, WEREAD_CLAUDE_CODE_PROMPT } from "./weread-prompts";
+import { buildSystemPrompt } from "./system-prompt";
 import type { PromptTemplate } from "./settings";
 import type { HarnessContext } from "./harness-view";
 import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
@@ -1219,49 +1219,25 @@ export class ChatView extends ItemView {
 		let prompt = text;
 
 		if (isFirstMessage) {
-			const { knowledgeFolders, distillTargetFolder, autoTagFolders } = this.plugin.settings;
-			const parts: string[] = [
-				"你是一个个人知识库助手。用户在 Obsidian 中管理知识库。",
-				"",
-				"## Vault 结构",
-				`- 知识库文件夹: ${knowledgeFolders.join("、")}`,
-				`- 原始笔记文件夹: ${autoTagFolders.join("、")}`,
-				`- 知识整理目标文件夹: ${distillTargetFolder}`,
-			];
-
-			if (attachedContent) {
-				parts.push("", attachedContent);
-			}
-
 			const adapter = this.app.vault.adapter as { basePath?: string };
 			const vaultAbsPath = adapter.basePath || "";
 
-			parts.push(
-				"",
-				"## MCP 工具使用说明",
-				"你可以通过 MCP 工具操作 vault 中的笔记，路径使用 vault 内相对路径：",
-				"- read_note: 读取笔记，path 如 `Raw/文章标题.md` 或 `Wiki/概念.md`",
-				"- search_vault: 搜索笔记，query 为关键词，可用 folder 限定文件夹",
-				"- list_notes: 列出文件夹内笔记，folder 如 `Raw`、`Wiki`",
-				"- create_note: 创建笔记，path 为完整路径如 `Wiki/新条目.md`",
-				"- edit_note: 编辑笔记指定部分",
-				"- append_to_note: 在笔记末尾追加内容",
-				"- update_frontmatter: 更新笔记的 frontmatter 属性",
-				"- rename_note / delete_note / get_links: 其他操作",
-				"",
-				"## 图片处理",
-				`Vault 绝对路径: ${vaultAbsPath}`,
-				"当 read_note 返回的内容包含图片引用（如 `![[image.png]]` 或 `![](path/to/image.jpg)`）时，",
-				"用 ReadFile 工具直接读取图片文件来查看内容。图片的绝对路径 = Vault绝对路径 + 图片相对路径。",
-				"例如: `![[attachments/photo.png]]` → ReadFile(`" + vaultAbsPath + "/attachments/photo.png`)",
-				"支持的格式: png, jpg, jpeg, webp, gif",
-				"",
-				"当用户提到某篇笔记时，先用 search_vault 搜索，找到后用 read_note 读取。",
-				"回答用中文，简洁有深度。引用笔记时使用 [[笔记名]] wiki-link 格式。",
-			);
+			const systemPromptText = buildSystemPrompt({
+				mode: "claude-code",
+				knowledgeFolders: this.plugin.settings.knowledgeFolders,
+				distillTargetFolder: this.plugin.settings.distillTargetFolder,
+				autoTagFolders: this.plugin.settings.autoTagFolders,
+				enableWebSearch: false,
+				enableWeRead: this.plugin.settings.enableWeRead && !!this.plugin.settings.wereadApiKey,
+				enablePodcast: false,
+				harnessContext: this.harnessContext,
+				vaultAbsPath,
+			});
 
-			if (this.plugin.settings.enableWeRead && this.plugin.settings.wereadApiKey) {
-				parts.push("", WEREAD_CLAUDE_CODE_PROMPT);
+			const parts: string[] = [systemPromptText];
+
+			if (attachedContent) {
+				parts.push("", attachedContent);
 			}
 
 			if (this.messages.length > 1) {
@@ -1344,29 +1320,19 @@ export class ChatView extends ItemView {
 		this.podcastTools = enablePodcast ? new PodcastTools() : null;
 
 		const knowledgeContext = await this.vaultTools.loadKnowledgeContext(5);
+		const proxyActive = this.plugin.settings.proxyEnabled;
 
-		const allFolders = knowledgeFolders.join("、");
-
-		const systemPrompt = [
-			"你是一个个人知识库助手。用户在 Obsidian 中管理自己的知识库，包括采集的原始文章（Raw/）、整理的知识条目（Wiki/）和每日笔记。",
-			`知识库文件夹: ${allFolders}`,
-			"你可以使用工具来读取、搜索、列出、创建、编辑、重命名、删除笔记，以及修改 frontmatter。支持按文件夹和标签（frontmatter tags）筛选搜索。删除笔记需要两步确认。",
-			enableWebSearch
-				? "你还可以使用 web_search 搜索互联网获取最新信息，用 web_fetch 抓取网页全文阅读。当用户提问涉及最新动态、你不确定的事实、或需要外部资料时，主动使用联网工具。"
-				: "",
-			weReadActive ? WEREAD_SYSTEM_PROMPT : "",
-			enablePodcast
-				? "你可以使用播客工具：podcast_search 搜索播客，podcast_episodes 获取剧集列表，podcast_transcript 获取文字稿。当用户想了解、总结或翻译播客内容时，主动使用这些工具。"
-				: "",
-			"回答用中文，简洁有深度。如果用户想保存洞察，用 append_to_note 工具写回笔记。",
-			"��回复中引用笔记时，请使用 [[笔记名]] 的 wiki-link 格式，以便用户可以直接点击跳转。",
-			"当用户提到某篇笔记时，先用 search_vault 搜索，找到后用 read_note 读取。",
-			"创建或编辑 Wiki 条目时，维护组织结构：复用已有 tags 避免同义重复，主动添加 [[wiki-link]] 关联相关条目，优先合并到已有条目而非创建重叠内容。",
-			knowledgeContext ? `## 最近的知识库笔记\n\n${knowledgeContext}` : "",
-			this.harnessContext ? this.buildHarnessPrompt() : "",
-		]
-			.filter(Boolean)
-			.join("\n\n");
+		const systemPrompt = buildSystemPrompt({
+			mode: proxyActive ? "proxy" : "api",
+			knowledgeFolders,
+			distillTargetFolder: this.plugin.settings.distillTargetFolder,
+			autoTagFolders: this.plugin.settings.autoTagFolders,
+			enableWebSearch,
+			enableWeRead: weReadActive,
+			enablePodcast,
+			harnessContext: this.harnessContext,
+			knowledgeContext: knowledgeContext || undefined,
+		});
 
 		this.client = new ClaudeClient(apiKey, model, systemPrompt, {
 			streamMode: chatStreamMode,
@@ -1380,32 +1346,9 @@ export class ChatView extends ItemView {
 			onStreamFallback: (reason) => {
 				console.warn("[ai-daily] stream fallback:", reason);
 			},
-			proxyUrl: this.plugin.settings.proxyEnabled ? this.plugin.settings.proxyUrl : undefined,
-			proxyToken: this.plugin.settings.proxyEnabled ? this.plugin.settings.proxyToken : undefined,
+			proxyUrl: proxyActive ? this.plugin.settings.proxyUrl : undefined,
+			proxyToken: proxyActive ? this.plugin.settings.proxyToken : undefined,
 		});
-	}
-
-	private buildHarnessPrompt(): string {
-		if (!this.harnessContext) return "";
-
-		const { mode, injectedFiles } = this.harnessContext;
-		const parts: string[] = [
-			`## Harness 模式：${mode.emoji} ${mode.label}`,
-			"",
-			mode.systemPromptAppend,
-		];
-
-		if (injectedFiles.length > 0) {
-			parts.push(
-				"",
-				"## 相关文件",
-				"",
-				"以下文件与当前模式相关，需要时请用 read_note 工具读取：",
-				...injectedFiles.map((f) => `- ${f.path}`),
-			);
-		}
-
-		return parts.join("\n");
 	}
 
 	private async persistSession(): Promise<void> {

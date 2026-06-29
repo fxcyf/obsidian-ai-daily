@@ -955,7 +955,8 @@ export class ChatView extends ItemView {
 
 		const useClaudeCode = await isClaudeCodeAvailable();
 
-		if (!useClaudeCode && !this.plugin.settings.apiKey) {
+		const proxyReady = this.plugin.settings.proxyEnabled && !!this.plugin.settings.proxyUrl && !!this.plugin.settings.proxyToken;
+		if (!useClaudeCode && !this.plugin.settings.apiKey && !proxyReady) {
 			this.addMessage(
 				"assistant",
 				"请先在插件设置中配置 Anthropic API Key，或安装 Claude Code。"

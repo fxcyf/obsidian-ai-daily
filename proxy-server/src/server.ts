@@ -335,6 +335,10 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 		proc = spawn(CLAUDE_PATH, args, {
 			stdio: ["pipe", "pipe", "pipe"],
 			env: { ...process.env, FORCE_COLOR: "0" },
+			// Use vault path as cwd so Claude Code doesn't walk up and load the
+			// project's CLAUDE.md (which contains dev-workflow instructions that
+			// confuse Claude when it's running as an Obsidian assistant).
+			cwd: VAULT_PATH || process.env.HOME || undefined,
 		});
 	} catch (e) {
 		sendEvent({ type: "error", message: `Failed to spawn claude: ${e}` });

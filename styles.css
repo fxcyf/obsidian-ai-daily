@@ -433,48 +433,44 @@
 .ai-daily-welcome-harness {
 	width: 100%;
 	max-width: 320px;
-	margin-bottom: 16px;
+	margin-bottom: 12px;
 }
 
 .ai-daily-welcome-harness-project {
-	margin-bottom: 10px;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px;
+	margin-bottom: 4px;
 }
 
 .ai-daily-welcome-harness-project-header {
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: 4px;
 	font-size: 12px;
-	font-weight: 500;
-	color: var(--text-muted);
-	text-transform: uppercase;
-	letter-spacing: 0.5px;
-	margin-bottom: 6px;
+	color: var(--text-faint);
+	margin-right: 2px;
 }
 
 .ai-daily-welcome-harness-modes {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
+	display: contents;
 }
 
 .ai-daily-welcome-harness-mode-btn {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	padding: 6px 12px;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 8px;
-	background: var(--background-secondary);
+	padding: 2px 8px;
+	border: none;
+	border-radius: 4px;
+	background: none;
 	cursor: pointer;
-	font-size: 13px;
+	font-size: 12px;
+	color: var(--text-muted);
 	transition: all 0.15s ease;
 }
 
 .ai-daily-welcome-harness-mode-btn:hover {
-	background: var(--interactive-accent);
-	color: var(--text-on-accent);
-	border-color: var(--interactive-accent);
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
 }
 
 /* ── Settings: full-width layout for textareas ────────── */

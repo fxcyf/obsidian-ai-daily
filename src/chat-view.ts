@@ -972,11 +972,6 @@ export class ChatView extends ItemView {
 
 						const projectEl = container.createDiv({ cls: "ai-daily-welcome-harness-project" });
 						const headerEl = projectEl.createDiv({ cls: "ai-daily-welcome-harness-project-header" });
-						const dot = headerEl.createSpan({ cls: "ai-daily-harness-picker-dot" });
-						dot.style.background =
-							project.status === "active"
-								? "var(--interactive-accent)"
-								: "var(--text-muted)";
 						headerEl.createSpan({ text: project.name });
 
 						const modesGrid = projectEl.createDiv({ cls: "ai-daily-welcome-harness-modes" });

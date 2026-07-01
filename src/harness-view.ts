@@ -455,7 +455,11 @@ export class HarnessView extends ItemView {
 			return;
 		}
 
-		const picker = this.containerDiv.createDiv({ cls: "ai-daily-harness-picker" });
+		const projectSection = this.containerDiv.querySelector(".ai-daily-harness-section");
+		if (!projectSection) return;
+
+		const picker = createDiv({ cls: "ai-daily-harness-picker" });
+		projectSection.after(picker);
 
 		for (const project of this.projectIndex.projects) {
 			const item = picker.createDiv({ cls: "ai-daily-harness-picker-item" });

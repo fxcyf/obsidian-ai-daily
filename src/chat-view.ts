@@ -22,7 +22,7 @@ import { WeReadTools } from "./weread-tools";
 import { PodcastTools } from "./podcast-tools";
 import { buildSystemPrompt } from "./system-prompt";
 import type { PromptTemplate } from "./settings";
-import type { HarnessContext } from "./harness-view";
+import { loadProjectIndex, parseModesFromContent, type HarnessContext } from "./harness-view";
 import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
 import type { PreparedImage } from "./image-tools";
 import { distillConversation, prepareDistillation, prepareHealthFix, type HealthCheckResult } from "./knowledge-agent";
@@ -924,6 +924,8 @@ export class ChatView extends ItemView {
 		welcomeEl.createDiv({ cls: "ai-daily-welcome-title", text: `AI Knowledge Chat v${this.plugin.manifest.version}` });
 		welcomeEl.createDiv({ cls: "ai-daily-welcome-hint", text: hint });
 
+		this.buildWelcomeHarness(welcomeEl);
+
 		const shortcuts: { icon: string; label: string; action: () => void }[] = [
 			{ icon: "brain", label: "Harness", action: () => this.plugin.activateHarnessView() },
 			{ icon: "rss", label: "生成 Feed", action: () => this.plugin.generateFeed() },
@@ -943,6 +945,61 @@ export class ChatView extends ItemView {
 		}
 
 		this.updateTokenBar();
+	}
+
+	private buildWelcomeHarness(welcomeEl: HTMLElement): void {
+		const container = welcomeEl.createDiv({ cls: "ai-daily-welcome-harness" });
+
+		loadProjectIndex(
+			this.app.vault,
+			this.app.metadataCache,
+			this.plugin.settings.harnessProjectsFolder,
+		).then((index) => {
+			if (!index || index.projects.length === 0) return;
+
+			const projectsFolder = this.plugin.settings.harnessProjectsFolder;
+			const readPromises: Promise<void>[] = [];
+
+			for (const project of index.projects) {
+				const modesPath = `${projectsFolder}/${project.name}/modes.md`;
+				const modesFile = this.app.vault.getAbstractFileByPath(modesPath);
+				if (!(modesFile instanceof TFile)) continue;
+
+				readPromises.push(
+					this.app.vault.read(modesFile).then((content) => {
+						const modes = parseModesFromContent(content);
+						if (modes.length === 0) return;
+
+						const projectEl = container.createDiv({ cls: "ai-daily-welcome-harness-project" });
+						const headerEl = projectEl.createDiv({ cls: "ai-daily-welcome-harness-project-header" });
+						const dot = headerEl.createSpan({ cls: "ai-daily-harness-picker-dot" });
+						dot.style.background =
+							project.status === "active"
+								? "var(--interactive-accent)"
+								: "var(--text-muted)";
+						headerEl.createSpan({ text: project.name });
+
+						const modesGrid = projectEl.createDiv({ cls: "ai-daily-welcome-harness-modes" });
+						for (const mode of modes) {
+							const btn = modesGrid.createEl("button", {
+								cls: "ai-daily-welcome-harness-mode-btn",
+							});
+							btn.createSpan({ text: `${mode.emoji} ${mode.label}` });
+							btn.addEventListener("click", () => {
+								const resolvedFiles = mode.files.map((f) => {
+									let resolved = f;
+									resolved = resolved.replace(/\{active_project\}/g, project.name);
+									resolved = resolved.replace(/\{active_work_context\}/g, index.activeWorkContext || "");
+									return { path: resolved };
+								});
+								const context: HarnessContext = { mode, injectedFiles: resolvedFiles };
+								this.startWithContext(context);
+							});
+						}
+					})
+				);
+			}
+		});
 	}
 
 	private handleStop(): void {

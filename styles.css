@@ -428,6 +428,55 @@
 	height: 16px;
 }
 
+/* ── Welcome Harness quick-start ─────────────────────── */
+
+.ai-daily-welcome-harness {
+	width: 100%;
+	max-width: 320px;
+	margin-bottom: 16px;
+}
+
+.ai-daily-welcome-harness-project {
+	margin-bottom: 10px;
+}
+
+.ai-daily-welcome-harness-project-header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	margin-bottom: 6px;
+}
+
+.ai-daily-welcome-harness-modes {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.ai-daily-welcome-harness-mode-btn {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 6px 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-secondary);
+	cursor: pointer;
+	font-size: 13px;
+	transition: all 0.15s ease;
+}
+
+.ai-daily-welcome-harness-mode-btn:hover {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
+}
+
 /* ── Settings: full-width layout for textareas ────────── */
 
 .ai-daily-setting-full .setting-item-info {
@@ -1393,36 +1442,42 @@
 	letter-spacing: 0.5px;
 }
 
-.ai-daily-harness-project-row {
+.ai-daily-harness-project-gallery {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.ai-daily-harness-project-card {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	padding: 8px 12px;
+	gap: 6px;
+	padding: 6px 12px;
 	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
 	border-radius: 8px;
-}
-
-.ai-daily-harness-project-name {
-	font-size: 15px;
-	font-weight: 500;
-}
-
-.ai-daily-harness-switch-btn {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	padding: 4px 8px;
-	font-size: 12px;
 	cursor: pointer;
-	background: none;
-	border: none;
-	color: var(--text-muted);
-	border-radius: 4px;
+	font-size: 13px;
+	transition: all 0.15s ease;
 }
 
-.ai-daily-harness-switch-btn:hover {
+.ai-daily-harness-project-card:hover {
 	background: var(--background-modifier-hover);
-	color: var(--text-normal);
+	border-color: var(--interactive-accent);
+}
+
+.ai-daily-harness-project-card-active {
+	border-color: var(--interactive-accent);
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.ai-daily-harness-project-card-active .ai-daily-harness-picker-dot {
+	background: rgba(255, 255, 255, 0.6) !important;
+}
+
+.ai-daily-harness-project-card-name {
+	font-weight: 500;
 }
 
 .ai-daily-harness-mode-grid {
@@ -1509,47 +1564,11 @@
 	cursor: not-allowed;
 }
 
-.ai-daily-harness-picker {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	padding: 8px;
-	background: var(--background-primary);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 8px;
-	box-shadow: var(--shadow-s);
-}
-
-.ai-daily-harness-picker-item {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding: 8px 12px;
-	border-radius: 6px;
-	cursor: pointer;
-	font-size: 14px;
-}
-
-.ai-daily-harness-picker-item:hover {
-	background: var(--background-modifier-hover);
-}
-
-.ai-daily-harness-picker-item.ai-daily-harness-picker-active {
-	background: var(--background-modifier-hover);
-	font-weight: 500;
-}
-
 .ai-daily-harness-picker-dot {
 	width: 8px;
 	height: 8px;
 	border-radius: 50%;
 	flex-shrink: 0;
-}
-
-.ai-daily-harness-picker-status {
-	margin-left: auto;
-	font-size: 12px;
-	color: var(--text-muted);
 }
 
 /* ── Harness banner in Chat View ──────────────────────── */

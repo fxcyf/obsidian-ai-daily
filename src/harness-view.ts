@@ -29,16 +29,131 @@ import type { HarnessMode } from "./settings";
 
 export const HARNESS_VIEW_TYPE = "ai-daily-harness";
 
-interface ProjectIndex {
+export interface HarnessContext {
+	mode: HarnessMode;
+	injectedFiles: { path: string }[];
+}
+
+export interface ProjectIndex {
 	activeProject: string;
 	activeWorkContext: string;
 	projects: { name: string; status: string; updated: string }[];
 	modes: HarnessMode[];
 }
 
-export interface HarnessContext {
-	mode: HarnessMode;
-	injectedFiles: { path: string }[];
+export async function loadProjectIndex(
+	vault: import("obsidian").Vault,
+	metadataCache: import("obsidian").MetadataCache,
+	projectsFolder: string,
+): Promise<ProjectIndex | null> {
+	const indexFile = vault.getAbstractFileByPath(`${projectsFolder}/_INDEX.md`);
+	if (!(indexFile instanceof TFile)) return null;
+
+	const indexContent = await vault.read(indexFile);
+	const indexFm = metadataCache.getFileCache(indexFile)?.frontmatter ?? {};
+
+	const activeProject = String(indexFm.active_project ?? "");
+	const activeWorkContext = String(indexFm.active_work_context ?? "");
+
+	let modes: HarnessMode[] = [];
+	if (activeProject) {
+		const modesPath = `${projectsFolder}/${activeProject}/modes.md`;
+		const modesFile = vault.getAbstractFileByPath(modesPath);
+		if (modesFile instanceof TFile) {
+			const modesContent = await vault.read(modesFile);
+			modes = parseModesFromContent(modesContent);
+		}
+	}
+
+	const projects = parseProjectTable(indexContent);
+	return { activeProject, activeWorkContext, projects, modes };
+}
+
+function parseProjectTable(content: string): { name: string; status: string; updated: string }[] {
+	const projects: { name: string; status: string; updated: string }[] = [];
+	const tableLines = content.split("\n").filter(
+		(l) => l.trim().startsWith("|") && !l.includes("---")
+	);
+	for (let i = 1; i < tableLines.length; i++) {
+		const cols = tableLines[i].split("|").map((c) => c.trim()).filter(Boolean);
+		if (cols.length >= 4) {
+			projects.push({ name: cols[0], status: cols[1], updated: cols[3] });
+		}
+	}
+	return projects;
+}
+
+export function parseModesFromContent(content: string): HarnessMode[] {
+	const raw = parseModesYamlBlock(content);
+	if (raw.length === 0) return [];
+	const sections = parseModeSections(content);
+	return raw
+		.map((m) => {
+			const id = String(m.id ?? "");
+			return {
+				id,
+				label: String(m.label ?? ""),
+				emoji: String(m.emoji ?? "📋"),
+				files: Array.isArray(m.files) ? m.files.map(String) : [],
+				systemPromptAppend: sections.get(id) ?? "",
+			};
+		})
+		.filter((m) => m.id && m.label);
+}
+
+function parseModesYamlBlock(content: string): Record<string, unknown>[] {
+	const match = content.match(/```ya?ml\s+modes\s*\n([\s\S]*?)```/);
+	if (!match) return [];
+	const yaml = match[1];
+	const modes: Record<string, unknown>[] = [];
+	let current: Record<string, unknown> | null = null;
+	let inFiles = false;
+	for (const line of yaml.split("\n")) {
+		if (line.match(/^- id:\s*/)) {
+			if (current) modes.push(current);
+			current = { id: line.replace(/^- id:\s*/, "").trim() };
+			inFiles = false;
+		} else if (current && line.match(/^\s+label:\s*/)) {
+			current.label = line.replace(/^\s+label:\s*/, "").trim();
+			inFiles = false;
+		} else if (current && line.match(/^\s+emoji:\s*/)) {
+			current.emoji = line.replace(/^\s+emoji:\s*/, "").trim().replace(/^["']|["']$/g, "");
+			inFiles = false;
+		} else if (current && line.match(/^\s+files:\s*$/)) {
+			current.files = [];
+			inFiles = true;
+		} else if (current && line.match(/^\s+files:\s*\[\s*\]\s*$/)) {
+			current.files = [];
+			inFiles = false;
+		} else if (inFiles && current && line.match(/^\s+-\s+/)) {
+			(current.files as string[]).push(line.replace(/^\s+-\s+/, "").trim());
+		} else {
+			inFiles = false;
+		}
+	}
+	if (current) modes.push(current);
+	return modes;
+}
+
+function parseModeSections(content: string): Map<string, string> {
+	const sections = new Map<string, string>();
+	const lines = content.split("\n");
+	let currentId = "";
+	let currentLines: string[] = [];
+	const fmEnd = content.match(/^---\n[\s\S]*?\n---\n/);
+	const startLine = fmEnd ? fmEnd[0].split("\n").length - 1 : 0;
+	for (let i = startLine; i < lines.length; i++) {
+		const match = lines[i].match(/^## (.+)$/);
+		if (match) {
+			if (currentId) sections.set(currentId, currentLines.join("\n").trim());
+			currentId = match[1].trim();
+			currentLines = [];
+		} else if (currentId) {
+			currentLines.push(lines[i]);
+		}
+	}
+	if (currentId) sections.set(currentId, currentLines.join("\n").trim());
+	return sections;
 }
 
 export class HarnessView extends ItemView {
@@ -47,7 +162,6 @@ export class HarnessView extends ItemView {
 	private selectedModeId: string | null = null;
 	private projectIndex: ProjectIndex | null = null;
 	private statusEl: HTMLElement | null = null;
-	private projectNameEl: HTMLElement | null = null;
 	private startBtn: HTMLButtonElement | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AIDailyChat) {
@@ -87,133 +201,11 @@ export class HarnessView extends ItemView {
 	}
 
 	private async loadProjectIndex(): Promise<void> {
-		const indexFile = this.app.vault.getAbstractFileByPath(`${this.projectsFolder}/_INDEX.md`);
-		if (!(indexFile instanceof TFile)) {
-			this.projectIndex = null;
-			return;
-		}
-
-		const indexContent = await this.app.vault.read(indexFile);
-		const indexFm = this.app.metadataCache.getFileCache(indexFile)?.frontmatter ?? {};
-
-		const activeProject = String(indexFm.active_project ?? "");
-		const activeWorkContext = String(indexFm.active_work_context ?? "");
-
-		let modes: HarnessMode[] = [];
-		if (activeProject) {
-			const modesPath = `${this.projectsFolder}/${activeProject}/modes.md`;
-			const modesFile = this.app.vault.getAbstractFileByPath(modesPath);
-			if (modesFile instanceof TFile) {
-				const modesContent = await this.app.vault.read(modesFile);
-				modes = this.parseModes(modesContent);
-			}
-		}
-
-		this.projectIndex = {
-			activeProject,
-			activeWorkContext,
-			projects: this.parseProjectTable(indexContent),
-			modes,
-		};
-	}
-
-	private parseProjectTable(content: string): { name: string; status: string; updated: string }[] {
-		const projects: { name: string; status: string; updated: string }[] = [];
-		const tableLines = content.split("\n").filter(
-			(l) => l.trim().startsWith("|") && !l.includes("---")
+		this.projectIndex = await loadProjectIndex(
+			this.app.vault,
+			this.app.metadataCache,
+			this.projectsFolder,
 		);
-		for (let i = 1; i < tableLines.length; i++) {
-			const cols = tableLines[i].split("|").map((c) => c.trim()).filter(Boolean);
-			if (cols.length >= 4) {
-				projects.push({ name: cols[0], status: cols[1], updated: cols[3] });
-			}
-		}
-		return projects;
-	}
-
-	private parseModes(content: string): HarnessMode[] {
-		const raw = this.parseModesYamlBlock(content);
-		if (raw.length === 0) return [];
-
-		const sections = this.parseModeSections(content);
-
-		return raw
-			.map((m) => {
-				const id = String(m.id ?? "");
-				return {
-					id,
-					label: String(m.label ?? ""),
-					emoji: String(m.emoji ?? "📋"),
-					files: Array.isArray(m.files) ? m.files.map(String) : [],
-					systemPromptAppend: sections.get(id) ?? "",
-				};
-			})
-			.filter((m) => m.id && m.label);
-	}
-
-	private parseModesYamlBlock(content: string): Record<string, unknown>[] {
-		const match = content.match(/```ya?ml\s+modes\s*\n([\s\S]*?)```/);
-		if (!match) return [];
-
-		const yaml = match[1];
-		const modes: Record<string, unknown>[] = [];
-		let current: Record<string, unknown> | null = null;
-		let inFiles = false;
-
-		for (const line of yaml.split("\n")) {
-			if (line.match(/^- id:\s*/)) {
-				if (current) modes.push(current);
-				current = { id: line.replace(/^- id:\s*/, "").trim() };
-				inFiles = false;
-			} else if (current && line.match(/^\s+label:\s*/)) {
-				current.label = line.replace(/^\s+label:\s*/, "").trim();
-				inFiles = false;
-			} else if (current && line.match(/^\s+emoji:\s*/)) {
-				current.emoji = line.replace(/^\s+emoji:\s*/, "").trim().replace(/^["']|["']$/g, "");
-				inFiles = false;
-			} else if (current && line.match(/^\s+files:\s*$/)) {
-				current.files = [];
-				inFiles = true;
-			} else if (current && line.match(/^\s+files:\s*\[\s*\]\s*$/)) {
-				current.files = [];
-				inFiles = false;
-			} else if (inFiles && current && line.match(/^\s+-\s+/)) {
-				(current.files as string[]).push(line.replace(/^\s+-\s+/, "").trim());
-			} else {
-				inFiles = false;
-			}
-		}
-		if (current) modes.push(current);
-
-		return modes;
-	}
-
-	private parseModeSections(content: string): Map<string, string> {
-		const sections = new Map<string, string>();
-		const lines = content.split("\n");
-		let currentId = "";
-		let currentLines: string[] = [];
-
-		const fmEnd = content.match(/^---\n[\s\S]*?\n---\n/);
-		const startLine = fmEnd ? fmEnd[0].split("\n").length - 1 : 0;
-
-		for (let i = startLine; i < lines.length; i++) {
-			const match = lines[i].match(/^## (.+)$/);
-			if (match) {
-				if (currentId) {
-					sections.set(currentId, currentLines.join("\n").trim());
-				}
-				currentId = match[1].trim();
-				currentLines = [];
-			} else if (currentId) {
-				currentLines.push(lines[i]);
-			}
-		}
-		if (currentId) {
-			sections.set(currentId, currentLines.join("\n").trim());
-		}
-
-		return sections;
 	}
 
 	private async buildUI(): Promise<void> {
@@ -230,24 +222,31 @@ export class HarnessView extends ItemView {
 
 	private buildProjectSection(): void {
 		const section = this.containerDiv.createDiv({ cls: "ai-daily-harness-section" });
-		section.createDiv({ cls: "ai-daily-harness-section-label", text: "当前项目" });
+		section.createDiv({ cls: "ai-daily-harness-section-label", text: "项目" });
 
-		const projectRow = section.createDiv({ cls: "ai-daily-harness-project-row" });
-		this.projectNameEl = projectRow.createDiv({ cls: "ai-daily-harness-project-name" });
-
-		if (this.projectIndex?.activeProject) {
-			this.projectNameEl.setText(this.projectIndex.activeProject);
-		} else {
-			this.projectNameEl.setText("未设置");
-			this.projectNameEl.addClass("ai-daily-harness-muted");
+		const projects = this.projectIndex?.projects ?? [];
+		if (projects.length === 0) {
+			section.createDiv({ cls: "ai-daily-harness-muted", text: "无项目" });
+			return;
 		}
 
-		const switchBtn = projectRow.createEl("button", {
-			cls: "ai-daily-harness-switch-btn",
-			text: "切换",
-		});
-		setIcon(switchBtn, "chevron-down");
-		switchBtn.addEventListener("click", () => this.showProjectPicker());
+		const gallery = section.createDiv({ cls: "ai-daily-harness-project-gallery" });
+		for (const project of projects) {
+			const isActive = project.name === this.projectIndex?.activeProject;
+			const card = gallery.createDiv({ cls: "ai-daily-harness-project-card" });
+			if (isActive) card.addClass("ai-daily-harness-project-card-active");
+
+			const dot = card.createSpan({ cls: "ai-daily-harness-picker-dot" });
+			dot.style.background =
+				project.status === "active"
+					? "var(--interactive-accent)"
+					: "var(--text-muted)";
+			card.createSpan({ cls: "ai-daily-harness-project-card-name", text: project.name });
+
+			card.addEventListener("click", async () => {
+				await this.switchProject(project.name);
+			});
+		}
 	}
 
 	private async buildModeSection(): Promise<void> {
@@ -423,6 +422,8 @@ export class HarnessView extends ItemView {
 	private async handleStart(): Promise<void> {
 		if (!this.selectedModeId) return;
 
+		await this.loadProjectIndex();
+
 		const modes = this.projectIndex?.modes ?? [];
 		const mode = modes.find((m) => m.id === this.selectedModeId);
 		if (!mode) return;
@@ -456,44 +457,6 @@ export class HarnessView extends ItemView {
 		return resolved;
 	}
 
-	private showProjectPicker(): void {
-		if (!this.projectIndex || this.projectIndex.projects.length === 0) return;
-
-		const existing = this.containerDiv.querySelector(".ai-daily-harness-picker");
-		if (existing) {
-			existing.remove();
-			return;
-		}
-
-		const projectSection = this.containerDiv.querySelector(".ai-daily-harness-section");
-		if (!projectSection) return;
-
-		const picker = createDiv({ cls: "ai-daily-harness-picker" });
-		projectSection.after(picker);
-
-		for (const project of this.projectIndex.projects) {
-			const item = picker.createDiv({ cls: "ai-daily-harness-picker-item" });
-			const isActive = project.name === this.projectIndex!.activeProject;
-
-			if (isActive) item.addClass("ai-daily-harness-picker-active");
-
-			const dot = item.createSpan({ cls: "ai-daily-harness-picker-dot" });
-			dot.style.background =
-				project.status === "active"
-					? "var(--interactive-accent)"
-					: "var(--text-muted)";
-			item.createSpan({ text: project.name });
-			item.createSpan({
-				cls: "ai-daily-harness-picker-status",
-				text: project.status,
-			});
-
-			item.addEventListener("click", async () => {
-				await this.switchProject(project.name);
-				picker.remove();
-			});
-		}
-	}
 
 	private async switchProject(projectName: string): Promise<void> {
 		const file = this.app.vault.getAbstractFileByPath(`${this.projectsFolder}/_INDEX.md`);

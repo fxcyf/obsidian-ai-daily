@@ -668,7 +668,7 @@ export class ChatView extends ItemView {
 			const snippet = text.length > 200 ? text.slice(0, 200) + "…" : text;
 			const entry = `- [ ] [AI 对话] ${snippet}`;
 
-			const inboxPath = "KB/Inbox/ideas.md";
+			const inboxPath = this.plugin.settings.harnessInboxFile;
 			const file = this.app.vault.getAbstractFileByPath(inboxPath);
 
 			if (file instanceof TFile) {

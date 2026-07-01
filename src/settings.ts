@@ -57,6 +57,9 @@ export interface AIDailyChatSettings {
 	// WeRead settings
 	enableWeRead: boolean;
 	wereadApiKey: string;
+	// Harness settings
+	harnessProjectsFolder: string;
+	harnessInboxFile: string;
 	// Proxy settings
 	proxyEnabled: boolean;
 	proxyUrl: string;
@@ -90,6 +93,8 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	enablePodcast: true,
 	enableWeRead: false,
 	wereadApiKey: "",
+	harnessProjectsFolder: "KB/Projects",
+	harnessInboxFile: "KB/Inbox/ideas.md",
 	proxyEnabled: false,
 	proxyUrl: "",
 	proxyToken: "",
@@ -317,6 +322,42 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 						this.plugin.settings.chatContextBudgetTokens = Number.isFinite(n)
 							? Math.max(1000, n)
 							: 200_000;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		// ── Harness settings ─────────────────────────────────
+
+		containerEl.createEl("h3", { text: "Harness" });
+
+		new Setting(containerEl)
+			.setName("项目文件夹")
+			.setDesc(
+				"Harness 从此文件夹读取 _INDEX.md 和各项目的 modes.md"
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("KB/Projects")
+					.setValue(this.plugin.settings.harnessProjectsFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.harnessProjectsFolder =
+							value.trim() || "KB/Projects";
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Inbox 文件")
+			.setDesc(
+				"Harness 状态栏中显示待办计数的文件路径"
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("KB/Inbox/ideas.md")
+					.setValue(this.plugin.settings.harnessInboxFile)
+					.onChange(async (value) => {
+						this.plugin.settings.harnessInboxFile =
+							value.trim() || "KB/Inbox/ideas.md";
 						await this.plugin.saveSettings();
 					})
 			);

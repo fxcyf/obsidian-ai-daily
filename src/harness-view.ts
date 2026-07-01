@@ -3,12 +3,12 @@
  *
  * Data sources:
  *
- * KB/Projects/_INDEX.md (frontmatter):
+ * {harnessProjectsFolder}/_INDEX.md (frontmatter):
  *   active_project: string        — which project is active
  *   active_work_context: string   — replaces {active_work_context} in file paths
  *   Body: markdown table (项目 | 状态 | 来源 | 最近更新) for project picker
  *
- * KB/Projects/{active_project}/modes.md:
+ * {harnessProjectsFolder}/{active_project}/modes.md:
  *   Body contains a ```yaml modes fenced block with mode definitions:
  *     - id: string (required)     — unique identifier, matches ## heading
  *       label: string (required)  — button display text
@@ -17,8 +17,10 @@
  *   Body also has ## {mode-id} sections — each is the system prompt for that mode
  *
  * Status summary:
- *   KB/Projects/{active_project}/PROGRESS.md — last "- [x]" and first "- [ ]" from bottom
- *   KB/Inbox/ideas.md — count of "- [ ]" lines
+ *   {harnessProjectsFolder}/{active_project}/PROGRESS.md — last "- [x]" and first "- [ ]" from bottom
+ *   {harnessInboxFile} — count of "- [ ]" lines
+ *
+ * Both paths are configurable in plugin settings (defaults: KB/Projects, KB/Inbox/ideas.md).
  */
 
 import { ItemView, WorkspaceLeaf, setIcon, TFile } from "obsidian";
@@ -53,6 +55,14 @@ export class HarnessView extends ItemView {
 		this.plugin = plugin;
 	}
 
+	private get projectsFolder(): string {
+		return this.plugin.settings.harnessProjectsFolder;
+	}
+
+	private get inboxFile(): string {
+		return this.plugin.settings.harnessInboxFile;
+	}
+
 	getViewType(): string {
 		return HARNESS_VIEW_TYPE;
 	}
@@ -77,7 +87,7 @@ export class HarnessView extends ItemView {
 	}
 
 	private async loadProjectIndex(): Promise<void> {
-		const indexFile = this.app.vault.getAbstractFileByPath("KB/Projects/_INDEX.md");
+		const indexFile = this.app.vault.getAbstractFileByPath(`${this.projectsFolder}/_INDEX.md`);
 		if (!(indexFile instanceof TFile)) {
 			this.projectIndex = null;
 			return;
@@ -91,7 +101,7 @@ export class HarnessView extends ItemView {
 
 		let modes: HarnessMode[] = [];
 		if (activeProject) {
-			const modesPath = `KB/Projects/${activeProject}/modes.md`;
+			const modesPath = `${this.projectsFolder}/${activeProject}/modes.md`;
 			const modesFile = this.app.vault.getAbstractFileByPath(modesPath);
 			if (modesFile instanceof TFile) {
 				const modesContent = await this.app.vault.read(modesFile);
@@ -312,7 +322,7 @@ export class HarnessView extends ItemView {
 			return;
 		}
 
-		const progressPath = `KB/Projects/${this.projectIndex.activeProject}/PROGRESS.md`;
+		const progressPath = `${this.projectsFolder}/${this.projectIndex.activeProject}/PROGRESS.md`;
 		const progressFile = this.app.vault.getAbstractFileByPath(progressPath);
 		if (progressFile instanceof TFile) {
 			const content = await this.app.vault.read(progressFile);
@@ -329,9 +339,9 @@ export class HarnessView extends ItemView {
 			}
 		}
 
-		const inboxFile = this.app.vault.getAbstractFileByPath("KB/Inbox/ideas.md");
-		if (inboxFile instanceof TFile) {
-			const content = await this.app.vault.read(inboxFile);
+		const inboxAbstractFile = this.app.vault.getAbstractFileByPath(this.inboxFile);
+		if (inboxAbstractFile instanceof TFile) {
+			const content = await this.app.vault.read(inboxAbstractFile);
 			const count = this.countUnprocessedInbox(content);
 			if (count > 0) {
 				const row = this.statusEl.createDiv({ cls: "ai-daily-harness-status-row" });
@@ -379,7 +389,7 @@ export class HarnessView extends ItemView {
 	}
 
 	private async getInboxCount(): Promise<number> {
-		const file = this.app.vault.getAbstractFileByPath("KB/Inbox/ideas.md");
+		const file = this.app.vault.getAbstractFileByPath(this.inboxFile);
 		if (!(file instanceof TFile)) return 0;
 		const content = await this.app.vault.read(file);
 		return this.countUnprocessedInbox(content);
@@ -486,7 +496,7 @@ export class HarnessView extends ItemView {
 	}
 
 	private async switchProject(projectName: string): Promise<void> {
-		const file = this.app.vault.getAbstractFileByPath("KB/Projects/_INDEX.md");
+		const file = this.app.vault.getAbstractFileByPath(`${this.projectsFolder}/_INDEX.md`);
 		if (!(file instanceof TFile)) return;
 
 		let content = await this.app.vault.read(file);

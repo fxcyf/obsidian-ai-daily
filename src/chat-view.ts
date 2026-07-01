@@ -976,10 +976,10 @@ export class ChatView extends ItemView {
 
 						const modesGrid = projectEl.createDiv({ cls: "ai-daily-welcome-harness-modes" });
 						for (const mode of modes) {
-							const btn = modesGrid.createEl("button", {
+							const btn = modesGrid.createSpan({
 								cls: "ai-daily-welcome-harness-mode-btn",
+								text: `${mode.emoji} ${mode.label}`,
 							});
-							btn.createSpan({ text: `${mode.emoji} ${mode.label}` });
 							btn.addEventListener("click", () => {
 								const resolvedFiles = mode.files.map((f) => {
 									let resolved = f;

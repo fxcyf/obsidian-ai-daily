@@ -456,29 +456,19 @@
 }
 
 .ai-daily-welcome-harness-mode-btn {
-	padding: 0;
-	border: none;
-	border-radius: 0;
-	background: none;
 	cursor: pointer;
 	font-size: 12px;
 	color: var(--text-muted);
 }
 
-.ai-daily-welcome-harness-mode-btn::after {
-	content: "·";
-	margin: 0 4px;
-	color: var(--text-faint);
-	pointer-events: none;
-}
-
-.ai-daily-welcome-harness-mode-btn:last-child::after {
-	content: none;
-}
-
 .ai-daily-welcome-harness-mode-btn:hover {
 	color: var(--text-normal);
-	text-decoration: underline;
+}
+
+.ai-daily-welcome-harness-mode-btn + .ai-daily-welcome-harness-mode-btn::before {
+	content: "·";
+	margin: 0 3px;
+	color: var(--text-faint);
 }
 
 /* ── Settings: full-width layout for textareas ────────── */

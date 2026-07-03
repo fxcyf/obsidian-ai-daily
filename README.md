@@ -1,4 +1,4 @@
-# AI Knowledge Chat — Obsidian Plugin
+# Cortex — Obsidian Plugin
 
 在 Obsidian 中构建个人知识库，与 AI 对话探索你的收藏。支持桌面和 iOS。
 
@@ -62,7 +62,7 @@ mkdir -p /path/to/vault/.obsidian/plugins/ai-daily-chat
 cp main.js manifest.json styles.css /path/to/vault/.obsidian/plugins/ai-daily-chat/
 ```
 
-Obsidian → 设置 → 第三方插件 → 启用 AI Knowledge Chat。
+Obsidian → 设置 → 第三方插件 → 启用 Cortex。
 
 ## 配置
 
@@ -106,7 +106,7 @@ Obsidian → 设置 → 第三方插件 → 启用 AI Knowledge Chat。
 ## 使用
 
 1. 打开任意笔记
-2. 点击侧边栏聊天图标（或命令面板搜索 "AI Knowledge Chat"）
+2. 点击侧边栏聊天图标（或命令面板搜索 "Cortex"）
 3. 直接提问
 
 **快捷操作**：

@@ -24,13 +24,13 @@ export class PluginApiServer {
 		const http = require("http") as typeof import("http");
 		this.server = http.createServer((req, res) => this.handleRequest(req, res));
 		this.server.listen(this.port, "127.0.0.1", () => {
-			console.log(`[AI Daily] Plugin API server listening on 127.0.0.1:${this.port}`);
+			console.log(`[Cortex] Plugin API server listening on 127.0.0.1:${this.port}`);
 		});
 		this.server.on("error", (err: NodeJS.ErrnoException) => {
 			if (err.code === "EADDRINUSE") {
-				console.warn(`[AI Daily] Port ${this.port} in use, API server not started`);
+				console.warn(`[Cortex] Port ${this.port} in use, API server not started`);
 			} else {
-				console.error("[AI Daily] API server error:", err);
+				console.error("[Cortex] API server error:", err);
 			}
 		});
 	}
@@ -39,7 +39,7 @@ export class PluginApiServer {
 		if (this.server) {
 			this.server.close();
 			this.server = null;
-			console.log("[AI Daily] Plugin API server stopped");
+			console.log("[Cortex] Plugin API server stopped");
 		}
 	}
 

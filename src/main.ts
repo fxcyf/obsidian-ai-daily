@@ -76,14 +76,14 @@ export default class AIDailyChat extends Plugin {
 		this.registerView(HARNESS_VIEW_TYPE, (leaf) => new HarnessView(leaf, this));
 
 		// Ribbon icon to open chat
-		this.addRibbonIcon("message-circle", "AI Knowledge Chat", () => {
+		this.addRibbonIcon("message-circle", "Cortex", () => {
 			this.activateView();
 		});
 
 		// Command to open chat
 		this.addCommand({
 			id: "open-chat",
-			name: "打开 AI Knowledge Chat",
+			name: "打开 Cortex",
 			callback: () => this.activateView(),
 		});
 

@@ -221,7 +221,7 @@ export class ChatView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return "AI Daily Chat";
+		return "Cortex";
 	}
 
 	getIcon(): string {
@@ -921,7 +921,7 @@ export class ChatView extends ItemView {
 		const welcomeEl = this.messagesEl.createDiv({
 			cls: "ai-daily-welcome",
 		});
-		welcomeEl.createDiv({ cls: "ai-daily-welcome-title", text: `AI Knowledge Chat v${this.plugin.manifest.version}` });
+		welcomeEl.createDiv({ cls: "ai-daily-welcome-title", text: `Cortex v${this.plugin.manifest.version}` });
 		welcomeEl.createDiv({ cls: "ai-daily-welcome-hint", text: hint });
 
 		this.buildWelcomeHarness(welcomeEl);

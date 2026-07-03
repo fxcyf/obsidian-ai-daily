@@ -186,7 +186,7 @@ export class HarnessView extends ItemView {
 	}
 
 	getIcon(): string {
-		return "brain";
+		return "sliders-horizontal";
 	}
 
 	async onOpen(): Promise<void> {

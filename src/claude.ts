@@ -285,6 +285,7 @@ export class ClaudeClient {
 	private proxyUrl?: string;
 	private proxyToken?: string;
 	private proxySessionId?: string;
+	private proxyTaskId?: string;
 
 	constructor(
 		apiKey: string,
@@ -322,6 +323,14 @@ export class ClaudeClient {
 
 	clearProxySessionId(): void {
 		this.proxySessionId = undefined;
+	}
+
+	getProxyTaskId(): string | undefined {
+		return this.proxyTaskId;
+	}
+
+	setProxyTaskId(id: string): void {
+		this.proxyTaskId = id;
 	}
 
 	isProxyMode(): boolean {
@@ -575,7 +584,9 @@ export class ClaudeClient {
 						continue;
 					}
 
-					if (event.type === "text" && event.content) {
+					if (event.type === "task_id" && (event as Record<string, unknown>).taskId) {
+						this.proxyTaskId = (event as Record<string, unknown>).taskId as string;
+					} else if (event.type === "text" && event.content) {
 						accumulated += event.content;
 						onAssistantDelta?.(event.content, accumulated);
 					} else if (event.type === "tool_use" && event.name) {

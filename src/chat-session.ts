@@ -28,6 +28,7 @@ export interface ChatSessionFile {
 	messages: PersistedMessage[];
 	claudeCodeSessionId?: string;
 	proxySessionId?: string;
+	proxyTaskId?: string;
 	harnessContext?: PersistedHarnessContext;
 }
 

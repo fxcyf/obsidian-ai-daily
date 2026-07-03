@@ -4,6 +4,7 @@ import { createInterface } from "readline";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { readFile, writeFile, mkdir } from "fs/promises";
+import { randomUUID } from "crypto";
 
 // ── Config ─────────────────────────────────────────────────────────
 
@@ -45,6 +46,30 @@ interface ClaudeStreamEvent {
 	};
 	[key: string]: unknown;
 }
+
+// ── Task cache (fire-and-forget support) ──────────────────────────
+
+interface TaskState {
+	status: "running" | "done" | "error";
+	chunks: string[];
+	result?: string;
+	sessionId?: string;
+	error?: string;
+	createdAt: number;
+}
+
+const TASK_TIMEOUT_MS = 10 * 60 * 1000;
+const TASK_RETENTION_MS = 30 * 60 * 1000;
+const tasks = new Map<string, TaskState>();
+
+setInterval(() => {
+	const now = Date.now();
+	for (const [id, task] of tasks) {
+		if (now - task.createdAt > TASK_RETENTION_MS && task.status !== "running") {
+			tasks.delete(id);
+		}
+	}
+}, 60_000);
 
 // ── Server ─────────────────────────────────────────────────────────
 
@@ -107,6 +132,32 @@ const server = createServer(async (req, res) => {
 			return;
 		}
 		await handleRewind(req, res);
+		return;
+	}
+
+	const taskMatch = url.pathname.match(/^\/task\/([a-f0-9-]+)$/);
+	if (taskMatch && req.method === "GET") {
+		if (!authenticate(req)) {
+			res.statusCode = 401;
+			res.end(JSON.stringify({ error: "Unauthorized" }));
+			return;
+		}
+		const task = tasks.get(taskMatch[1]);
+		if (!task) {
+			res.statusCode = 404;
+			res.setHeader("Content-Type", "application/json");
+			res.end(JSON.stringify({ error: "Task not found" }));
+			return;
+		}
+		const after = parseInt(url.searchParams.get("after") || "0", 10);
+		res.setHeader("Content-Type", "application/json");
+		res.end(JSON.stringify({
+			status: task.status,
+			chunks: task.chunks.slice(after),
+			result: task.result,
+			sessionId: task.sessionId,
+			error: task.error,
+		}));
 		return;
 	}
 
@@ -320,13 +371,23 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 		return;
 	}
 
+	const taskId = randomUUID();
+	const task: TaskState = { status: "running", chunks: [], createdAt: Date.now() };
+	tasks.set(taskId, task);
+
 	res.setHeader("Content-Type", "text/event-stream");
 	res.setHeader("Cache-Control", "no-cache");
 	res.setHeader("Connection", "keep-alive");
 
+	let clientDisconnected = false;
+
 	const sendEvent = (data: Record<string, unknown>) => {
-		res.write(`data: ${JSON.stringify(data)}\n\n`);
+		if (!clientDisconnected && !res.writableEnded) {
+			res.write(`data: ${JSON.stringify(data)}\n\n`);
+		}
 	};
+
+	sendEvent({ type: "task_id", taskId });
 
 	const args = buildClaudeArgs(body);
 
@@ -335,16 +396,24 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 		proc = spawn(CLAUDE_PATH, args, {
 			stdio: ["pipe", "pipe", "pipe"],
 			env: { ...process.env, FORCE_COLOR: "0" },
-			// Use vault path as cwd so Claude Code doesn't walk up and load the
-			// project's CLAUDE.md (which contains dev-workflow instructions that
-			// confuse Claude when it's running as an Obsidian assistant).
 			cwd: VAULT_PATH || process.env.HOME || undefined,
 		});
 	} catch (e) {
-		sendEvent({ type: "error", message: `Failed to spawn claude: ${e}` });
+		task.status = "error";
+		task.error = `Failed to spawn claude: ${e}`;
+		sendEvent({ type: "error", message: task.error });
 		res.end();
 		return;
 	}
+
+	const timeout = setTimeout(() => {
+		console.warn(`[Proxy] Task ${taskId} timed out, killing process`);
+		proc.kill("SIGTERM");
+		if (task.status === "running") {
+			task.status = "error";
+			task.error = "Task timed out";
+		}
+	}, TASK_TIMEOUT_MS);
 
 	let lastText = "";
 	let sessionId = body.sessionId || "";
@@ -375,6 +444,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 					const delta = block.text.slice(lastText.length);
 					if (delta) {
 						lastText = block.text;
+						task.chunks.push(delta);
 						sendEvent({ type: "text", content: delta });
 					}
 				} else if (block.type === "tool_use") {
@@ -387,9 +457,12 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 			}
 		} else if (event.type === "result") {
 			sessionId = event.session_id || sessionId;
+			task.status = "done";
+			task.result = event.result || lastText;
+			task.sessionId = sessionId;
 			sendEvent({
 				type: "done",
-				result: event.result || lastText,
+				result: task.result,
 				sessionId,
 			});
 		}
@@ -407,11 +480,17 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 	});
 
 	req.on("close", () => {
-		proc.kill("SIGTERM");
+		clientDisconnected = true;
+		if (!res.writableEnded) res.end();
 	});
 
 	proc.on("close", (code) => {
-		if (code !== 0 && !res.writableEnded) {
+		clearTimeout(timeout);
+		if (task.status === "running") {
+			task.status = "error";
+			task.error = `claude exited with code ${code}: ${stderrOutput.slice(0, 500)}`;
+		}
+		if (code !== 0) {
 			sendEvent({
 				type: "error",
 				message: `claude exited with code ${code}: ${stderrOutput.slice(0, 500)}`,
@@ -423,8 +502,11 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 	});
 
 	proc.on("error", (err) => {
+		clearTimeout(timeout);
+		task.status = "error";
+		task.error = `spawn error: ${err.message}`;
+		sendEvent({ type: "error", message: task.error });
 		if (!res.writableEnded) {
-			sendEvent({ type: "error", message: `spawn error: ${err.message}` });
 			res.end();
 		}
 	});

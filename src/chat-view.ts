@@ -1071,6 +1071,10 @@ export class ChatView extends ItemView {
 				this.client!.setProxySessionId(this.restoredProxySessionId);
 				this.restoredProxySessionId = undefined;
 			}
+			if (this.restoredProxyTaskId) {
+				this.client!.setProxyTaskId(this.restoredProxyTaskId);
+				this.restoredProxyTaskId = undefined;
+			}
 		}
 
 		const loadingEl = this.messagesEl.createDiv({
@@ -1224,8 +1228,17 @@ export class ChatView extends ItemView {
 
 			let reply: string;
 			if (this.client!.isProxyMode()) {
+				let proxyMessage = userMessage;
+				const isFirstProxyMessage = !this.client!.getProxySessionId();
+				if (isFirstProxyMessage && this.messages.length > 1) {
+					const history = this.messages.slice(0, -1);
+					const summary = history.map((m) =>
+						`${m.role === "user" ? "用户" : "助手"}: ${m.content}`
+					).join("\n\n");
+					proxyMessage = `以下是之前的对话记录，请基于这些上下文继续：\n---\n${summary}\n---\n\n${userMessage}`;
+				}
 				try {
-					reply = await this.client!.proxyChat(userMessage, streamCb, onToolCall);
+					reply = await this.client!.proxyChat(proxyMessage, streamCb, onToolCall);
 				} catch (proxyErr) {
 					if (this.plugin.settings.proxyFallbackToApi && this.plugin.settings.apiKey) {
 						console.warn("[ai-daily] proxy failed, falling back to API:", proxyErr);
@@ -1449,6 +1462,7 @@ export class ChatView extends ItemView {
 			messages: persisted,
 			claudeCodeSessionId: this.claudeCodeSessionId,
 			proxySessionId: this.client?.getProxySessionId(),
+			proxyTaskId: this.client?.getProxyTaskId(),
 			harnessContext: this.harnessContext ?? undefined,
 		};
 		try {
@@ -1923,6 +1937,7 @@ export class ChatView extends ItemView {
 	private claudeCodeAbort: (() => void) | null = null;
 	private claudeCodeSessionId: string | undefined;
 	private restoredProxySessionId: string | undefined;
+	private restoredProxyTaskId: string | undefined;
 	private claudeCodeUndoHistory: { id: number; data: UndoData; description: string }[] = [];
 	private claudeCodeUndoCounter = 0;
 
@@ -2387,6 +2402,7 @@ export class ChatView extends ItemView {
 	}
 
 	private clearChat(): void {
+		this.client?.abort();
 		this.sessionId = null;
 		this.messages = [];
 		this.cachedTokenCount = 0;
@@ -2585,6 +2601,7 @@ export class ChatView extends ItemView {
 		this.sessionId = data.id;
 		this.claudeCodeSessionId = data.claudeCodeSessionId;
 		this.restoredProxySessionId = data.proxySessionId;
+		this.restoredProxyTaskId = data.proxyTaskId;
 		this.harnessContext = data.harnessContext ?? null;
 		this.messages = data.messages.map((m) => ({
 			role: m.role,
@@ -2626,6 +2643,9 @@ export class ChatView extends ItemView {
 			}
 		}
 		await this.initClient();
+		if (this.restoredProxySessionId) {
+			this.client!.setProxySessionId(this.restoredProxySessionId);
+		}
 		this.client!.setHistoryFromStrings(
 			this.messages.map((m) => ({
 				role: m.role,
@@ -2635,6 +2655,53 @@ export class ChatView extends ItemView {
 		this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
 		this.updateTokenBar();
 		new Notice("已恢复历史对话", 3000);
+
+		if (this.restoredProxyTaskId && this.plugin.settings.proxyEnabled && this.plugin.settings.proxyUrl) {
+			this.recoverProxyTask(this.restoredProxyTaskId);
+		}
+	}
+
+	private async recoverProxyTask(taskId: string): Promise<void> {
+		const proxyUrl = this.plugin.settings.proxyUrl?.trim();
+		const baseUrl = proxyUrl && !/^https?:\/\//i.test(proxyUrl) ? `https://${proxyUrl}` : proxyUrl;
+		if (!baseUrl || !this.plugin.settings.proxyToken) return;
+
+		try {
+			const resp = await fetch(`${baseUrl}/task/${taskId}`, {
+				headers: { Authorization: `Bearer ${this.plugin.settings.proxyToken}` },
+			});
+			if (!resp.ok) return;
+
+			const data = await resp.json() as {
+				status: string;
+				chunks: string[];
+				result?: string;
+				sessionId?: string;
+			};
+
+			if (data.sessionId && this.client) {
+				this.client.setProxySessionId(data.sessionId);
+			}
+
+			if (data.status === "done" && data.result) {
+				const lastMsg = this.messages[this.messages.length - 1];
+				if (lastMsg?.role === "user" || (lastMsg?.role === "assistant" && lastMsg.content !== data.result)) {
+					if (lastMsg?.role === "assistant") {
+						this.messages.pop();
+						const lastEl = this.messagesEl.querySelector(".ai-daily-msg-assistant:last-child");
+						if (lastEl) lastEl.remove();
+					}
+					this.addMessage("assistant", data.result);
+					this.scrollToBottomIfFollowing();
+					await this.persistSession();
+					new Notice("已恢复代理任务的完整回复", 4000);
+				}
+			} else if (data.status === "running") {
+				new Notice("代理任务仍在运行中，请稍后刷新", 4000);
+			}
+		} catch (e) {
+			console.warn("[ai-daily] proxy task recovery failed:", e);
+		}
 	}
 
 	async onClose(): Promise<void> {

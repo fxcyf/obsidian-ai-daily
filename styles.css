@@ -238,8 +238,15 @@
 	opacity: 0.6;
 }
 
-.ai-daily-input {
+.ai-daily-input-wrap {
 	flex: 1;
+	position: relative;
+	min-width: 0;
+}
+
+.ai-daily-input {
+	width: 100%;
+	box-sizing: border-box;
 	resize: none;
 	overflow-y: auto;
 	border: 1px solid var(--background-modifier-border);
@@ -263,18 +270,29 @@
 .ai-daily-expand-btn {
 	-webkit-appearance: none;
 	appearance: none;
-	background: none;
-	border: none;
+	position: absolute;
+	right: 6px;
+	bottom: 4px;
+	background: var(--background-secondary-alt, var(--background-secondary));
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 10px;
 	color: var(--text-muted);
 	cursor: pointer;
-	padding: 2px 4px;
+	padding: 1px 8px;
 	font-size: 11px;
+	line-height: 18px;
 	opacity: 0;
+	pointer-events: none;
 	transition: opacity 0.15s;
-	align-self: flex-end;
+	z-index: 1;
 }
 
 .ai-daily-expand-btn.visible {
+	opacity: 0.8;
+	pointer-events: auto;
+}
+
+.ai-daily-expand-btn:hover {
 	opacity: 1;
 }
 

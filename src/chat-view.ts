@@ -338,21 +338,23 @@ export class ChatView extends ItemView {
 			this.openFilePicker();
 		});
 
-		this.inputEl = inputRow.createEl("textarea", {
+		const inputWrap = inputRow.createDiv({ cls: "ai-daily-input-wrap" });
+
+		this.inputEl = inputWrap.createEl("textarea", {
 			cls: "ai-daily-input",
 			attr: { placeholder: "问点什么… @ 引用笔记，/ 选择模板", rows: "1" },
 		});
+
+		this.expandBtn = inputWrap.createEl("button", {
+			cls: "ai-daily-expand-btn",
+			attr: { "aria-label": "展开/收起输入框" },
+		});
+		this.expandBtn.textContent = "展开 ↑";
 
 		this.sendBtn = inputRow.createEl("button", {
 			cls: "ai-daily-send-btn",
 		});
 		setIcon(this.sendBtn, "send");
-
-		this.expandBtn = this.inputAreaEl.createEl("button", {
-			cls: "ai-daily-expand-btn",
-			attr: { "aria-label": "展开/收起输入框" },
-		});
-		this.expandBtn.textContent = "展开 ↑";
 		this.expandBtn.addEventListener("pointerdown", (e) => {
 			e.preventDefault();
 			const isExpanded = this.inputEl.classList.toggle("expanded");

@@ -1157,6 +1157,10 @@ export class ChatView extends ItemView {
 			}
 		};
 
+		let proxyTypewriterTarget = "";
+		let proxyTypewriterRendered = 0;
+		let proxyTypewriterTimer: number | null = null;
+
 		try {
 			let preparedImages: PreparedImage[] | undefined;
 			if (this.plugin.settings.enableLocalImages) {
@@ -1224,6 +1228,29 @@ export class ChatView extends ItemView {
 					}
 				}
 			};
+			const PROXY_TYPEWRITER_INTERVAL = 25;
+			const proxyTypewriterTick = () => {
+				const buffered = proxyTypewriterTarget.length - proxyTypewriterRendered;
+				if (buffered <= 0) {
+					proxyTypewriterTimer = null;
+					return;
+				}
+				const chars = buffered > 60 ? 4 : buffered > 20 ? 2 : 1;
+				proxyTypewriterRendered = Math.min(proxyTypewriterRendered + chars, proxyTypewriterTarget.length);
+				scheduleStreamingMarkdown(proxyTypewriterTarget.slice(0, proxyTypewriterRendered));
+				proxyTypewriterTimer = window.setTimeout(proxyTypewriterTick, PROXY_TYPEWRITER_INTERVAL);
+			};
+			const startProxyTypewriter = () => {
+				if (proxyTypewriterTimer !== null) return;
+				proxyTypewriterTimer = window.setTimeout(proxyTypewriterTick, PROXY_TYPEWRITER_INTERVAL);
+			};
+			const flushProxyTypewriter = () => {
+				if (proxyTypewriterTimer !== null) {
+					window.clearTimeout(proxyTypewriterTimer);
+					proxyTypewriterTimer = null;
+				}
+				proxyTypewriterRendered = proxyTypewriterTarget.length;
+			};
 
 			const streamCb = useStream
 				? (_delta: string, accumulated: string) => {
@@ -1233,7 +1260,12 @@ export class ChatView extends ItemView {
 								cls: "ai-daily-msg ai-daily-msg-assistant ai-daily-msg-streaming",
 							});
 						}
-						scheduleStreamingMarkdown(accumulated);
+						if (this.client!.isProxyMode()) {
+							proxyTypewriterTarget = accumulated;
+							startProxyTypewriter();
+						} else {
+							scheduleStreamingMarkdown(accumulated);
+						}
 					}
 				: undefined;
 
@@ -1278,6 +1310,7 @@ export class ChatView extends ItemView {
 			}
 
 			loadingEl.remove();
+			flushProxyTypewriter();
 
 			if (useStream && assistantEl) {
 				await flushStreamingMarkdown(reply || "*(已停止)*");
@@ -1299,6 +1332,10 @@ export class ChatView extends ItemView {
 			await this.persistSession();
 			this.updateTokenBar();
 		} catch (e) {
+			if (proxyTypewriterTimer !== null) {
+				window.clearTimeout(proxyTypewriterTimer);
+				proxyTypewriterTimer = null;
+			}
 			cancelStreamingMarkdown();
 			loadingEl.remove();
 			if (assistantEl && latestStreamingMarkdown) {

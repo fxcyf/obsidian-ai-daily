@@ -196,6 +196,7 @@ export class ChatView extends ItemView {
 	private inputAreaEl!: HTMLElement;
 	private inputEl!: HTMLTextAreaElement;
 	private sendBtn!: HTMLButtonElement;
+	private expandBtn!: HTMLButtonElement;
 	private tokenBarEl!: HTMLElement;
 	private historyOverlay: HTMLElement | null = null;
 	private historyOverlayResizeCleanup: (() => void) | null = null;
@@ -347,6 +348,18 @@ export class ChatView extends ItemView {
 		});
 		setIcon(this.sendBtn, "send");
 
+		this.expandBtn = this.inputAreaEl.createEl("button", {
+			cls: "ai-daily-expand-btn",
+			attr: { "aria-label": "展开/收起输入框" },
+		});
+		this.expandBtn.textContent = "展开 ↑";
+		this.expandBtn.addEventListener("pointerdown", (e) => {
+			e.preventDefault();
+			const isExpanded = this.inputEl.classList.toggle("expanded");
+			this.expandBtn.textContent = isExpanded ? "收起 ↓" : "展开 ↑";
+			this.autoResizeInput();
+		});
+
 		this.sendBtn.addEventListener("pointerdown", (e) => {
 			e.preventDefault();
 			if (this.isLoading) {
@@ -356,9 +369,7 @@ export class ChatView extends ItemView {
 			}
 		});
 		this.inputEl.addEventListener("input", () => {
-			this.inputEl.style.height = "auto";
-			this.inputEl.style.height =
-				Math.min(this.inputEl.scrollHeight, 120) + "px";
+			this.autoResizeInput();
 			this.handleTemplateInput();
 			this.handleMentionInput();
 		});
@@ -466,9 +477,7 @@ export class ChatView extends ItemView {
 			});
 			item.addEventListener("click", () => {
 				this.inputEl.value = tpl.prompt;
-				this.inputEl.style.height = "auto";
-				this.inputEl.style.height =
-					Math.min(this.inputEl.scrollHeight, 120) + "px";
+				this.autoResizeInput();
 				this.closeTemplatePopup();
 				this.inputEl.focus();
 			});
@@ -997,6 +1006,19 @@ export class ChatView extends ItemView {
 		});
 	}
 
+	private autoResizeInput(): void {
+		this.inputEl.style.height = "auto";
+		const isExpanded = this.inputEl.classList.contains("expanded");
+		const maxH = isExpanded ? window.innerHeight * 0.5 : 200;
+		this.inputEl.style.height = Math.min(this.inputEl.scrollHeight, maxH) + "px";
+		const overflowing = this.inputEl.scrollHeight > 200;
+		this.expandBtn.classList.toggle("visible", overflowing);
+		if (!overflowing) {
+			this.inputEl.classList.remove("expanded");
+			this.expandBtn.textContent = "展开 ↑";
+		}
+	}
+
 	private handleStop(): void {
 		if (!this.isLoading) return;
 		if (this.claudeCodeAbort) {
@@ -1045,6 +1067,9 @@ export class ChatView extends ItemView {
 		this.setSendButtonState(true);
 		this.inputEl.value = "";
 		this.inputEl.style.height = "auto";
+		this.inputEl.classList.remove("expanded");
+		this.expandBtn.classList.remove("visible");
+		this.expandBtn.textContent = "展开 ↑";
 
 		if (useClaudeCode) {
 			this.handleSendViaClaudeCode(text);

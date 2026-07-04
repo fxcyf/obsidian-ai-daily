@@ -241,7 +241,7 @@
 .ai-daily-input {
 	flex: 1;
 	resize: none;
-	overflow-y: hidden;
+	overflow-y: auto;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 18px;
 	padding: 8px 14px;
@@ -250,9 +250,32 @@
 	background: var(--background-secondary);
 	color: var(--text-normal);
 	min-height: 36px;
-	max-height: 120px;
+	max-height: 200px;
 	-webkit-user-select: text;
 	user-select: text;
+	transition: max-height 0.2s ease;
+}
+
+.ai-daily-input.expanded {
+	max-height: 50vh;
+}
+
+.ai-daily-expand-btn {
+	-webkit-appearance: none;
+	appearance: none;
+	background: none;
+	border: none;
+	color: var(--text-muted);
+	cursor: pointer;
+	padding: 2px 4px;
+	font-size: 11px;
+	opacity: 0;
+	transition: opacity 0.15s;
+	align-self: flex-end;
+}
+
+.ai-daily-expand-btn.visible {
+	opacity: 1;
 }
 
 .ai-daily-input:focus {

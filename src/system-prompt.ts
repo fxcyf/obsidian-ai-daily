@@ -30,11 +30,24 @@ export function buildSystemPrompt(config: SystemPromptConfig): string {
 	if (config.mode === "claude-code" || config.mode === "proxy") {
 		parts.push(
 			"",
+			"## 重要：工具使用规则",
+			"**必须通过 MCP 工具操作 vault 中的笔记**，不要使用 ReadFile/Grep/Glob 等 native 工具读写笔记内容。",
+			"- 读取笔记 → 用 `read_note`（不要用 ReadFile）",
+			"- 搜索笔记 → 用 `search_vault`（不要用 Grep/Glob）",
+			"- 列出文件 → 用 `list_notes`（不要用 Glob）",
+			"- 创建/编辑/删除笔记 → 用对应 MCP 工具",
+			"",
+			"ReadFile 仅用于读取图片等二进制文件。这样做是为了确保操作通过 Obsidian API 执行，正确维护链接索引和元数据。",
+			"",
 			"## MCP 工具使用说明",
-			"你可以通过 MCP 工具操作 vault 中的笔记，路径使用 vault 内相对路径：",
+			"路径使用 vault 内相对路径：",
 			toolSummaryForPrompt(),
 			"",
 			"所有工具已预先授权，调用时无需用户确认权限。如果工具返回错误，直接说明错误原因，不要提示用户去批准权限或点击允许。",
+			"",
+			"## 探索 Vault 结构",
+			"如果你不确定某个文件夹或笔记在哪里，**先用 `list_notes` 工具查看目录结构**（传入空路径可列出根目录）。",
+			"不要猜测路径，不要假设文件夹结构——先查再操作。",
 		);
 
 		if (config.vaultAbsPath) {
@@ -43,7 +56,8 @@ export function buildSystemPrompt(config: SystemPromptConfig): string {
 				"## 图片处理",
 				`Vault 绝对路径: ${config.vaultAbsPath}`,
 				"当 read_note 返回的内容包含图片引用（如 `![[image.png]]` 或 `![](path/to/image.jpg)`）时，",
-				"用 ReadFile 工具直接读取图片文件来查看内容。图片的绝对路径 = Vault绝对路径 + 图片相对路径。",
+				"用 ReadFile 工具直接读取图片文件来查看内容（这是 ReadFile 唯一允许的用途）。",
+				"图片的绝对路径 = Vault绝对路径 + 图片相对路径。",
 				`例如: \`![[attachments/photo.png]]\` → ReadFile(\`${config.vaultAbsPath}/attachments/photo.png\`)`,
 				"支持的格式: png, jpg, jpeg, webp, gif",
 			);
@@ -73,9 +87,28 @@ export function buildSystemPrompt(config: SystemPromptConfig): string {
 
 	parts.push(
 		"",
-		"回复中引用笔记时，请使用 [[笔记名]] 的 wiki-link 格式，以便用户可以直接点击跳转。",
-		"当用户提到某篇笔记时，先用 search_vault 搜索，找到后用 read_note 读取。",
-		"创建或编辑 Wiki 条目时，维护组织结构：复用已有 tags 避免同义重复，主动添加 [[wiki-link]] 关联相关条目，优先合并到已有条目而非创建重叠内容。",
+		"## 笔记操作规范",
+		"- 回复中引用笔记时使用 [[笔记名]] wiki-link 格式",
+		"- 提到某篇笔记时，先用 search_vault 搜索，找到后用 read_note 读取",
+		"",
+		"## Wiki 条目格式规范",
+		`Wiki 条目存放在 ${config.distillTargetFolder}/ 文件夹中，是结构化的知识卡片。格式要求：`,
+		"",
+		"1. **Frontmatter**（必须）：每个 Wiki 文件开头必须有 YAML frontmatter，包含：",
+		"   - `tags`: 分类标签数组，复用已有 tag，避免同义重复（如已有「机器学习」就不要用「ML」）",
+		"   - `summary`: 一句话摘要，描述该条目的核心内容",
+		"",
+		"2. **标题**：简洁、概念化的名词或名词短语（如「向量数据库」而非「什么是向量数据库」）",
+		"",
+		"3. **正文结构**：",
+		"   - 用 Markdown 标题层级组织内容",
+		"   - 主动添加 [[wiki-link]] 关联相关条目，维护知识网络",
+		"   - 内容应是事实性、可复用的知识，不是对话记录",
+		"",
+		"4. **组织原则**：",
+		"   - 优先合并到已有条目，避免创建内容重叠的新条目",
+		"   - 如果目标文件夹有子文件夹按主题分类，新条目应放入合适的子文件夹",
+		"   - 编辑已有条目时保持其原有的标题层级和结构",
 	);
 
 	if (config.knowledgeContext) {

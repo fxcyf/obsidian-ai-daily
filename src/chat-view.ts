@@ -37,6 +37,7 @@ import {
 	pruneOldSessions,
 	type ChatSessionFile,
 	type PersistedMessage,
+	type MessageSource,
 } from "./chat-session";
 
 export const VIEW_TYPE = "ai-daily-chat";
@@ -45,6 +46,7 @@ const STREAM_MARKDOWN_RENDER_INTERVAL_MS = 120;
 interface ChatMessage {
 	role: "user" | "assistant";
 	content: string;
+	source?: MessageSource;
 }
 
 const TOOL_DISPLAY_NAMES: Record<string, string> = {
@@ -205,6 +207,7 @@ export class ChatView extends ItemView {
 	private userScrolledUp = false;
 	private cachedTokenCount = 0;
 	private sessionId: string | null = null;
+	private lastMode: MessageSource | null = null;
 	private attachedFiles: TFile[] = [];
 	private attachBarEl: HTMLElement | null = null;
 	private harnessContext: HarnessContext | null = null;
@@ -718,17 +721,32 @@ export class ChatView extends ItemView {
 		const msgEls = this.messagesEl.querySelectorAll(".ai-daily-msg-assistant");
 		if (msgEls.length === 0 || this.messages.length < 2) return;
 
-		const lastAssistantEl = msgEls[msgEls.length - 1];
-		if (lastAssistantEl.querySelector(".ai-daily-rewind-btn")) return;
+		// Map DOM assistant elements to message indices
+		let assistantDomIdx = 0;
+		const assistantMsgIndices: number[] = [];
+		for (let i = 0; i < this.messages.length; i++) {
+			if (this.messages[i].role === "assistant") {
+				assistantMsgIndices.push(i);
+			}
+		}
 
-		const btn = lastAssistantEl.createDiv({ cls: "ai-daily-rewind-btn" });
-		setIcon(btn, "undo-2");
-		btn.setAttribute("aria-label", "回退此轮对话");
-		btn.setAttribute("title", "回退此轮对话");
+		for (let d = 0; d < msgEls.length && d < assistantMsgIndices.length; d++) {
+			const el = msgEls[d];
+			if (el.querySelector(".ai-daily-rewind-btn")) continue;
+			const msgIdx = assistantMsgIndices[d];
+			// Need a user message before this assistant message to rewind
+			if (msgIdx < 1 || this.messages[msgIdx - 1]?.role !== "user") continue;
 
-		btn.addEventListener("click", () => {
-			void this.rewindLastTurn();
-		});
+			const btn = (el as HTMLElement).createDiv({ cls: "ai-daily-rewind-btn" });
+			setIcon(btn, "undo-2");
+			btn.setAttribute("aria-label", "回退到此处之前");
+			btn.setAttribute("title", "回退到此处之前");
+
+			const capturedIdx = msgIdx;
+			btn.addEventListener("click", () => {
+				void this.rewindToMessage(capturedIdx);
+			});
+		}
 	}
 
 	private processMarkdownLinks(el: HTMLElement): void {
@@ -1073,6 +1091,26 @@ export class ChatView extends ItemView {
 		this.expandBtn.classList.remove("visible");
 		this.expandBtn.textContent = "展开 ↑";
 
+		const currentMode: MessageSource = useClaudeCode
+			? "claude-code"
+			: proxyReady ? "proxy" : "api";
+
+		if (this.lastMode && this.lastMode !== currentMode) {
+			if (this.lastMode === "proxy" || (this.lastMode === "claude-code" && currentMode === "proxy")) {
+				this.client?.clearProxySessionId();
+			}
+			if (this.lastMode === "claude-code" || (this.lastMode === "proxy" && currentMode === "claude-code")) {
+				this.claudeCodeSessionId = undefined;
+			}
+			const modeNames: Record<MessageSource, string> = {
+				"claude-code": "本地 Claude Code",
+				"proxy": "代理模式",
+				"api": "API 直连",
+			};
+			new Notice(`已切换到${modeNames[currentMode]}，对话上下文将自动同步`, 4000);
+		}
+		this.lastMode = currentMode;
+
 		if (useClaudeCode) {
 			this.handleSendViaClaudeCode(text);
 			return;
@@ -1286,6 +1324,7 @@ export class ChatView extends ItemView {
 					);
 
 			let reply: string;
+			let actualSource: MessageSource = "api";
 			if (this.client!.isProxyMode()) {
 				let proxyMessage = userMessage;
 				const isFirstProxyMessage = !this.client!.getProxySessionId();
@@ -1298,32 +1337,41 @@ export class ChatView extends ItemView {
 				}
 				try {
 					reply = await this.client!.proxyChat(proxyMessage, streamCb, onToolCall);
+					actualSource = "proxy";
 				} catch (proxyErr) {
 					if (this.plugin.settings.proxyFallbackToApi && this.plugin.settings.apiKey) {
 						console.warn("[ai-daily] proxy failed, falling back to API:", proxyErr);
 						new Notice("代理不可用，回退到本地 API", 4000);
+						this.client!.clearProxySessionId();
+						this.lastMode = "api";
 						reply = await doLocalChat();
+						actualSource = "api";
 					} else {
 						throw proxyErr;
 					}
 				}
 			} else {
 				reply = await doLocalChat();
+				actualSource = "api";
 			}
 
 			loadingEl.remove();
 			flushProxyTypewriter();
 
+			// Tag user message with actual source (determined after mode resolution)
+			const lastUserMsg = this.messages[this.messages.length - 1];
+			if (lastUserMsg?.role === "user") lastUserMsg.source = actualSource;
+
 			if (useStream && assistantEl) {
 				await flushStreamingMarkdown(reply || "*(已停止)*");
 				this.postProcessAssistantEl(assistantEl);
 				assistantEl.removeClass("ai-daily-msg-streaming");
-				this.messages.push({ role: "assistant", content: reply || "*(已停止)*" });
+				this.messages.push({ role: "assistant", content: reply || "*(已停止)*", source: actualSource });
 				this.cachedTokenCount += estimateTextTokens(reply);
 			} else if (reply) {
-				this.addMessage("assistant", reply);
+				this.addMessage("assistant", reply, actualSource);
 			} else {
-				this.addMessage("assistant", "*(空回复，请检查代理配置)*");
+				this.addMessage("assistant", "*(空回复，请检查代理配置)*", actualSource);
 			}
 			this.scrollToBottomIfFollowing();
 			this.renderUndoBar();
@@ -1364,7 +1412,7 @@ export class ChatView extends ItemView {
 	}
 
 	private async handleSendViaClaudeCode(text: string): Promise<void> {
-		this.addMessage("user", text);
+		this.addMessage("user", text, "claude-code");
 		if (!this.sessionId) this.sessionId = newSessionId();
 
 		const isFirstMessage = !this.claudeCodeSessionId;
@@ -1511,6 +1559,7 @@ export class ChatView extends ItemView {
 		const persisted: PersistedMessage[] = this.messages.map((m) => ({
 			role: m.role,
 			content: m.content,
+			...(m.source ? { source: m.source } : {}),
 		}));
 		const existing = await loadChatSession(
 			this.app.vault,
@@ -1528,6 +1577,7 @@ export class ChatView extends ItemView {
 			proxySessionId: this.client?.getProxySessionId(),
 			proxyTaskId: this.client?.getProxyTaskId(),
 			harnessContext: this.harnessContext ?? undefined,
+			lastMode: this.lastMode ?? undefined,
 		};
 		try {
 			await saveChatSession(this.app.vault, chatHistoryFolder, file);
@@ -1546,11 +1596,11 @@ export class ChatView extends ItemView {
 		}
 	}
 
-	private addMessage(role: "user" | "assistant", content: string): void {
+	private addMessage(role: "user" | "assistant", content: string, source?: MessageSource): void {
 		const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
 		if (welcome) welcome.remove();
 
-		this.messages.push({ role, content });
+		this.messages.push({ role, content, source });
 		this.cachedTokenCount += estimateTextTokens(content);
 
 		const msgEl = this.messagesEl.createDiv({
@@ -1961,11 +2011,11 @@ export class ChatView extends ItemView {
 						assistantEl!.removeClass("ai-daily-msg-streaming");
 						this.postProcessAssistantEl(assistantEl!);
 					});
-					this.messages.push({ role: "assistant", content: accumulated });
+					this.messages.push({ role: "assistant", content: accumulated, source: "claude-code" });
 				} else if (assistantEl) {
 					assistantEl.remove();
 				}
-				this.addMessage("assistant", `Claude Code 出错: ${error}`);
+				this.addMessage("assistant", `Claude Code 出错: ${error}`, "claude-code");
 				this.isLoading = false;
 				this.setSendButtonState(false);
 				this.renderUndoBar();
@@ -1979,9 +2029,9 @@ export class ChatView extends ItemView {
 						assistantEl!.removeClass("ai-daily-msg-streaming");
 						this.postProcessAssistantEl(assistantEl!);
 					});
-					this.messages.push({ role: "assistant", content: fullText });
+					this.messages.push({ role: "assistant", content: fullText, source: "claude-code" });
 				} else if (fullText) {
-					this.addMessage("assistant", fullText);
+					this.addMessage("assistant", fullText, "claude-code");
 				}
 				this.scrollToBottomIfFollowing();
 				void this.persistSession();
@@ -2157,9 +2207,9 @@ export class ChatView extends ItemView {
 				await flushStreamingMarkdown(reply || "*(已停止)*");
 				this.postProcessAssistantEl(assistantEl);
 				assistantEl.removeClass("ai-daily-msg-streaming");
-				this.messages.push({ role: "assistant", content: reply || "*(已停止)*" });
+				this.messages.push({ role: "assistant", content: reply || "*(已停止)*", source: "api" });
 			} else if (reply) {
-				this.addMessage("assistant", reply);
+				this.addMessage("assistant", reply, "api");
 			}
 			this.scrollToBottomIfFollowing();
 			await this.persistSession();
@@ -2378,9 +2428,9 @@ export class ChatView extends ItemView {
 				await flushStreamingMarkdown(reply || "*(修复完成)*");
 				this.postProcessAssistantEl(assistantEl);
 				assistantEl.removeClass("ai-daily-msg-streaming");
-				this.messages.push({ role: "assistant", content: reply || "*(修复完成)*" });
+				this.messages.push({ role: "assistant", content: reply || "*(修复完成)*", source: "api" });
 			} else if (reply) {
-				this.addMessage("assistant", reply);
+				this.addMessage("assistant", reply, "api");
 			}
 			this.renderUndoBar();
 			this.scrollToBottomIfFollowing();
@@ -2403,53 +2453,80 @@ export class ChatView extends ItemView {
 		}
 	}
 
-	private async rewindLastTurn(): Promise<void> {
+	private async rewindToMessage(assistantMsgIdx: number): Promise<void> {
 		if (this.isLoading) return;
-		if (this.messages.length < 2) return;
+		if (assistantMsgIdx < 1) return;
 
-		const last = this.messages[this.messages.length - 1];
-		const secondLast = this.messages[this.messages.length - 2];
-		if (last.role !== "assistant" || secondLast.role !== "user") return;
+		const assistantMsg = this.messages[assistantMsgIdx];
+		const userMsg = this.messages[assistantMsgIdx - 1];
+		if (assistantMsg?.role !== "assistant" || userMsg?.role !== "user") return;
 
-		const rewoundUserText = secondLast.content;
+		// Count how many turns (user+assistant pairs) we're removing from each active source
+		const removedMessages = this.messages.slice(assistantMsgIdx - 1);
+		const proxyTurns = this.client?.getProxySessionId()
+			? removedMessages.filter((m) => m.role === "user" && m.source === "proxy").length
+			: 0;
+		const ccTurns = this.claudeCodeSessionId
+			? removedMessages.filter((m) => m.role === "user" && m.source === "claude-code").length
+			: 0;
 
-		this.messages.pop();
-		this.messages.pop();
-
-		if (this.client) {
-			this.client.rewindLastTurn();
-		}
-
-		if (this.claudeCodeSessionId) {
-			await rewindClaudeCodeSession(this.claudeCodeSessionId);
-		}
-
-		if (this.client?.isProxyMode()) {
-			const proxySessionId = this.client.getProxySessionId();
-			if (proxySessionId) {
-				try {
-					const base = this.plugin.settings.proxyUrl.replace(/\/+$/, "");
-					await fetch(`${base}/rewind`, {
-						method: "POST",
-						headers: {
-							"Content-Type": "application/json",
-							"Authorization": `Bearer ${this.plugin.settings.proxyAuthToken}`,
-						},
-						body: JSON.stringify({ sessionId: proxySessionId }),
-					});
-				} catch { /* best effort */ }
+		if (proxyTurns > 0) {
+			const proxySessionId = this.client!.getProxySessionId()!;
+			try {
+				const base = this.plugin.settings.proxyUrl.replace(/\/+$/, "");
+				const resp = await fetch(`${base}/rewind`, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"Authorization": `Bearer ${this.plugin.settings.proxyToken}`,
+					},
+					body: JSON.stringify({ sessionId: proxySessionId, count: proxyTurns }),
+				});
+				if (!resp.ok) {
+					new Notice("回退失败，请重试", 3000);
+					return;
+				}
+			} catch {
+				new Notice("回退失败：无法连接代理服务器", 3000);
+				return;
 			}
 		}
 
-		// Remove last assistant msg el, any tool-calls/undo-bars before it, and the user msg el
+		if (ccTurns > 0) {
+			try {
+				for (let i = 0; i < ccTurns; i++) {
+					await rewindClaudeCodeSession(this.claudeCodeSessionId!);
+				}
+			} catch {
+				new Notice("回退失败：Claude Code 会话回退出错", 3000);
+				return;
+			}
+		}
+
+		const rewoundUserText = userMsg.content;
+		// Remove from assistantMsgIdx - 1 (the user msg) onwards
+		this.messages.splice(assistantMsgIdx - 1);
+
+		if (this.client) {
+			// Sync internal client messages
+			const clientMsgs = this.client.getMessagesSnapshot();
+			const keepCount = this.messages.filter((m) => m.source === "api" || m.source === "proxy").length;
+			while (clientMsgs.length > keepCount) {
+				this.client.rewindLastTurn();
+			}
+		}
+
+		// Remove DOM elements: keep elements for remaining messages, remove the rest
 		const msgEls = this.messagesEl.querySelectorAll(".ai-daily-msg");
 		const allEls = Array.from(this.messagesEl.children);
-		if (msgEls.length >= 2) {
-			const lastMsgEl = msgEls[msgEls.length - 1];
-			const secondLastMsgEl = msgEls[msgEls.length - 2];
-			const startIdx = allEls.indexOf(secondLastMsgEl);
-			for (let i = allEls.length - 1; i >= startIdx; i--) {
-				allEls[i].remove();
+		const remainingMsgCount = this.messages.length;
+		if (msgEls.length > remainingMsgCount) {
+			const firstToRemove = msgEls[remainingMsgCount];
+			const startIdx = allEls.indexOf(firstToRemove);
+			if (startIdx >= 0) {
+				for (let i = allEls.length - 1; i >= startIdx; i--) {
+					allEls[i].remove();
+				}
 			}
 		}
 
@@ -2457,12 +2534,14 @@ export class ChatView extends ItemView {
 			(sum, m) => sum + estimateTextTokens(m.content), 0
 		);
 		this.updateTokenBar();
+		this.updateRewindButtons();
 
 		this.inputEl.value = rewoundUserText;
 		this.inputEl.focus();
 
 		await this.persistSession();
-		new Notice("已回退上一轮对话", 2000);
+		const turnsRemoved = Math.floor(removedMessages.length / 2);
+		new Notice(`已回退 ${turnsRemoved} 轮对话`, 2000);
 	}
 
 	private clearChat(): void {
@@ -2667,9 +2746,11 @@ export class ChatView extends ItemView {
 		this.restoredProxySessionId = data.proxySessionId;
 		this.restoredProxyTaskId = data.proxyTaskId;
 		this.harnessContext = data.harnessContext ?? null;
+		this.lastMode = data.lastMode ?? null;
 		this.messages = data.messages.map((m) => ({
 			role: m.role,
 			content: m.content,
+			source: m.source,
 		}));
 		this.cachedTokenCount = this.messages.reduce(
 			(sum, m) => sum + estimateTextTokens(m.content), 0
@@ -2755,7 +2836,7 @@ export class ChatView extends ItemView {
 						const lastEl = this.messagesEl.querySelector(".ai-daily-msg-assistant:last-child");
 						if (lastEl) lastEl.remove();
 					}
-					this.addMessage("assistant", data.result);
+					this.addMessage("assistant", data.result, "proxy");
 					this.scrollToBottomIfFollowing();
 					await this.persistSession();
 					new Notice("已恢复代理任务的完整回复", 4000);

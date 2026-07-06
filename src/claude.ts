@@ -563,6 +563,7 @@ export class ClaudeClient {
 			const decoder = new TextDecoder();
 			let accumulated = "";
 			let buffer = "";
+			let receivedDone = false;
 
 			while (true) {
 				const { done, value } = await reader.read();
@@ -593,6 +594,7 @@ export class ClaudeClient {
 						onToolCall?.(event.name, event.input || {}, "start");
 						onToolCall?.(event.name, event.input || {}, "done");
 					} else if (event.type === "done") {
+						receivedDone = true;
 						if (event.sessionId) {
 							this.proxySessionId = event.sessionId;
 						}
@@ -605,6 +607,17 @@ export class ClaudeClient {
 				}
 			}
 
+			if (!receivedDone && this.proxyTaskId && this.proxyUrl) {
+				try {
+					const recovered = await this.recoverFromTask(signal);
+					if (recovered !== null) {
+						accumulated = recovered;
+					}
+				} catch {
+					console.warn("[ai-daily] SSE truncation recovery failed, using partial content");
+				}
+			}
+
 			this.messages.push({ role: "assistant", content: accumulated });
 			return accumulated;
 		} catch (e) {
@@ -614,6 +627,31 @@ export class ClaudeClient {
 			throw e;
 		} finally {
 			this.abortController = null;
+		}
+	}
+
+	private async recoverFromTask(signal?: AbortSignal): Promise<string | null> {
+		if (!this.proxyTaskId || !this.proxyUrl) return null;
+		const controller = new AbortController();
+		const timeout = setTimeout(() => controller.abort(), 5000);
+		try {
+			const resp = await fetch(`${this.proxyUrl}/task/${this.proxyTaskId}`, {
+				headers: { Authorization: `Bearer ${this.proxyToken}` },
+				signal: signal ?? controller.signal,
+			});
+			if (!resp.ok) return null;
+			const data = await resp.json() as {
+				status: string;
+				result?: string;
+				sessionId?: string;
+			};
+			if (data.sessionId) this.proxySessionId = data.sessionId;
+			if (data.status === "done" && data.result) return data.result;
+			return null;
+		} catch {
+			return null;
+		} finally {
+			clearTimeout(timeout);
 		}
 	}
 

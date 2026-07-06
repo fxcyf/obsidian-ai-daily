@@ -135,6 +135,16 @@ const server = createServer(async (req, res) => {
 		return;
 	}
 
+	if (url.pathname === "/session-history" && req.method === "GET") {
+		if (!authenticate(req)) {
+			res.statusCode = 401;
+			res.end(JSON.stringify({ error: "Unauthorized" }));
+			return;
+		}
+		await handleSessionHistory(url, res);
+		return;
+	}
+
 	const taskMatch = url.pathname.match(/^\/task\/([a-f0-9-]+)$/);
 	if (taskMatch && req.method === "GET") {
 		if (!authenticate(req)) {
@@ -263,9 +273,9 @@ async function handleUndo(req: IncomingMessage, res: ServerResponse): Promise<vo
 async function handleRewind(req: IncomingMessage, res: ServerResponse): Promise<void> {
 	res.setHeader("Content-Type", "application/json");
 
-	let body: { sessionId?: string } = {};
+	let body: { sessionId?: string; count?: number } = {};
 	try {
-		body = await readBody<{ sessionId?: string }>(req);
+		body = await readBody<{ sessionId?: string; count?: number }>(req);
 	} catch { /* use empty */ }
 
 	if (!body.sessionId) {
@@ -273,6 +283,8 @@ async function handleRewind(req: IncomingMessage, res: ServerResponse): Promise<
 		res.end(JSON.stringify({ error: "sessionId is required" }));
 		return;
 	}
+
+	const rewindCount = Math.max(1, body.count ?? 1);
 
 	const home = process.env.HOME || process.env.USERPROFILE || "";
 	const projectsDir = resolve(home, ".claude", "projects");
@@ -302,7 +314,9 @@ async function handleRewind(req: IncomingMessage, res: ServerResponse): Promise<
 			return;
 		}
 
-		let lastUserIdx = -1;
+		// Find the Nth user message from the end (skipping tool_result messages)
+		let targetUserIdx = -1;
+		let found = 0;
 		for (let i = lines.length - 1; i >= 0; i--) {
 			try {
 				const obj = JSON.parse(lines[i]);
@@ -311,20 +325,23 @@ async function handleRewind(req: IncomingMessage, res: ServerResponse): Promise<
 				const isToolResult = Array.isArray(content) &&
 					content.some((b: Record<string, unknown>) => b.type === "tool_result");
 				if (!isToolResult) {
-					lastUserIdx = i;
-					break;
+					found++;
+					if (found >= rewindCount) {
+						targetUserIdx = i;
+						break;
+					}
 				}
 			} catch { /* skip */ }
 		}
 
-		if (lastUserIdx <= 0) {
+		if (targetUserIdx <= 0) {
 			res.statusCode = 400;
 			res.end(JSON.stringify({ error: "Nothing to rewind" }));
 			return;
 		}
 
-		let cutIdx = lastUserIdx;
-		for (let i = lastUserIdx - 1; i >= 0; i--) {
+		let cutIdx = targetUserIdx;
+		for (let i = targetUserIdx - 1; i >= 0; i--) {
 			try {
 				const obj = JSON.parse(lines[i]);
 				if (obj.type === "queue-operation" || obj.type === "mode") {
@@ -338,6 +355,70 @@ async function handleRewind(req: IncomingMessage, res: ServerResponse): Promise<
 		const truncated = lines.slice(0, cutIdx).join("\n") + "\n";
 		await writeFile(jsonlPath, truncated, "utf-8");
 		res.end(JSON.stringify({ ok: true, removedLines: lines.length - cutIdx }));
+	} catch (e) {
+		res.statusCode = 500;
+		res.end(JSON.stringify({ error: String(e) }));
+	}
+}
+
+async function handleSessionHistory(url: URL, res: ServerResponse): Promise<void> {
+	res.setHeader("Content-Type", "application/json");
+
+	const sessionId = url.searchParams.get("sessionId");
+	if (!sessionId) {
+		res.statusCode = 400;
+		res.end(JSON.stringify({ error: "sessionId is required" }));
+		return;
+	}
+
+	const home = process.env.HOME || process.env.USERPROFILE || "";
+	const projectsDir = resolve(home, ".claude", "projects");
+	const filename = `${sessionId}.jsonl`;
+
+	let jsonlPath = "";
+	try {
+		const { readdirSync, existsSync } = await import("fs");
+		for (const dir of readdirSync(projectsDir)) {
+			const candidate = resolve(projectsDir, dir, filename);
+			if (existsSync(candidate)) { jsonlPath = candidate; break; }
+		}
+	} catch { /* fall through */ }
+
+	if (!jsonlPath) {
+		res.statusCode = 404;
+		res.end(JSON.stringify({ error: "Session not found" }));
+		return;
+	}
+
+	try {
+		const raw = await readFile(jsonlPath, "utf-8");
+		const lines = raw.split("\n").filter((l) => l.trim());
+		const messages: { role: string; content: string }[] = [];
+
+		for (const line of lines) {
+			try {
+				const obj = JSON.parse(line);
+				if (obj.type === "user") {
+					const content = obj.message?.content;
+					if (typeof content === "string" && content.trim()) {
+						messages.push({ role: "user", content });
+					}
+				} else if (obj.type === "assistant" || obj.type === "ASSISTANT") {
+					const blocks = obj.message?.content;
+					if (Array.isArray(blocks)) {
+						const texts: string[] = [];
+						for (const b of blocks) {
+							if (b?.type === "text" && b.text) texts.push(b.text);
+						}
+						if (texts.length > 0) {
+							messages.push({ role: "assistant", content: texts.join("\n") });
+						}
+					}
+				}
+			} catch { /* skip corrupt line */ }
+		}
+
+		res.end(JSON.stringify({ messages, turnCount: messages.length }));
 	} catch (e) {
 		res.statusCode = 500;
 		res.end(JSON.stringify({ error: String(e) }));

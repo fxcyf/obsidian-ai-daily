@@ -3,9 +3,12 @@ import { Vault, normalizePath } from "obsidian";
 export const DEFAULT_CHAT_FOLDER = ".ai-chat";
 const PRUNE_THROTTLE_KEY = "ai-daily-last-prune";
 
+export type MessageSource = "claude-code" | "proxy" | "api";
+
 export interface PersistedMessage {
 	role: "user" | "assistant";
 	content: string;
+	source?: MessageSource;
 }
 
 export interface PersistedHarnessContext {
@@ -30,6 +33,7 @@ export interface ChatSessionFile {
 	proxySessionId?: string;
 	proxyTaskId?: string;
 	harnessContext?: PersistedHarnessContext;
+	lastMode?: MessageSource;
 }
 
 export function newSessionId(): string {

@@ -13,7 +13,7 @@
  *     - id: string (required)     — unique identifier, matches ## heading
  *       label: string (required)  — button display text
  *       emoji: string             — defaults to "📋"
- *       files: string[]           — vault paths to inject, supports {active_project} / {active_work_context}
+ *       files: string[]           — vault paths or [[wikilinks]] to inject, supports {active_project} / {active_work_context}
  *   Body also has ## {mode-id} sections — each is the system prompt for that mode
  *
  * Status summary:
@@ -23,7 +23,7 @@
  * Both paths are configurable in plugin settings (defaults: KB/Projects, KB/Inbox/ideas.md).
  */
 
-import { ItemView, WorkspaceLeaf, setIcon, TFile } from "obsidian";
+import { ItemView, WorkspaceLeaf, setIcon, TFile, type App } from "obsidian";
 import type AIDailyChat from "./main";
 import type { HarnessMode } from "./settings";
 
@@ -39,6 +39,27 @@ export interface ProjectIndex {
 	activeWorkContext: string;
 	projects: { name: string; status: string; updated: string }[];
 	modes: HarnessMode[];
+}
+
+export function resolveFileEntries(
+	filePaths: string[],
+	app: App,
+	resolveVars: (p: string) => string,
+): { path: string }[] {
+	const results: { path: string }[] = [];
+	for (const rawPath of filePaths) {
+		const resolved = resolveVars(rawPath);
+		const wikiMatch = resolved.match(/^\[\[(.+?)(?:\|.*)?\]\]$/);
+		if (wikiMatch) {
+			const linked = app.metadataCache.getFirstLinkpathDest(wikiMatch[1], "");
+			if (linked) {
+				results.push({ path: linked.path });
+			}
+		} else {
+			results.push({ path: resolved });
+		}
+	}
+	return results;
 }
 
 export async function loadProjectIndex(
@@ -434,12 +455,7 @@ export class HarnessView extends ItemView {
 	}
 
 	private resolveFiles(filePaths: string[]): { path: string }[] {
-		const results: { path: string }[] = [];
-		for (const rawPath of filePaths) {
-			const resolvedPath = this.resolveVariables(rawPath);
-			results.push({ path: resolvedPath });
-		}
-		return results;
+		return resolveFileEntries(filePaths, this.app, (p) => this.resolveVariables(p));
 	}
 
 	private resolveVariables(path: string): string {

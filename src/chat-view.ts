@@ -22,7 +22,7 @@ import { WeReadTools } from "./weread-tools";
 import { PodcastTools } from "./podcast-tools";
 import { buildSystemPrompt } from "./system-prompt";
 import type { PromptTemplate } from "./settings";
-import { loadProjectIndex, parseModesFromContent, type HarnessContext } from "./harness-view";
+import { loadProjectIndex, parseModesFromContent, resolveFileEntries, type HarnessContext } from "./harness-view";
 import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
 import type { PreparedImage } from "./image-tools";
 import { distillConversation, prepareDistillation, prepareHealthFix, type HealthCheckResult } from "./knowledge-agent";
@@ -1010,12 +1010,13 @@ export class ChatView extends ItemView {
 								text: `${mode.emoji} ${mode.label}`,
 							});
 							btn.addEventListener("click", () => {
-								const resolvedFiles = mode.files.map((f) => {
-									let resolved = f;
-									resolved = resolved.replace(/\{active_project\}/g, project.name);
-									resolved = resolved.replace(/\{active_work_context\}/g, index.activeWorkContext || "");
-									return { path: resolved };
-								});
+								const resolveVars = (p: string) => {
+									let r = p;
+									r = r.replace(/\{active_project\}/g, project.name);
+									r = r.replace(/\{active_work_context\}/g, index.activeWorkContext || "");
+									return r;
+								};
+								const resolvedFiles = resolveFileEntries(mode.files, this.app, resolveVars);
 								const context: HarnessContext = { mode, injectedFiles: resolvedFiles };
 								this.startWithContext(context);
 							});

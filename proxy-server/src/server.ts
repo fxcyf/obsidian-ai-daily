@@ -683,7 +683,7 @@ function buildClaudeArgs(body: ChatRequest): string[] {
 		"--verbose",
 		"--include-partial-messages",
 		"--permission-mode", "bypassPermissions",
-		"--tools", "ReadFile,Grep,Glob,WebSearch,WebFetch,TodoWrite",
+		"--tools", "WebSearch,WebFetch,TodoWrite",
 		"--mcp-config", MCP_CONFIG,
 		"--model", CLAUDE_MODEL,
 	];

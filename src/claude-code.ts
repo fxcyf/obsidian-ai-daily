@@ -619,6 +619,73 @@ async function findSessionJsonl(sessionId: string): Promise<string | null> {
 	return null;
 }
 
+export async function seedClaudeCodeSession(
+	history: { role: string; content: string }[],
+	cwd: string,
+	model?: string,
+): Promise<string> {
+	const { writeFile, mkdir } = require("fs/promises") as typeof import("fs/promises");
+	const { join } = require("path") as typeof import("path");
+	const { randomUUID } = require("crypto") as typeof import("crypto");
+
+	const home = process.env.HOME || process.env.USERPROFILE || "";
+	const dirName = cwd.replace(/^\//, "").replace(/[\/ ]/g, "-");
+	const dir = join(home, ".claude", "projects", dirName);
+	await mkdir(dir, { recursive: true });
+
+	const sessionId = randomUUID();
+	const now = new Date().toISOString();
+	const lines: string[] = [];
+	let parentUuid: string | null = null;
+
+	for (const msg of history) {
+		const uuid = randomUUID();
+		if (msg.role === "user") {
+			lines.push(JSON.stringify({
+				type: "user",
+				message: { role: "user", content: msg.content },
+				uuid,
+				parentUuid,
+				isSidechain: false,
+				timestamp: now,
+				sessionId,
+				cwd,
+			}));
+		} else {
+			lines.push(JSON.stringify({
+				type: "assistant",
+				message: {
+					role: "assistant",
+					content: [{ type: "text", text: msg.content }],
+					model: model || "sonnet",
+					type: "message",
+					id: `msg_seed_${uuid.slice(0, 12)}`,
+					stop_reason: "end_turn",
+				},
+				uuid,
+				parentUuid,
+				isSidechain: false,
+				timestamp: now,
+				sessionId,
+				cwd,
+			}));
+		}
+		parentUuid = uuid;
+	}
+
+	if (parentUuid) {
+		lines.push(JSON.stringify({
+			type: "last-prompt",
+			lastPrompt: history.filter(m => m.role === "user").pop()?.content ?? "",
+			leafUuid: parentUuid,
+			sessionId,
+		}));
+	}
+
+	await writeFile(join(dir, `${sessionId}.jsonl`), lines.join("\n") + "\n", "utf-8");
+	return sessionId;
+}
+
 export async function rewindClaudeCodeSession(sessionId: string): Promise<boolean> {
 	const { readFile, writeFile } = require("fs/promises") as typeof import("fs/promises");
 

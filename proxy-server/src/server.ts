@@ -29,6 +29,7 @@ interface ChatRequest {
 	message: string;
 	sessionId?: string;
 	systemPrompt?: string;
+	history?: { role: string; content: string }[];
 }
 
 interface ClaudeStreamEvent {
@@ -432,6 +433,76 @@ function authenticate(req: IncomingMessage): boolean {
 	return token === AUTH_TOKEN;
 }
 
+// ── Session seed (construct JSONL from history) ─────────────────────
+
+function cwdToProjectDir(): string {
+	const cwd = VAULT_PATH || process.env.HOME || "/";
+	return cwd.replace(/^\//, "").replace(/[\/ ]/g, "-");
+}
+
+async function seedSession(
+	sessionId: string,
+	history: { role: string; content: string }[],
+	systemPrompt?: string,
+): Promise<void> {
+	const home = process.env.HOME || process.env.USERPROFILE || "";
+	const dir = resolve(home, ".claude", "projects", cwdToProjectDir());
+	await mkdir(dir, { recursive: true });
+
+	const cwd = VAULT_PATH || process.env.HOME || "/";
+	const now = new Date().toISOString();
+	const lines: string[] = [];
+
+	let parentUuid: string | null = null;
+
+	for (const msg of history) {
+		const uuid = randomUUID();
+		if (msg.role === "user") {
+			lines.push(JSON.stringify({
+				type: "user",
+				message: { role: "user", content: msg.content },
+				uuid,
+				parentUuid: parentUuid,
+				isSidechain: false,
+				timestamp: now,
+				sessionId,
+				cwd,
+			}));
+		} else {
+			lines.push(JSON.stringify({
+				type: "assistant",
+				message: {
+					role: "assistant",
+					content: [{ type: "text", text: msg.content }],
+					model: CLAUDE_MODEL,
+					type: "message",
+					id: `msg_seed_${uuid.slice(0, 12)}`,
+					stop_reason: "end_turn",
+				},
+				uuid,
+				parentUuid: parentUuid,
+				isSidechain: false,
+				timestamp: now,
+				sessionId,
+				cwd,
+			}));
+		}
+		parentUuid = uuid;
+	}
+
+	if (parentUuid) {
+		lines.push(JSON.stringify({
+			type: "last-prompt",
+			lastPrompt: history.filter(m => m.role === "user").pop()?.content ?? "",
+			leafUuid: parentUuid,
+			sessionId,
+		}));
+	}
+
+	await writeFile(resolve(dir, `${sessionId}.jsonl`), lines.join("\n") + "\n", "utf-8");
+	console.log(`[Proxy] Seeded session ${sessionId} with ${history.length} messages`);
+}
+
 // ── Chat handler ───────────────────────────────────────────────────
 
 async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -450,6 +521,16 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 		res.setHeader("Content-Type", "application/json");
 		res.end(JSON.stringify({ error: "message is required" }));
 		return;
+	}
+
+	if (body.history?.length && !body.sessionId) {
+		const seededId = randomUUID();
+		try {
+			await seedSession(seededId, body.history, body.systemPrompt);
+			body.sessionId = seededId;
+		} catch (e) {
+			console.error("[Proxy] Failed to seed session:", e);
+		}
 	}
 
 	const taskId = randomUUID();

@@ -1694,7 +1694,7 @@
 	color: var(--text-success);
 }
 
-.ai-daily-rewind-btn {
+.ai-daily-fork-btn {
 	position: absolute;
 	bottom: 4px;
 	right: 4px;
@@ -1710,15 +1710,15 @@
 	color: var(--text-muted);
 }
 
-.ai-daily-msg-assistant:hover .ai-daily-rewind-btn {
+.ai-daily-msg-assistant:hover .ai-daily-fork-btn {
 	opacity: 1;
 }
 
-.is-mobile .ai-daily-rewind-btn {
+.is-mobile .ai-daily-fork-btn {
 	opacity: 0.6;
 }
 
-.ai-daily-rewind-btn:hover {
+.ai-daily-fork-btn:hover {
 	background: var(--background-modifier-hover);
 	color: var(--text-normal);
 }

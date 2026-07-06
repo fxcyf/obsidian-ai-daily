@@ -503,7 +503,8 @@ export class ClaudeClient {
 	async proxyChat(
 		userMessage: string,
 		onAssistantDelta?: (delta: string, accumulated: string) => void,
-		onToolCall?: (name: string, input: Record<string, unknown>, status: "start" | "done" | "error") => void
+		onToolCall?: (name: string, input: Record<string, unknown>, status: "start" | "done" | "error") => void,
+		seedHistory?: { role: string; content: string }[],
 	): Promise<string> {
 		if (!this.proxyUrl || !this.proxyToken) {
 			throw new Error("Proxy mode not configured");
@@ -519,6 +520,9 @@ export class ClaudeClient {
 				body.sessionId = this.proxySessionId;
 			} else {
 				body.systemPrompt = this.systemPrompt;
+				if (seedHistory?.length) {
+					body.history = seedHistory;
+				}
 			}
 
 			const PROXY_RETRY_MAX = 2;

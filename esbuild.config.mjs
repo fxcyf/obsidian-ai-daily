@@ -37,7 +37,7 @@ if (production) {
 const buildOptions = {
 	entryPoints: ["src/main.ts"],
 	bundle: true,
-	external: ["obsidian", "child_process", "path", "fs", "http", "net", "os"],
+	external: ["obsidian", "child_process", "path", "fs", "http", "net", "os", "crypto"],
 	format: "cjs",
 	target: "es2018",
 	logLevel: "info",

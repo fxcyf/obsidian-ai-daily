@@ -31,13 +31,13 @@ export function buildSystemPrompt(config: SystemPromptConfig): string {
 		parts.push(
 			"",
 			"## 重要：工具使用规则",
-			"**必须通过 MCP 工具操作 vault 中的笔记**，不要使用 ReadFile/Grep/Glob 等 native 工具读写笔记内容。",
-			"- 读取笔记 → 用 `read_note`（不要用 ReadFile）",
+			"**必须通过 MCP 工具操作 vault 中的笔记**，不要使用 Read/Grep/Glob 等 native 工具读写笔记内容。",
+			"- 读取笔记 → 用 `read_note`（不要用 Read）",
 			"- 搜索笔记 → 用 `search_vault`（不要用 Grep/Glob）",
 			"- 列出文件 → 用 `list_notes`（不要用 Glob）",
 			"- 创建/编辑/删除笔记 → 用对应 MCP 工具",
 			"",
-			"ReadFile 仅用于读取图片等二进制文件。这样做是为了确保操作通过 Obsidian API 执行，正确维护链接索引和元数据。",
+			"Read 仅用于读取图片等二进制文件。这样做是为了确保操作通过 Obsidian API 执行，正确维护链接索引和元数据。",
 			"",
 			"## MCP 工具使用说明",
 			"路径使用 vault 内相对路径：",
@@ -56,9 +56,9 @@ export function buildSystemPrompt(config: SystemPromptConfig): string {
 				"## 图片处理",
 				`Vault 绝对路径: ${config.vaultAbsPath}`,
 				"当 read_note 返回的内容包含图片引用（如 `![[image.png]]` 或 `![](path/to/image.jpg)`）时，",
-				"用 ReadFile 工具直接读取图片文件来查看内容（这是 ReadFile 唯一允许的用途）。",
+				"用 Read 工具直接读取图片文件来查看内容（这是 Read 唯一允许的用途）。",
 				"图片的绝对路径 = Vault绝对路径 + 图片相对路径。",
-				`例如: \`![[attachments/photo.png]]\` → ReadFile(\`${config.vaultAbsPath}/attachments/photo.png\`)`,
+				`例如: \`![[attachments/photo.png]]\` → Read(\`${config.vaultAbsPath}/attachments/photo.png\`)`,
 				"支持的格式: png, jpg, jpeg, webp, gif",
 			);
 		}

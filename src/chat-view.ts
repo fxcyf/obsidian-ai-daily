@@ -186,6 +186,7 @@ class ConfirmModal extends Modal {
 
 export class ChatView extends ItemView {
 	plugin: AIDailyChat;
+	private closed = false;
 	private chatContainerEl!: HTMLElement;
 	private headerEl!: HTMLElement;
 	private messages: ChatMessage[] = [];
@@ -1113,7 +1114,12 @@ export class ChatView extends ItemView {
 		this.lastMode = currentMode;
 
 		if (useClaudeCode) {
-			this.handleSendViaClaudeCode(text);
+			this.handleSendViaClaudeCode(text).catch((e) => {
+				console.error("[ai-daily] Claude Code error:", e);
+				this.addMessage("assistant", `Claude Code 出错: ${e instanceof Error ? e.message : String(e)}`, "claude-code");
+				this.isLoading = false;
+				this.setSendButtonState(false);
+			});
 			return;
 		}
 
@@ -1921,6 +1927,7 @@ export class ChatView extends ItemView {
 
 		const handle = spawnClaudeCode(prompt, { mcpConfig, sessionId, model }, {
 			onText: (delta) => {
+				if (this.closed) return;
 				loadingEl.remove();
 				if (!assistantEl) {
 					assistantEl = this.messagesEl.createDiv({
@@ -1936,6 +1943,7 @@ export class ChatView extends ItemView {
 				startTypewriter();
 			},
 			onToolCall: (id, name, input, status) => {
+				if (this.closed) return;
 				if (status === "running") {
 					loadingEl.remove();
 					flushTypewriter();
@@ -1970,6 +1978,7 @@ export class ChatView extends ItemView {
 				}
 			},
 			onToolResult: (id, result, isError) => {
+				if (this.closed) return;
 				const el = toolCallEls.get(id);
 				if (!el || !result) return;
 				const details = el.createEl("details", { cls: "ai-daily-tool-result" });
@@ -1978,6 +1987,7 @@ export class ChatView extends ItemView {
 				pre.createEl("code", { text: result.length > 2000 ? result.slice(0, 2000) + "\n…(已截断)" : result });
 			},
 			onThinking: (text) => {
+				if (this.closed) return;
 				loadingEl.remove();
 				thinkingText += text;
 				if (!thinkingEl) {
@@ -1995,6 +2005,7 @@ export class ChatView extends ItemView {
 				this.pushClaudeCodeUndo(data);
 			},
 			onError: (error) => {
+				if (this.closed) return;
 				loadingEl.remove();
 				if (typewriterTimer !== null) { window.clearTimeout(typewriterTimer); typewriterTimer = null; }
 				if (assistantEl && accumulated) {
@@ -2013,6 +2024,7 @@ export class ChatView extends ItemView {
 				this.renderUndoBar();
 			},
 			onDone: (fullText) => {
+				if (this.closed) return;
 				loadingEl.remove();
 				if (typewriterTimer !== null) { window.clearTimeout(typewriterTimer); typewriterTimer = null; }
 				if (assistantEl) {
@@ -2801,6 +2813,12 @@ export class ChatView extends ItemView {
 	}
 
 	async onClose(): Promise<void> {
+		this.closed = true;
+		if (this.claudeCodeAbort) {
+			this.claudeCodeAbort();
+			this.claudeCodeAbort = null;
+		}
+		this.client?.abort();
 		this.closeHistoryOverlay();
 		this.closeTemplatePopup();
 		this.closeMentionPopup();

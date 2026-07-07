@@ -384,7 +384,7 @@ export function spawnClaudeCode(
 		"--verbose",
 		"--include-partial-messages",
 		"--permission-mode", "bypassPermissions",
-		"--tools", "ReadFile,Grep,Glob,WebSearch,WebFetch,TodoWrite",
+		"--tools", "Read,Grep,Glob,WebSearch,WebFetch,TodoWrite",
 		"--mcp-config", mcpConfigPath,
 	];
 	if (model) {

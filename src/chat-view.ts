@@ -1076,7 +1076,7 @@ export class ChatView extends ItemView {
 		const useClaudeCode = await isClaudeCodeAvailable();
 
 		const proxyReady = this.plugin.settings.proxyEnabled && !!this.plugin.settings.proxyUrl && !!this.plugin.settings.proxyToken;
-		if (!useClaudeCode && !this.plugin.settings.apiKey && !proxyReady) {
+		if (!useClaudeCode && !this.plugin.getEffectiveApiKey() && !proxyReady) {
 			this.addMessage(
 				"assistant",
 				"请先在插件设置中配置 Anthropic API Key，或安装 Claude Code。"
@@ -1345,7 +1345,7 @@ export class ChatView extends ItemView {
 					reply = await this.client!.proxyChat(userMessage, streamCb, onToolCall, seedHistory);
 					actualSource = "proxy";
 				} catch (proxyErr) {
-					if (this.plugin.settings.proxyFallbackToApi && this.plugin.settings.apiKey) {
+					if (this.plugin.settings.proxyFallbackToApi && this.plugin.getEffectiveApiKey()) {
 						console.warn("[ai-daily] proxy failed, falling back to API:", proxyErr);
 						new Notice("代理不可用，回退到本地 API", 4000);
 						this.client!.clearProxySessionId();
@@ -2068,7 +2068,7 @@ export class ChatView extends ItemView {
 			new Notice("请等待当前操作完成", 2000);
 			return;
 		}
-		if (!this.plugin.settings.apiKey) {
+		if (!this.plugin.getEffectiveApiKey()) {
 			new Notice("请先在插件设置中配置 API Key", 3000);
 			return;
 		}
@@ -2136,7 +2136,7 @@ export class ChatView extends ItemView {
 			);
 
 			const distillClient = new ClaudeClient(
-				this.plugin.settings.apiKey,
+				this.plugin.getEffectiveApiKey(),
 				this.plugin.settings.model,
 				systemPrompt,
 				{ streamMode: this.plugin.settings.chatStreamMode, enableWebSearch: false }
@@ -2244,7 +2244,7 @@ export class ChatView extends ItemView {
 			new Notice("请等待当前操作完成", 2000);
 			return;
 		}
-		if (!this.plugin.settings.apiKey) {
+		if (!this.plugin.getEffectiveApiKey()) {
 			new Notice("请先在插件设置中配置 API Key", 3000);
 			return;
 		}
@@ -2253,7 +2253,7 @@ export class ChatView extends ItemView {
 		const notice = new Notice("正在蒸馏对话知识...", 0);
 		try {
 			const result = await distillConversation(this.app, this.messages, {
-				apiKey: this.plugin.settings.apiKey,
+				apiKey: this.plugin.getEffectiveApiKey(),
 				model: this.plugin.settings.model,
 				knowledgeFolders: this.plugin.settings.knowledgeFolders,
 				targetFolder: this.plugin.settings.distillTargetFolder,
@@ -2292,7 +2292,7 @@ export class ChatView extends ItemView {
 			new Notice("请等待当前操作完成", 2000);
 			return;
 		}
-		if (!this.plugin.settings.apiKey) {
+		if (!this.plugin.getEffectiveApiKey()) {
 			new Notice("请先在插件设置中配置 API Key", 3000);
 			return;
 		}
@@ -2357,7 +2357,7 @@ export class ChatView extends ItemView {
 			);
 
 			const fixClient = new ClaudeClient(
-				this.plugin.settings.apiKey,
+				this.plugin.getEffectiveApiKey(),
 				this.plugin.settings.model,
 				systemPrompt,
 				{ streamMode: this.plugin.settings.chatStreamMode, enableWebSearch: false }

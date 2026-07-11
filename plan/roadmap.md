@@ -35,6 +35,7 @@
 | 对话驱动知识蒸馏 | ✅ | [Agentic Vault](feature-agentic-vault.md) #3 | 对话产出自动沉淀为结构化 Wiki（v0.8.0） |
 | 笔记自动标注 | ✅ | [LLM 自组织](feature-llm-driven-org.md) #1、[工作流自动化](feature-automation.md) #1 | 新笔记自动生成 tags + summary（v0.7.3） |
 | 本地图片处理 | ✅ | [本地文件处理](feature-local-file-image.md) | 让 Raw 笔记中的本地图片可被 AI 理解（v0.7.2） |
+| Feed 增强（自定义 Prompt + Agent 获取） | ⬜ | [Feed 增强](feature-feed-enhancement.md) | 自定义 prompt/范围，代理模式下 Agent 自主搜索 |
 
 ---
 
@@ -59,6 +60,7 @@
 |------|------|------|------|
 | Auto-linking 自动链接 | ⬜ | [LLM 自组织](feature-llm-driven-org.md) #2 | 检测缺失链接，补全知识网络 |
 | 知识库健康报告 | ⬜ | [LLM 自组织](feature-llm-driven-org.md) #3 | 覆盖分析、孤岛检测、重复检测 |
+| 知识报告（周/月） | ⬜ | [知识报告](feature-knowledge-report.md) | AI 总结学习进展、知识增长、薄弱领域 |
 | 定时日报/周报 | ⬜ | [工作流自动化](feature-automation.md) #2 | 启动时自动生成，形成信息流闭环 |
 | 多模型后端（Ollama 等） | ⬜ | [LLM 自组织](feature-llm-driven-org.md) #4 | 覆盖隐私敏感用户 |
 | Spaced Repetition 智能回顾 | ⬜ | [LLM 自组织](feature-llm-driven-org.md) #5、[工作流自动化](feature-automation.md) #3 | AI 生成回顾问题，强化记忆 |
@@ -94,6 +96,8 @@
 | [feature-knowledge-enhancement.md](feature-knowledge-enhancement.md) | 知识库能力深化（语义搜索 + 图谱 + 笔记生成） | ⬜ 已归入阶段二/三 |
 | [feature-automation.md](feature-automation.md) | 工作流自动化（标注 + 日报 + 回顾） | ⬜ 已归入阶段二/四 |
 | [feature-proxy-mode.md](feature-proxy-mode.md) | 桌面代理模式（移动端免 API 费 + fallback） | ⬜ |
+| [feature-feed-enhancement.md](feature-feed-enhancement.md) | Feed 增强（自定义 Prompt + 可调范围 + Agent 自主获取） | ⬜ |
+| [feature-knowledge-report.md](feature-knowledge-report.md) | 知识报告（定期 AI 总结学习进展） | ⬜ |
 
 ---
 

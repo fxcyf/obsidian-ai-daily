@@ -27,6 +27,7 @@ export const DEFAULT_PROMPT_TEMPLATES: PromptTemplate[] = [
 
 export interface AIDailyChatSettings {
 	apiKey: string;
+	enableApi: boolean;
 	knowledgeFolders: string[];
 	model: string;
 	chatHistoryFolder: string;
@@ -69,6 +70,7 @@ export interface AIDailyChatSettings {
 
 export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	apiKey: "",
+	enableApi: true,
 	knowledgeFolders: ["Raw", "Wiki"],
 	model: "claude-haiku-4-5",
 	chatHistoryFolder: ".ai-chat",
@@ -137,6 +139,20 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					btn.setIcon(hidden ? "eye" : "eye-off");
 				});
 			});
+
+		new Setting(containerEl)
+			.setName("启用 API 调用")
+			.setDesc(
+				"关闭后所有使用 Anthropic API 的功能将停用（聊天、自动标注、Feed 生成等），代理模式和 Claude Code 不受影响"
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enableApi)
+					.onChange(async (value) => {
+						this.plugin.settings.enableApi = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		new Setting(containerEl)
 			.setName("知识库文件夹")

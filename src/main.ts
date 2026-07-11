@@ -66,6 +66,10 @@ export default class AIDailyChat extends Plugin {
 	private autoTagger: AutoTagger | null = null;
 	private apiServer: PluginApiServer | null = null;
 
+	getEffectiveApiKey(): string {
+		return this.settings.enableApi ? this.settings.apiKey : "";
+	}
+
 	async onload(): Promise<void> {
 		await this.loadSettings();
 
@@ -244,7 +248,7 @@ export default class AIDailyChat extends Plugin {
 		try {
 			const file = await generateFeed(
 				this.app,
-				this.settings,
+				{ ...this.settings, apiKey: this.getEffectiveApiKey() },
 				(progress) => { notice.setMessage(progress.message); },
 				existing?.content
 			);
@@ -271,7 +275,7 @@ export default class AIDailyChat extends Plugin {
 		try {
 			const file = await generatePodcastFeed(
 				this.app,
-				this.settings,
+				{ ...this.settings, apiKey: this.getEffectiveApiKey() },
 				(progress) => { notice.setMessage(progress.message); },
 				existing?.content
 			);
@@ -291,7 +295,7 @@ export default class AIDailyChat extends Plugin {
 		const useClaudeCode = await isClaudeCodeAvailable();
 		console.log("[ai-daily] useClaudeCode =", useClaudeCode);
 
-		if (!useClaudeCode && !this.settings.apiKey) {
+		if (!useClaudeCode && !this.getEffectiveApiKey()) {
 			new Notice("请先在插件设置中配置 Anthropic API Key，或安装 Claude Code。", 5000);
 			return;
 		}
@@ -361,10 +365,10 @@ export default class AIDailyChat extends Plugin {
 		this.autoTagger?.destroy();
 		this.autoTagger = null;
 
-		if (!this.settings.enableAutoTagging || !this.settings.apiKey) return;
+		if (!this.settings.enableAutoTagging || !this.getEffectiveApiKey()) return;
 
 		this.autoTagger = new AutoTagger(this.app, {
-			apiKey: this.settings.apiKey,
+			apiKey: this.getEffectiveApiKey(),
 			model: this.settings.model,
 			folders: this.settings.autoTagFolders,
 			customPrompt: this.settings.autoTagPrompt || undefined,

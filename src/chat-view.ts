@@ -20,6 +20,7 @@ import { VaultTools, type UndoEntry } from "./vault-tools";
 import { WebTools } from "./web-tools";
 import { WeReadTools } from "./weread-tools";
 import { PodcastTools } from "./podcast-tools";
+import { FeedTools } from "./feed-tools";
 import { buildSystemPrompt } from "./system-prompt";
 import type { PromptTemplate } from "./settings";
 import { loadProjectIndex, parseModesFromContent, resolveFileEntries, type HarnessContext } from "./harness-view";
@@ -195,6 +196,7 @@ export class ChatView extends ItemView {
 	private webTools: WebTools = new WebTools();
 	private wereadTools: WeReadTools | null = null;
 	private podcastTools: PodcastTools | null = null;
+	private feedTools: FeedTools | null = null;
 	private messagesEl!: HTMLElement;
 	private inputAreaEl!: HTMLElement;
 	private inputEl!: HTMLTextAreaElement;
@@ -1323,6 +1325,7 @@ export class ChatView extends ItemView {
 							if (name === "read_image") return this.executeReadImage(input);
 							if (name === "weread_api" && this.wereadTools) return this.wereadTools.execute(name, input);
 							if (name.startsWith("podcast_") && this.podcastTools) return this.podcastTools.execute(name, input);
+							if (name.startsWith("fetch_") && this.feedTools) return this.feedTools.execute(name, input);
 							return this.vaultTools!.execute(name, input);
 						},
 						streamCb,
@@ -1517,6 +1520,7 @@ export class ChatView extends ItemView {
 		const weReadActive = enableWeRead && !!wereadApiKey;
 		this.wereadTools = weReadActive ? new WeReadTools(wereadApiKey) : null;
 		this.podcastTools = enablePodcast ? new PodcastTools() : null;
+		this.feedTools = new FeedTools(this.plugin.settings.feedSources);
 
 		const knowledgeContext = await this.vaultTools.loadKnowledgeContext(5);
 		const proxyActive = this.plugin.settings.proxyEnabled;
@@ -1538,6 +1542,7 @@ export class ChatView extends ItemView {
 			enableWebSearch,
 			enableWeRead: weReadActive,
 			enablePodcast,
+			enableFeeds: true,
 			compressThresholdEst: chatCompressThresholdEst,
 			onCompress: (detail) => {
 				new Notice(detail, 6000);

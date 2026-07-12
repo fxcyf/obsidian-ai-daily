@@ -87,6 +87,7 @@ import {
 	PODCAST_TOOL_DEFS,
 	WEB_FETCH_TOOL_DEF,
 	WEREAD_TOOL_DEF,
+	FEED_TOOL_DEFS,
 	toAnthropicTool,
 } from "./tool-definitions";
 
@@ -99,6 +100,7 @@ const WEB_SEARCH_TOOL = {
 const WEB_FETCH_TOOL = toAnthropicTool(WEB_FETCH_TOOL_DEF);
 const WEREAD_TOOL = toAnthropicTool(WEREAD_TOOL_DEF);
 const PODCAST_TOOLS = PODCAST_TOOL_DEFS.map(toAnthropicTool);
+const FEED_TOOLS = FEED_TOOL_DEFS.map(toAnthropicTool);
 export const VAULT_TOOLS = TOOL_DEFS.map(toAnthropicTool);
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -238,7 +240,7 @@ export async function callClaudeSimple(options: SimpleCallOptions): Promise<stri
 
 // ── Client ──────────────────────────────────────────────────────────
 
-export function buildToolsArray(enableWebSearch: boolean, enableWeRead: boolean = false, enablePodcast: boolean = false): Record<string, unknown>[] {
+export function buildToolsArray(enableWebSearch: boolean, enableWeRead: boolean = false, enablePodcast: boolean = false, enableFeeds: boolean = false): Record<string, unknown>[] {
 	const tools: Record<string, unknown>[] = [...VAULT_TOOLS];
 	if (enableWebSearch) {
 		tools.push(WEB_SEARCH_TOOL, WEB_FETCH_TOOL);
@@ -248,6 +250,9 @@ export function buildToolsArray(enableWebSearch: boolean, enableWeRead: boolean 
 	}
 	if (enablePodcast) {
 		tools.push(...PODCAST_TOOLS);
+	}
+	if (enableFeeds) {
+		tools.push(...FEED_TOOLS);
 	}
 	if (tools.length > 0) {
 		tools[tools.length - 1] = { ...tools[tools.length - 1], cache_control: { type: "ephemeral" } };
@@ -260,6 +265,7 @@ export interface ClaudeClientOptions {
 	enableWebSearch?: boolean;
 	enableWeRead?: boolean;
 	enablePodcast?: boolean;
+	enableFeeds?: boolean;
 	compressThresholdEst?: number;
 	compressKeepMessages?: number;
 	onCompress?: (detail: string) => void;
@@ -277,6 +283,7 @@ export class ClaudeClient {
 	private enableWebSearch: boolean;
 	private enableWeRead: boolean;
 	private enablePodcast: boolean;
+	private enableFeeds: boolean;
 	private compressThresholdEst: number;
 	private compressKeepMessages: number;
 	private onCompress?: (detail: string) => void;
@@ -300,6 +307,7 @@ export class ClaudeClient {
 		this.enableWebSearch = options?.enableWebSearch ?? false;
 		this.enableWeRead = options?.enableWeRead ?? false;
 		this.enablePodcast = options?.enablePodcast ?? false;
+		this.enableFeeds = options?.enableFeeds ?? false;
 		this.compressThresholdEst =
 			options?.compressThresholdEst ?? 90_000;
 		this.compressKeepMessages = Math.max(
@@ -883,7 +891,7 @@ export class ClaudeClient {
 			model: this.model,
 			max_tokens: MAX_TOKENS,
 			system: [{ type: "text", text: this.systemPrompt, cache_control: { type: "ephemeral" } }],
-			tools: buildToolsArray(this.enableWebSearch, this.enableWeRead, this.enablePodcast),
+			tools: buildToolsArray(this.enableWebSearch, this.enableWeRead, this.enablePodcast, this.enableFeeds),
 			messages,
 		};
 	}

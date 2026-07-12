@@ -98,6 +98,7 @@ rebase 发生冲突时：
 - `src/web-tools.ts` — Web 工具实现（web_fetch 网页抓取）
 - `src/podcast-tools.ts` — 播客工具（RSS 解析、YouTube 字幕提取、iTunes 搜索），同时供聊天工具和 feed 系统使用
 - `src/podcast-tools.test.ts` — podcast-tools 单测（extractYouTubeId）
+- `src/feed-tools.ts` — Feed 工具（fetch_feeds 批量抓取评分、fetch_rss 单源抓取），供 Agent 在聊天中自主获取资讯
 - `src/weread-tools.ts` — 微信读书 API 客户端（统一网关调用，Bearer auth）
 - `src/weread-prompts.ts` — 微信读书 system prompt（API 模式 + Claude Code 模式两套）
 - `src/harness-view.ts` — Harness View 面板（从 `{active_project}/modes.md` 读取模式定义，`## {id}` 正文作为 prompt，注入到 Chat View）

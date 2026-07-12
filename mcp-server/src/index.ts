@@ -258,6 +258,36 @@ server.tool(
 	}
 );
 
+// ── Feed tools (API backend only) ───────────────────────────────────
+
+server.tool(
+	"fetch_feeds",
+	"从配置的订阅源（RSS/HN/Reddit/GitHub Trending/Podcast）批量抓取最新文章，自动评分排序去重。返回结构化文章列表。需要 Obsidian API 后端。",
+	{
+		topics: z.string().optional().describe("关注主题（逗号分隔），用于相关性评分"),
+		max_articles: z.number().optional().default(20).describe("返回最大文章数（默认 20）"),
+		category: z.string().optional().describe("按分类筛选：research/engineering/community/tools/podcast/newsletter/industry"),
+	},
+	async ({ topics, max_articles, category }) => {
+		if (!apiBackend) return textResult("Error: fetch_feeds requires Obsidian API backend");
+		return textResult(await apiBackend.fetchFeeds(topics, max_articles, category));
+	}
+);
+
+server.tool(
+	"fetch_rss",
+	"抓取指定 URL 的 RSS/Atom feed，返回文章列表。可用于抓取任意 RSS 源（不限于配置的订阅源）。需要 Obsidian API 后端。",
+	{
+		url: z.string().describe("RSS/Atom feed URL"),
+		name: z.string().optional().describe("源名称（用于显示）"),
+		limit: z.number().optional().default(10).describe("返回最大条目数（默认 10）"),
+	},
+	async ({ url, name, limit }) => {
+		if (!apiBackend) return textResult("Error: fetch_rss requires Obsidian API backend");
+		return textResult(await apiBackend.fetchRss(url, name, limit));
+	}
+);
+
 // ── WeRead API gateway ──────────────────────────────────────────────
 
 const WEREAD_API_KEY = process.env.WEREAD_API_KEY || "";

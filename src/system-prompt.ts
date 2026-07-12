@@ -87,6 +87,11 @@ export function buildSystemPrompt(config: SystemPromptConfig): string {
 
 	parts.push(
 		"",
+		"你可以使用 fetch_feeds 工具从配置的订阅源批量抓取最新文章（自动评分排序），或用 fetch_rss 抓取任意 RSS/Atom feed。",
+	);
+
+	parts.push(
+		"",
 		"## 笔记操作规范",
 		"- 回复中引用笔记时使用 [[笔记名]] wiki-link 格式",
 		"- 提到某篇笔记时，先用 search_vault 搜索，找到后用 read_note 读取",

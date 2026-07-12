@@ -146,7 +146,7 @@ export default class AIDailyChat extends Plugin {
 
 		// Start local API server on desktop for MCP server bridge
 		if (Platform.isDesktop) {
-			this.apiServer = new PluginApiServer(this.app, 27080, this.settings.knowledgeFolders);
+			this.apiServer = new PluginApiServer(this.app, 27080, this.settings.knowledgeFolders, this.settings.feedSources);
 			this.apiServer.start();
 			this.register(() => this.apiServer?.stop());
 		}

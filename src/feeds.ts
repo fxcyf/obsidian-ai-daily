@@ -207,7 +207,7 @@ function getTextContent(el: Element, tag: string, ns?: string): string {
 
 // ── Feed fetching (RSS) ───────────────────────────────────────────
 
-async function fetchRssFeed(feed: FeedSource): Promise<Article[]> {
+export async function fetchRssFeed(feed: FeedSource): Promise<Article[]> {
 	const articles: Article[] = [];
 
 	let data: string;

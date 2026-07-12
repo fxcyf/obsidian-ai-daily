@@ -74,6 +74,14 @@ export class VaultOpsApi {
 		return this.call("/api/podcast_transcript", { url, episode_index: episodeIndex });
 	}
 
+	async fetchFeeds(topics?: string, maxArticles?: number, category?: string): Promise<string> {
+		return this.call("/api/fetch_feeds", { topics, max_articles: maxArticles, category });
+	}
+
+	async fetchRss(url: string, name?: string, limit?: number): Promise<string> {
+		return this.call("/api/fetch_rss", { url, name, limit });
+	}
+
 	private async call(endpoint: string, body: Record<string, unknown>): Promise<string> {
 		const resp = await fetch(`${this.apiUrl}${endpoint}`, {
 			method: "POST",

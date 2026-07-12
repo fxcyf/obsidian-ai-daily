@@ -149,6 +149,29 @@ export const WEREAD_TOOL_DEF: ToolDef = {
 	},
 };
 
+// ── Feed tools ────────────────────────────────────────────────────
+
+export const FEED_TOOL_DEFS: ToolDef[] = [
+	{
+		name: "fetch_feeds",
+		description: "从配置的订阅源（RSS/HN/Reddit/GitHub Trending/Podcast）批量抓取最新文章，自动评分排序去重。返回结构化文章列表。",
+		parameters: {
+			topics: { type: "string", description: "关注主题（逗号分隔），用于相关性评分。如 'RAG,Agent,多模态'" },
+			max_articles: { type: "number", description: "返回最大文章数（默认 20）" },
+			category: { type: "string", description: "按分类筛选：research/engineering/community/tools/podcast/newsletter/industry" },
+		},
+	},
+	{
+		name: "fetch_rss",
+		description: "抓取指定 URL 的 RSS/Atom feed，返回文章列表。可用于抓取任意 RSS 源（不限于配置的订阅源）。",
+		parameters: {
+			url: { type: "string", description: "RSS/Atom feed URL", required: true },
+			name: { type: "string", description: "源名称（用于显示）" },
+			limit: { type: "number", description: "返回最大条目数（默认 10）" },
+		},
+	},
+];
+
 // ── Converters ─────────────────────────────────────────────────────
 
 export function toAnthropicTool(def: ToolDef): Record<string, unknown> {

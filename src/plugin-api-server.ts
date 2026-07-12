@@ -2,6 +2,7 @@ import { App, TFile } from "obsidian";
 import type { IncomingMessage, ServerResponse } from "http";
 import { VaultTools } from "./vault-tools";
 import { PodcastTools } from "./podcast-tools";
+import { FeedTools } from "./feed-tools";
 import { prepareLocalImages, type ImageRef } from "./image-tools";
 
 type HttpServer = import("http").Server;
@@ -12,12 +13,14 @@ export class PluginApiServer {
 	private server: HttpServer | null = null;
 	private vaultTools: VaultTools;
 	private podcastTools: PodcastTools;
+	private feedTools: FeedTools;
 
-	constructor(app: App, port: number, knowledgeFolders: string[] = []) {
+	constructor(app: App, port: number, knowledgeFolders: string[] = [], feedSources: import("./feeds").FeedSource[] = []) {
 		this.app = app;
 		this.port = port;
 		this.vaultTools = new VaultTools(app, knowledgeFolders);
 		this.podcastTools = new PodcastTools();
+		this.feedTools = new FeedTools(feedSources);
 	}
 
 	async start(): Promise<void> {
@@ -103,6 +106,12 @@ export class PluginApiServer {
 			case "/api/podcast_transcript": {
 				const toolName = path.replace("/api/", "");
 				return this.podcastTools.execute(toolName, body);
+			}
+
+			case "/api/fetch_feeds":
+			case "/api/fetch_rss": {
+				const toolName = path.replace("/api/", "");
+				return this.feedTools.execute(toolName, body);
 			}
 
 			default:

@@ -237,7 +237,7 @@ export default class AIDailyChat extends Plugin {
 	}
 
 	async generateFeed(): Promise<void> {
-		const existing = await checkExistingFeed(this.app, this.settings.feedFolder);
+		const existing = await checkExistingFeed(this.app, "Feed");
 
 		if (existing) {
 			const confirmed = await new FeedConfirmModal(this.app).open();
@@ -264,7 +264,7 @@ export default class AIDailyChat extends Plugin {
 	}
 
 	async generatePodcastFeed(): Promise<void> {
-		const existing = await checkExistingPodcastFeed(this.app, this.settings.feedFolder);
+		const existing = await checkExistingPodcastFeed(this.app, "Feed");
 
 		if (existing) {
 			const confirmed = await new FeedConfirmModal(this.app).open();

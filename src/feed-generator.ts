@@ -179,8 +179,10 @@ export async function generateFeed(
 	onProgress?: (progress: FeedProgress) => void,
 	existingContent?: string
 ): Promise<TFile> {
-	const { apiKey, model, feedModel, feedFolder, feedTopics, feedSources, feedMaxArticles, knowledgeFolders } = settings;
-	const effectiveModel = feedModel || model;
+	const { apiKey, model, feedSources, knowledgeFolders } = settings;
+	const feedFolder = "Feed";
+	const feedTopics: string[] = [];
+	const feedMaxArticles = 20;
 
 	if (!apiKey) throw new Error("请先在设置中配置 API Key");
 
@@ -254,7 +256,7 @@ export async function generateFeed(
 	if (dedupedArticles.length === 0 && vaultContext === "未找到相关笔记。") {
 		aiContent = "今天暂无新的 Feed 内容。请检查 RSS 源配置或网络连接。";
 	} else {
-		aiContent = await callClaude(apiKey, effectiveModel, userMessage);
+		aiContent = await callClaude(apiKey, model, userMessage);
 	}
 
 	// Step 4: Write to vault
@@ -367,8 +369,8 @@ export async function generatePodcastFeed(
 	onProgress?: (progress: FeedProgress) => void,
 	existingContent?: string
 ): Promise<TFile> {
-	const { apiKey, model, feedModel, feedFolder, feedSources } = settings;
-	const effectiveModel = feedModel || model;
+	const { apiKey, model, feedSources } = settings;
+	const feedFolder = "Feed";
 
 	if (!apiKey) throw new Error("请先在设置中配置 API Key");
 
@@ -493,7 +495,7 @@ export async function generatePodcastFeed(
 	} else {
 		const result = await callClaudeSimple({
 			apiKey,
-			model: effectiveModel,
+			model: model,
 			systemPrompt: PODCAST_FEED_SYSTEM_PROMPT,
 			userMessage,
 		});

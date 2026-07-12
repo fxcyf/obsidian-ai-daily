@@ -38,11 +38,7 @@ export interface AIDailyChatSettings {
 	enableWebSearch: boolean;
 	promptTemplates: PromptTemplate[];
 	// Feed settings
-	feedFolder: string;
-	feedModel: string;
-	feedTopics: string[];
 	feedSources: FeedSource[];
-	feedMaxArticles: number;
 	// Image settings
 	enableLocalImages: boolean;
 	maxImagesPerMessage: number;
@@ -80,11 +76,7 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	chatContextBudgetTokens: 200_000,
 	enableWebSearch: true,
 	promptTemplates: DEFAULT_PROMPT_TEMPLATES,
-	feedFolder: "Feed",
-	feedModel: "",
-	feedTopics: [],
 	feedSources: DEFAULT_FEEDS,
-	feedMaxArticles: 20,
 	enableLocalImages: true,
 	maxImagesPerMessage: 3,
 	maxImageBytes: 3_145_728,
@@ -571,71 +563,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 
 		// ── Feed settings ──────────────────────────────────────
 
-		containerEl.createEl("h3", { text: "Feed 设置" });
-
-		new Setting(containerEl)
-			.setName("Feed 文件夹")
-			.setDesc("生成的 Feed 笔记存放位置")
-			.addText((text) =>
-				text
-					.setPlaceholder("Feed")
-					.setValue(this.plugin.settings.feedFolder)
-					.onChange(async (value) => {
-						this.plugin.settings.feedFolder = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("Feed 模型")
-			.setDesc("用于生成 Feed 的模型，留空则使用对话模型")
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("", "与对话模型相同")
-					.addOption("claude-haiku-4-5", "Haiku 4.5 (快速/便宜)")
-					.addOption("claude-sonnet-4-6", "Sonnet 4.6 (均衡)")
-					.addOption("claude-opus-4-6", "Opus 4.6 (最强)")
-					.setValue(this.plugin.settings.feedModel)
-					.onChange(async (value) => {
-						this.plugin.settings.feedModel = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		const topicsSetting = new Setting(containerEl)
-			.setName("关注主题")
-			.setDesc("用逗号分隔，如: RAG,Agent,多模态")
-			.addTextArea((text) =>
-				text
-					.setPlaceholder("RAG,Agent,LLM,多模态")
-					.setValue(this.plugin.settings.feedTopics.join(", "))
-					.onChange(async (value) => {
-						this.plugin.settings.feedTopics = value
-							.split(",")
-							.map((s) => s.trim())
-							.filter(Boolean);
-						await this.plugin.saveSettings();
-					})
-			);
-		topicsSetting.settingEl.addClass("ai-daily-setting-full");
-		const topicsTextarea = topicsSetting.settingEl.querySelector("textarea");
-		if (topicsTextarea) {
-			topicsTextarea.rows = 2;
-		}
-
-		new Setting(containerEl)
-			.setName("最大文章数")
-			.setDesc("每次 Feed 抓取的最大文章数量")
-			.addSlider((slider) =>
-				slider
-					.setLimits(5, 50, 5)
-					.setValue(this.plugin.settings.feedMaxArticles)
-					.setDynamicTooltip()
-					.onChange(async (value) => {
-						this.plugin.settings.feedMaxArticles = value;
-						await this.plugin.saveSettings();
-					})
-			);
+		containerEl.createEl("h3", { text: "Feed 订阅源" });
 
 		this.renderFeedSourceList(containerEl);
 	}

@@ -1,6 +1,6 @@
 import type { AIDailyChatSettings } from "./settings";
 
-const GUIDE_FOLDER = ".cortex-guide";
+const GUIDE_FOLDER = "_cortex-guide";
 
 interface GuideFile {
 	path: string;

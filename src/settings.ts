@@ -111,7 +111,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("生成 Vault 参考模板")
 			.setDesc(
-				"根据当前设置生成 .cortex-guide/ 文件夹，包含文件夹结构模板、modes 配置示例和 CLAUDE.md。修改设置后可重新生成。"
+				"根据当前设置生成 _cortex-guide/ 文件夹，包含文件夹结构模板、modes 配置示例和 CLAUDE.md。修改设置后可重新生成。"
 			)
 			.addButton((btn) =>
 				btn.setButtonText("生成模板").onClick(async () => {

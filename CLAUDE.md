@@ -58,6 +58,13 @@ rebase 发生冲突时：
 - **TEST.md**：测试指南，新增功能时同步添加测试用例和文档
 - **PROGRESS.md**：见下方「经验教训沉淀」
 - **plan/roadmap.md**：每次新增或修改 `plan/` 下的计划文档后，必须在 `plan/roadmap.md` 中添加索引和组织，确保 roadmap 始终是所有计划的完整入口
+- **src/vault-guide.ts**：Vault 参考模板生成器。当修改了以下任何一项时，必须同步更新此文件中的模板内容和注释：
+  - frontmatter 字段名或类型（如 `organized`、`tags`、`auto-tagged`）
+  - 文件命名规则（如 `Feed-YYYY-MM-DD.md`）
+  - Harness 文件格式（`_INDEX.md` 表格结构、`modes.md` YAML 解析规则、`PROGRESS.md` 扫描逻辑）
+  - Inbox 格式（`- [ ]` 计数、`## YYYY-MM-DD` 日期标题）
+  - 工具列表变更（新增/删除/重命名工具）
+  - 插件设置中的文件夹路径字段变更
 
 ## 测试规范
 

@@ -36,6 +36,8 @@
 | 笔记自动标注 | ✅ | [LLM 自组织](feature-llm-driven-org.md) #1、[工作流自动化](feature-automation.md) #1 | 新笔记自动生成 tags + summary（v0.7.3） |
 | 本地图片处理 | ✅ | [本地文件处理](feature-local-file-image.md) | 让 Raw 笔记中的本地图片可被 AI 理解（v0.7.2） |
 | Feed 增强（自定义 Prompt + Agent 获取） | ⬜ | [Feed 增强](feature-feed-enhancement.md) | 自定义 prompt/范围，代理模式下 Agent 自主搜索 |
+| PDF/图片输入 | ⬜ | [PDF/图片输入](feature-pdf-image-input.md) | 聊天输入框支持粘贴/拖拽图片和 PDF |
+| Workspace Dashboard 重构 | ⬜ | [Workspace Dashboard](feature-workspace-dashboard.md) | Harness→Workspace 重命名 + 路线图 + 知识图谱 |
 
 ---
 
@@ -98,6 +100,8 @@
 | [feature-proxy-mode.md](feature-proxy-mode.md) | 桌面代理模式（移动端免 API 费 + fallback） | ⬜ |
 | [feature-feed-enhancement.md](feature-feed-enhancement.md) | Feed 增强（自定义 Prompt + 可调范围 + Agent 自主获取） | ⬜ |
 | [feature-knowledge-report.md](feature-knowledge-report.md) | 知识报告（定期 AI 总结学习进展） | ⬜ |
+| [feature-workspace-dashboard.md](feature-workspace-dashboard.md) | Workspace Dashboard 重构（重命名 + 路线图 + 知识图谱） | ⬜ |
+| [feature-pdf-image-input.md](feature-pdf-image-input.md) | PDF/图片输入（粘贴/拖拽多模态输入） | ⬜ |
 
 ---
 

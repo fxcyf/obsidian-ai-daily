@@ -72,10 +72,14 @@ export async function loadProjectIndex(
 	if (!(indexFile instanceof TFile)) return null;
 
 	const indexContent = await vault.read(indexFile);
-	const indexFm = metadataCache.getFileCache(indexFile)?.frontmatter ?? {};
 
-	const activeProject = String(indexFm.active_project ?? "");
-	const activeWorkContext = String(indexFm.active_work_context ?? "");
+	// Parse frontmatter from content directly — metadataCache may lag behind vault.modify()
+	const fmMatch = indexContent.match(/^---\n([\s\S]*?)\n---/);
+	const fmText = fmMatch?.[1] ?? "";
+	const apMatch = fmText.match(/^active_project:\s*(.*)$/m);
+	const awcMatch = fmText.match(/^active_work_context:\s*(.*)$/m);
+	const activeProject = (apMatch?.[1] ?? "").trim();
+	const activeWorkContext = (awcMatch?.[1] ?? "").trim();
 
 	let modes: HarnessMode[] = [];
 	if (activeProject) {

@@ -9,7 +9,7 @@
  * know how a mode is launched or how a session is loaded.
  */
 
-import { App, TFile, setIcon, Menu, Modal, Setting, Notice } from "obsidian";
+import { App, TFile, setIcon, Menu, Modal, Setting, Notice, FuzzySuggestModal, type FuzzyMatch } from "obsidian";
 import type AIDailyChat from "./main";
 import {
 	loadProjectIndex,
@@ -429,21 +429,12 @@ class EditWorkspaceModal extends Modal {
 		});
 
 		const footer = contentEl.createDiv({ cls: "ws-studio-edit-footer" });
-		const saveBtn = footer.createEl("button", { text: "保存", cls: "mod-cta" });
-		saveBtn.addEventListener("click", async () => {
-			await this.save();
-			this.close();
-		});
-		const cancelBtn = footer.createEl("button", { text: "取消" });
-		cancelBtn.addEventListener("click", () => this.close());
-
-		const danger = contentEl.createDiv({ cls: "ws-studio-edit-danger" });
-		danger.createDiv({ cls: "ws-studio-edit-danger-label", text: "⚠️ 危险区域" });
-		const deleteBtn = danger.createEl("button", {
-			text: "从 Studio 移除该 Workspace",
+		const deleteBtn = footer.createEl("button", {
+			text: "移除 Workspace",
 			cls: "ws-studio-edit-delete",
 		});
 		deleteBtn.addEventListener("click", async () => {
+			if (!confirm(`确定要从 Studio 移除「${this.workspaceName}」吗？文件将保留。`)) return;
 			const projectsFolder = this.plugin.settings.harnessProjectsFolder;
 			const indexPath = `${projectsFolder}/_INDEX.md`;
 			const adapter = this.app.vault.adapter;
@@ -456,6 +447,14 @@ class EditWorkspaceModal extends Modal {
 			new Notice(`已从 Studio 移除「${this.workspaceName}」`);
 			this.close();
 			await this.onSave();
+		});
+		const footerRight = footer.createDiv({ cls: "ws-studio-edit-footer-right" });
+		const cancelBtn = footerRight.createEl("button", { text: "取消" });
+		cancelBtn.addEventListener("click", () => this.close());
+		const saveBtn = footerRight.createEl("button", { text: "保存", cls: "mod-cta" });
+		saveBtn.addEventListener("click", async () => {
+			await this.save();
+			this.close();
 		});
 	}
 
@@ -477,16 +476,13 @@ class EditWorkspaceModal extends Modal {
 			const head = card.createDiv({ cls: "ws-studio-edit-mode-head" });
 			const emojiInput = head.createEl("input", { type: "text", cls: "ws-studio-edit-emoji" });
 			emojiInput.value = mode.emoji;
+			emojiInput.setAttribute("placeholder", "🔖");
 			emojiInput.addEventListener("input", () => { mode.emoji = emojiInput.value; });
 
 			const labelInput = head.createEl("input", { type: "text", cls: "ws-studio-edit-label" });
 			labelInput.value = mode.label;
+			labelInput.setAttribute("placeholder", "显示名称");
 			labelInput.addEventListener("input", () => { mode.label = labelInput.value; });
-
-			const idInput = head.createEl("input", { type: "text", cls: "ws-studio-edit-id" });
-			idInput.value = mode.id;
-			idInput.setAttribute("placeholder", "id");
-			idInput.addEventListener("input", () => { mode.id = idInput.value; });
 
 			const delBtn = head.createEl("button", { cls: "ws-studio-edit-mode-del" });
 			setIcon(delBtn, "trash-2");
@@ -495,18 +491,35 @@ class EditWorkspaceModal extends Modal {
 				this.renderModesList();
 			});
 
-			const promptLabel = card.createEl("div", { cls: "ws-studio-edit-field-label", text: "Prompt" });
-			void promptLabel;
+			const idRow = card.createDiv({ cls: "ws-studio-edit-id-row" });
+			idRow.createEl("span", { cls: "ws-studio-edit-id-label", text: "ID" });
+			const idInput = idRow.createEl("input", { type: "text", cls: "ws-studio-edit-id" });
+			idInput.value = mode.id;
+			idInput.setAttribute("placeholder", "唯一标识，如 review");
+			idInput.addEventListener("input", () => { mode.id = idInput.value; });
+
+			card.createEl("div", { cls: "ws-studio-edit-field-label", text: "Prompt" });
 			const promptArea = card.createEl("textarea", { cls: "ws-studio-edit-prompt" });
 			promptArea.value = mode.systemPromptAppend;
-			promptArea.rows = 3;
+			promptArea.rows = 5;
 			promptArea.addEventListener("input", () => { mode.systemPromptAppend = promptArea.value; });
 
-			const filesLabel = card.createEl("div", { cls: "ws-studio-edit-field-label", text: "Files (每行一个路径或 [[wikilink]])" });
-			void filesLabel;
+			const filesHeader = card.createDiv({ cls: "ws-studio-edit-files-header" });
+			filesHeader.createEl("span", { cls: "ws-studio-edit-field-label", text: "Files" });
+			const addFileBtn = filesHeader.createEl("button", { cls: "ws-studio-edit-add-file-btn" });
+			setIcon(addFileBtn.createSpan(), "file-plus");
+			addFileBtn.createSpan({ text: "选择文件" });
+			addFileBtn.addEventListener("click", () => {
+				new FileSuggestModal(this.app, (path) => {
+					mode.files.push(path);
+					filesArea.value = mode.files.join("\n");
+				}).open();
+			});
+
 			const filesArea = card.createEl("textarea", { cls: "ws-studio-edit-files" });
 			filesArea.value = mode.files.join("\n");
-			filesArea.rows = 2;
+			filesArea.rows = 3;
+			filesArea.setAttribute("placeholder", "每行一个路径或 [[wikilink]]，或点击上方按钮选择");
 			filesArea.addEventListener("input", () => {
 				mode.files = filesArea.value.split("\n").map((s) => s.trim()).filter(Boolean);
 			});
@@ -558,6 +571,34 @@ class EditWorkspaceModal extends Modal {
 
 	onClose(): void {
 		this.contentEl.empty();
+	}
+}
+
+// ── File Suggest Modal ──────────────────────────────────
+
+class FileSuggestModal extends FuzzySuggestModal<TFile> {
+	private onChoose: (path: string) => void;
+
+	constructor(app: App, onChoose: (path: string) => void) {
+		super(app);
+		this.onChoose = onChoose;
+		this.setPlaceholder("搜索 vault 中的文件…");
+	}
+
+	getItems(): TFile[] {
+		return this.app.vault.getMarkdownFiles();
+	}
+
+	getItemText(item: TFile): string {
+		return item.path;
+	}
+
+	onChooseSuggestion(item: FuzzyMatch<TFile>): void {
+		this.onChoose(item.item.path);
+	}
+
+	onChooseItem(item: TFile): void {
+		this.onChoose(item.path);
 	}
 }
 

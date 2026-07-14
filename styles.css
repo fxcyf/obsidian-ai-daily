@@ -2278,10 +2278,10 @@
 }
 
 .ws-studio-edit-emoji {
-	width: 42px;
+	width: 48px;
 	text-align: center;
 	padding: 6px;
-	font-size: 15px;
+	font-size: 18px;
 	border: 1px solid var(--background-modifier-border);
 	background: var(--background-primary);
 	color: var(--text-normal);
@@ -2290,17 +2290,32 @@
 
 .ws-studio-edit-label {
 	flex: 1;
-	padding: 6px 8px;
-	font-size: 13px;
+	padding: 6px 10px;
+	font-size: 14px;
 	border: 1px solid var(--background-modifier-border);
 	background: var(--background-primary);
 	color: var(--text-normal);
 	border-radius: 5px;
 }
 
+.ws-studio-edit-id-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.ws-studio-edit-id-label {
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--text-faint);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	flex-shrink: 0;
+}
+
 .ws-studio-edit-id {
-	width: 100px;
-	padding: 6px 8px;
+	flex: 1;
+	padding: 4px 8px;
 	font-size: 12px;
 	border: 1px solid var(--background-modifier-border);
 	background: var(--background-primary);
@@ -2342,14 +2357,50 @@
 .ws-studio-edit-prompt,
 .ws-studio-edit-files {
 	width: 100%;
-	padding: 8px;
+	padding: 10px;
 	font-family: monospace;
 	font-size: 12px;
+	line-height: 1.5;
 	border: 1px solid var(--background-modifier-border);
 	background: var(--background-primary);
 	color: var(--text-normal);
 	border-radius: 5px;
 	resize: vertical;
+	min-height: 60px;
+}
+
+.ws-studio-edit-files-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: 4px;
+}
+
+.ws-studio-edit-files-header .ws-studio-edit-field-label {
+	margin-top: 0;
+}
+
+.ws-studio-edit-add-file-btn {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	background: none;
+	border: none;
+	color: var(--interactive-accent);
+	cursor: pointer;
+	padding: 2px 6px;
+	border-radius: 4px;
+	font-size: 11px;
+	font-family: inherit;
+}
+
+.ws-studio-edit-add-file-btn:hover {
+	background: var(--background-modifier-hover);
+}
+
+.ws-studio-edit-add-file-btn svg {
+	width: 12px;
+	height: 12px;
 }
 
 .ws-studio-edit-actions-list {
@@ -2426,32 +2477,31 @@
 .ws-studio-edit-footer {
 	display: flex;
 	gap: 8px;
-	justify-content: flex-end;
+	align-items: center;
+	justify-content: space-between;
 	margin-top: 16px;
 	padding-top: 12px;
 	border-top: 1px solid var(--background-modifier-border);
 }
 
-.ws-studio-edit-danger {
-	margin-top: 24px;
-	padding: 12px;
-	border: 1px solid var(--background-modifier-error);
-	border-radius: 8px;
-}
-
-.ws-studio-edit-danger-label {
-	font-size: 12px;
-	color: var(--text-error);
-	margin-bottom: 8px;
+.ws-studio-edit-footer-right {
+	display: flex;
+	gap: 8px;
 }
 
 .ws-studio-edit-delete {
-	background: var(--background-modifier-error);
-	color: var(--text-error);
+	background: none;
 	border: none;
-	padding: 6px 12px;
-	border-radius: 5px;
+	color: var(--text-faint);
 	cursor: pointer;
 	font-family: inherit;
 	font-size: 12px;
+	padding: 6px 10px;
+	border-radius: 5px;
+	transition: color 0.15s;
+}
+
+.ws-studio-edit-delete:hover {
+	color: var(--text-error);
+	background: var(--background-modifier-error);
 }

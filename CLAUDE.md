@@ -18,22 +18,26 @@
    - 进入 worktree 目录工作（后续所有操作在 worktree 中）
    - 如果 worktree 创建失败，直接在当前分支工作
 3. **实现功能** — 编写代码，确保可运行
-4. **提交代码** — `git add` + `git commit`，commit message 简洁描述改动
-5. **Merge + 测试**:
+4. **构建验证** — 修改 `src/` 下源码后必须重新构建，确保产物与源码同步:
+   - `npm run build`（production → `dist/`）
+   - 同时更新根目录 `main.js`：`npx esbuild src/main.ts --bundle --external:obsidian --external:child_process --external:path --external:fs --external:http --external:net --external:os --external:crypto --format=cjs --target=es2018 --outfile=main.js`
+   - 将构建产物一并提交
+5. **提交代码** — `git add` + `git commit`，commit message 简洁描述改动
+6. **Merge + 测试**:
    - `git fetch origin && git merge origin/main`（集成最新代码，如有 remote）
    - 运行测试（如有测试命令）
-6. **自动合并到 main**（如有 remote）:
+7. **自动合并到 main**（如有 remote）:
    - `git fetch origin main`
    - `git rebase origin/main`，如果冲突则自行 resolve
    - 如果成功：`git checkout main && git merge <task-branch> && git push origin main`
-   - 如果这一步有任何失败，退回到步骤 5 重试
+   - 如果这一步有任何失败，退回到步骤 6 重试
    - （纯本地项目跳过本步）
-7. **标记完成** — 更新文档（必须在清理之前，防止进程被杀时状态丢失）
-8. **清理** — 回到项目根目录:
+8. **标记完成** — 更新文档（必须在清理之前，防止进程被杀时状态丢失）
+9. **清理** — 回到项目根目录:
    - `git worktree remove .claude-manager/worktrees/<worktree名>`
    - `git branch -D <task-branch>`
    - 如有 remote: `git push origin --delete <task-branch>`
-9. **经验沉淀** — 在 PROGRESS.md 记录经验教训（可选）
+10. **经验沉淀** — 在 PROGRESS.md 记录经验教训（可选）
 
 ### 冲突处理
 
@@ -41,7 +45,7 @@ rebase 发生冲突时：
 1. 查看冲突文件: `git diff --name-only --diff-filter=U`
 2. 逐个解决冲突
 3. `git add <resolved-files> && git rebase --continue`
-4. 如果无法解决: `git rebase --abort`，退回步骤 5
+4. 如果无法解决: `git rebase --abort`，退回步骤 6
 
 ### 状态判断
 

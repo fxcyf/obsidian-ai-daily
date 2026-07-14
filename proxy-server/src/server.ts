@@ -437,7 +437,7 @@ function authenticate(req: IncomingMessage): boolean {
 
 function cwdToProjectDir(): string {
 	const cwd = VAULT_PATH || process.env.HOME || "/";
-	return cwd.replace(/^\//, "").replace(/[\/ ]/g, "-");
+	return cwd.replace(/[\/ ]/g, "-");
 }
 
 async function seedSession(

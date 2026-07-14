@@ -5,6 +5,9 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { VaultOps, containsTraversal } from "./vault-ops.js";
 import { VaultOpsApi } from "./vault-ops-api.js";
+import { FeedTools } from "./feed-tools.js";
+import { PodcastTools } from "./podcast-tools.js";
+import { DEFAULT_FEEDS, type FeedSource } from "./feeds.js";
 
 // ── Backend selection ──────────────────────────────────────────────
 // Prefer Obsidian plugin HTTP API; fall back to filesystem if unavailable.
@@ -33,6 +36,18 @@ const knowledgeFolders = (process.env.KNOWLEDGE_FOLDERS || "Raw,Wiki")
 	.split(",")
 	.map((s) => s.trim())
 	.filter(Boolean);
+
+// ── Feed & Podcast config ─────────────────────────────────────────
+let feedSources: FeedSource[] = DEFAULT_FEEDS;
+if (process.env.FEED_SOURCES) {
+	try {
+		feedSources = JSON.parse(process.env.FEED_SOURCES) as FeedSource[];
+	} catch {
+		console.error("[MCP] Failed to parse FEED_SOURCES env var, using defaults");
+	}
+}
+const podcastTools = new PodcastTools();
+const feedTools = new FeedTools(feedSources);
 
 async function initBackend(): Promise<void> {
 	const api = new VaultOpsApi(obsidianApiUrl);
@@ -217,74 +232,69 @@ server.tool(
 	}
 );
 
-// ── Podcast tools (API backend only) ──────────────────────────────
+// ── Podcast tools (direct Node.js execution) ─────────────────────
 
 server.tool(
 	"podcast_search",
-	"搜索播客。输入关键词，返回匹配的播客列表（名称、作者、Feed URL）。需要 Obsidian API 后端。",
+	"搜索播客。输入关键词，返回匹配的播客列表（名称、作者、Feed URL）。",
 	{
 		query: z.string().describe("搜索关键词，如 'AI news' 或 '硬地骇客'"),
 		limit: z.number().optional().default(10).describe("返回结果数量（默认 10）"),
 	},
 	async ({ query, limit }) => {
-		if (!apiBackend) return textResult("Error: podcast_search requires Obsidian API backend");
-		return textResult(await apiBackend.podcastSearch(query, limit));
+		return textResult(await podcastTools.execute("podcast_search", { query, limit }));
 	}
 );
 
 server.tool(
 	"podcast_episodes",
-	"获取播客最近的剧集列表。传入 RSS feed URL，返回最近的剧集信息。需要 Obsidian API 后端。",
+	"获取播客最近的剧集列表。传入 RSS feed URL，返回最近的剧集信息。",
 	{
 		url: z.string().describe("播客 RSS feed URL"),
 		limit: z.number().optional().default(5).describe("返回剧集数量（默认 5）"),
 	},
 	async ({ url, limit }) => {
-		if (!apiBackend) return textResult("Error: podcast_episodes requires Obsidian API backend");
-		return textResult(await apiBackend.podcastEpisodes(url, limit));
+		return textResult(await podcastTools.execute("podcast_episodes", { url, limit }));
 	}
 );
 
 server.tool(
 	"podcast_transcript",
-	"获取播客剧集的文字稿。支持 YouTube URL（直接提取字幕）或 RSS feed URL（提取指定剧集的 transcript）。需要 Obsidian API 后端。",
+	"获取播客剧集的文字稿。支持 YouTube URL（直接提取字幕）或 RSS feed URL（提取指定剧集的 transcript）。",
 	{
 		url: z.string().describe("YouTube 视频 URL 或播客 RSS feed URL"),
 		episode_index: z.number().optional().default(0).describe("RSS feed 中的剧集索引（0=最新，默认 0）"),
 	},
 	async ({ url, episode_index }) => {
-		if (!apiBackend) return textResult("Error: podcast_transcript requires Obsidian API backend");
-		return textResult(await apiBackend.podcastTranscript(url, episode_index));
+		return textResult(await podcastTools.execute("podcast_transcript", { url, episode_index }));
 	}
 );
 
-// ── Feed tools (API backend only) ───────────────────────────────────
+// ── Feed tools (direct Node.js execution) ──────────────────────────
 
 server.tool(
 	"fetch_feeds",
-	"从配置的订阅源（RSS/HN/Reddit/GitHub Trending/Podcast）批量抓取最新文章，自动评分排序去重。返回结构化文章列表。需要 Obsidian API 后端。",
+	"从配置的订阅源（RSS/HN/Reddit/GitHub Trending/Podcast）批量抓取最新文章，自动评分排序去重。返回结构化文章列表。",
 	{
 		topics: z.string().optional().describe("关注主题（逗号分隔），用于相关性评分"),
 		max_articles: z.number().optional().default(20).describe("返回最大文章数（默认 20）"),
 		category: z.string().optional().describe("按分类筛选：research/engineering/community/tools/podcast/newsletter/industry"),
 	},
 	async ({ topics, max_articles, category }) => {
-		if (!apiBackend) return textResult("Error: fetch_feeds requires Obsidian API backend");
-		return textResult(await apiBackend.fetchFeeds(topics, max_articles, category));
+		return textResult(await feedTools.execute("fetch_feeds", { topics, max_articles, category }));
 	}
 );
 
 server.tool(
 	"fetch_rss",
-	"抓取指定 URL 的 RSS/Atom feed，返回文章列表。可用于抓取任意 RSS 源（不限于配置的订阅源）。需要 Obsidian API 后端。",
+	"抓取指定 URL 的 RSS/Atom feed，返回文章列表。可用于抓取任意 RSS 源（不限于配置的订阅源）。",
 	{
 		url: z.string().describe("RSS/Atom feed URL"),
 		name: z.string().optional().describe("源名称（用于显示）"),
 		limit: z.number().optional().default(10).describe("返回最大条目数（默认 10）"),
 	},
 	async ({ url, name, limit }) => {
-		if (!apiBackend) return textResult("Error: fetch_rss requires Obsidian API backend");
-		return textResult(await apiBackend.fetchRss(url, name, limit));
+		return textResult(await feedTools.execute("fetch_rss", { url, name, limit }));
 	}
 );
 

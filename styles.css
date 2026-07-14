@@ -2385,23 +2385,36 @@
 	font-family: monospace;
 }
 
-.ws-studio-edit-mode-del {
+.ws-studio-edit-icon-btn {
 	background: none;
-	border: none;
+	border: 1px solid var(--background-modifier-border);
 	color: var(--text-muted);
 	cursor: pointer;
-	padding: 6px;
-	border-radius: 5px;
+	padding: 4px;
+	border-radius: 6px;
 	display: flex;
 	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	flex-shrink: 0;
+	box-sizing: border-box;
+	transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 
-.ws-studio-edit-mode-del:hover {
+.ws-studio-edit-icon-btn:hover {
+	color: var(--text-normal);
+	border-color: var(--text-muted);
+	background: var(--background-modifier-hover);
+}
+
+.ws-studio-edit-icon-btn.danger:hover {
 	color: var(--text-error);
+	border-color: var(--text-error);
 	background: var(--background-modifier-error);
 }
 
-.ws-studio-edit-mode-del svg {
+.ws-studio-edit-icon-btn svg {
 	width: 14px;
 	height: 14px;
 }
@@ -2509,16 +2522,19 @@
 	align-items: center;
 	gap: 4px;
 	background: none;
-	border: none;
-	color: var(--interactive-accent);
+	border: 1px solid var(--background-modifier-border);
+	color: var(--text-muted);
 	cursor: pointer;
-	padding: 2px 6px;
-	border-radius: 4px;
+	padding: 3px 8px;
+	border-radius: 6px;
 	font-size: 11px;
 	font-family: inherit;
+	transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 
 .ws-studio-edit-add-file-btn:hover {
+	color: var(--text-normal);
+	border-color: var(--text-muted);
 	background: var(--background-modifier-hover);
 }
 
@@ -2561,17 +2577,25 @@
 
 .ws-studio-edit-action-del {
 	background: none;
-	border: none;
+	border: 1px solid var(--background-modifier-border);
 	color: var(--text-muted);
 	cursor: pointer;
 	padding: 4px;
-	border-radius: 4px;
+	border-radius: 6px;
 	display: flex;
 	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	flex-shrink: 0;
+	box-sizing: border-box;
+	transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 
 .ws-studio-edit-action-del:hover {
 	color: var(--text-error);
+	border-color: var(--text-error);
+	background: var(--background-modifier-error);
 }
 
 .ws-studio-edit-action-del svg {
@@ -2585,17 +2609,19 @@
 	border: 1px dashed var(--background-modifier-border);
 	color: var(--text-muted);
 	cursor: pointer;
-	padding: 8px;
+	padding: 6px;
 	border-radius: 6px;
 	font-family: inherit;
 	font-size: 12px;
-	margin-top: 8px;
+	margin-top: 6px;
+	transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 
 .ws-studio-edit-add:hover,
 .ws-studio-edit-add-action:hover {
 	color: var(--text-normal);
-	border-color: var(--interactive-accent);
+	border-color: var(--text-muted);
+	background: var(--background-modifier-hover);
 }
 
 .ws-studio-edit-footer {
@@ -2613,19 +2639,42 @@
 	gap: 8px;
 }
 
-.ws-studio-edit-delete {
-	background: none;
-	border: none;
-	color: var(--text-faint);
-	cursor: pointer;
+.ws-studio-edit-footer button {
 	font-family: inherit;
-	font-size: 12px;
-	padding: 6px 10px;
-	border-radius: 5px;
-	transition: color 0.15s;
+	font-size: 13px;
+	padding: 6px 14px;
+	border-radius: 6px;
+	cursor: pointer;
+	border: 1px solid var(--background-modifier-border);
+	background: none;
+	color: var(--text-muted);
+	transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.ws-studio-edit-footer button:hover {
+	color: var(--text-normal);
+	border-color: var(--text-muted);
+	background: var(--background-modifier-hover);
+}
+
+.ws-studio-edit-footer button.mod-cta {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
+}
+
+.ws-studio-edit-footer button.mod-cta:hover {
+	opacity: 0.9;
+	background: var(--interactive-accent);
+	border-color: var(--interactive-accent);
+}
+
+.ws-studio-edit-delete {
+	border-color: transparent;
 }
 
 .ws-studio-edit-delete:hover {
 	color: var(--text-error);
+	border-color: var(--text-error);
 	background: var(--background-modifier-error);
 }

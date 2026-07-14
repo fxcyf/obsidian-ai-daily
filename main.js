@@ -4853,7 +4853,7 @@ var EditWorkspaceModal = class extends import_obsidian10.Modal {
       idInput.addEventListener("input", () => {
         mode.id = idInput.value;
       });
-      const delBtn = head.createEl("button", { cls: "ws-studio-edit-mode-del" });
+      const delBtn = head.createEl("button", { cls: "ws-studio-edit-icon-btn danger" });
       (0, import_obsidian10.setIcon)(delBtn, "trash-2");
       delBtn.addEventListener("click", () => {
         this.modes.splice(i, 1);

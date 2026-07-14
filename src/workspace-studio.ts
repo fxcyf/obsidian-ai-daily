@@ -535,7 +535,7 @@ class EditWorkspaceModal extends Modal {
 			idInput.setAttribute("placeholder", "ID");
 			idInput.addEventListener("input", () => { mode.id = idInput.value; });
 
-			const delBtn = head.createEl("button", { cls: "ws-studio-edit-mode-del" });
+			const delBtn = head.createEl("button", { cls: "ws-studio-edit-icon-btn danger" });
 			setIcon(delBtn, "trash-2");
 			delBtn.addEventListener("click", () => {
 				this.modes.splice(i, 1);

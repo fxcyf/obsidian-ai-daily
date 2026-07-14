@@ -357,8 +357,13 @@ export class WorkspaceStudio {
 		const rowRe = new RegExp(`^(\\|\\s*${escaped}\\s*\\|)\\s*\\w+\\s*\\|`, "m");
 		const matched = rowRe.test(before);
 		const content = before.replace(rowRe, `$1 ${status} |`);
-		new Notice(`[debug] regex matched: ${matched}, changed: ${before !== content}`);
+		new Notice(`[debug] matched: ${matched}, changed: ${before !== content}`, 8000);
 		await this.app.vault.modify(indexFile, content);
+		// verify: re-read immediately
+		const after = await this.app.vault.read(indexFile);
+		const persisted = after === content;
+		const statusInFile = after.includes(`| ${name} |`) ? after.match(new RegExp(`\\|\\s*${escaped}\\s*\\|\\s*(\\w+)`))?.[1] : "NOT_FOUND";
+		new Notice(`[debug] persisted: ${persisted}, status now: ${statusInFile}, path: ${indexFile.path}`, 10000);
 	}
 
 	private openEditWorkspaceModal(name: string): void {

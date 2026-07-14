@@ -39,6 +39,14 @@ jobs:
           cp -r dist/* "$PLUGIN_DIR/"
           echo "Deployed plugin to $PLUGIN_DIR"
 
+      - name: Deploy MCP server to persistent repo
+        run: |
+          MCP_REPO="$HOME/MyFiles/random/obsidian-ai-daily"
+          cd "$MCP_REPO"
+          git pull origin main
+          cd mcp-server && npm install && npm run build
+          echo "MCP server rebuilt at $MCP_REPO/mcp-server/dist"
+
       - name: Update and restart proxy server
         run: |
           sudo cp proxy-server/deploy/obsidian-proxy.service /etc/systemd/system/obsidian-proxy.service

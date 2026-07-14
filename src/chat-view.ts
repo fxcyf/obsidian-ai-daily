@@ -948,32 +948,31 @@ export class ChatView extends ItemView {
 	}
 
 	private showWelcome(): void {
-		const hint = "直接提问来探索你的知识库，或用工具读取特定笔记。";
-
 		const welcomeEl = this.messagesEl.createDiv({
 			cls: "ai-daily-welcome",
 		});
-		welcomeEl.createDiv({ cls: "ai-daily-welcome-title", text: `Cortex v${this.plugin.manifest.version}` });
-		welcomeEl.createDiv({ cls: "ai-daily-welcome-hint", text: hint });
+
+		const masthead = welcomeEl.createDiv({ cls: "ai-daily-welcome-masthead" });
+		const glyph = masthead.createDiv({ cls: "ai-daily-welcome-glyph" });
+		setIcon(glyph, "brain-circuit");
+		const titleRow = masthead.createEl("h1", { cls: "ai-daily-welcome-title" });
+		titleRow.createSpan({ text: "Cortex" });
+		titleRow.createSpan({ cls: "ai-daily-welcome-ver", text: `v${this.plugin.manifest.version}` });
+		masthead.createEl("p", { cls: "ai-daily-welcome-hint", text: "直接提问探索知识库，或选一个模式开始" });
 
 		this.buildWelcomeHarness(welcomeEl);
 
-		const shortcuts: { icon: string; label: string; action: () => void }[] = [
-			{ icon: "brain", label: "Harness", action: () => this.plugin.activateHarnessView() },
-			{ icon: "rss", label: "生成 Feed", action: () => this.plugin.generateFeed() },
-			{ icon: "mic", label: "生成播客 Feed", action: () => this.plugin.generatePodcastFeed() },
+		const tools: { icon: string; label: string; action: () => void }[] = [
 			{ icon: "history", label: "历史", action: () => this.openHistoryPanel() },
-			{ icon: "sparkles", label: "蒸馏知识", action: () => { this.inputEl.value = "/distill"; this.handleSend(); } },
-			{ icon: "heart-pulse", label: "Wiki 健康检查", action: () => this.plugin.runWikiHealthCheck() },
+			{ icon: "heart-pulse", label: "Wiki 检查", action: () => this.plugin.runWikiHealthCheck() },
 		];
-
-		const actionsEl = welcomeEl.createDiv({ cls: "ai-daily-welcome-actions" });
-		for (const shortcut of shortcuts) {
-			const btn = actionsEl.createDiv({ cls: "ai-daily-welcome-action" });
-			const iconEl = btn.createSpan({ cls: "ai-daily-welcome-action-icon" });
-			setIcon(iconEl, shortcut.icon);
-			btn.createSpan({ text: shortcut.label });
-			btn.addEventListener("click", shortcut.action);
+		const toolsEl = welcomeEl.createDiv({ cls: "ai-daily-welcome-tools" });
+		for (const t of tools) {
+			const btn = toolsEl.createEl("button", { cls: "ai-daily-welcome-tool" });
+			const iconEl = btn.createSpan({ cls: "ai-daily-welcome-tool-icon" });
+			setIcon(iconEl, t.icon);
+			btn.createSpan({ text: t.label });
+			btn.addEventListener("click", t.action);
 		}
 
 		this.updateTokenBar();
@@ -990,64 +989,75 @@ export class ChatView extends ItemView {
 			if (!index || index.projects.length === 0) return;
 
 			const projectsFolder = this.plugin.settings.harnessProjectsFolder;
-			const readPromises: Promise<void>[] = [];
 
 			for (const project of index.projects) {
 				const modesPath = `${projectsFolder}/${project.name}/modes.md`;
 				const modesFile = this.app.vault.getAbstractFileByPath(modesPath);
 				if (!(modesFile instanceof TFile)) continue;
 
-				readPromises.push(
-					this.app.vault.read(modesFile).then((content) => {
-						const modes = parseModesFromContent(content);
-						if (modes.length === 0) return;
+				void this.app.vault.read(modesFile).then((content) => {
+					const modes = parseModesFromContent(content);
+					if (modes.length === 0) return;
 
-						const projectEl = container.createDiv({ cls: "ai-daily-welcome-harness-project" });
-						const headerEl = projectEl.createDiv({ cls: "ai-daily-welcome-harness-project-header" });
-						headerEl.createSpan({ text: project.name });
+					const group = container.createDiv({ cls: "ai-daily-welcome-group" });
+					const label = group.createDiv({ cls: "ai-daily-welcome-group-label" });
+					label.createSpan({ text: project.name });
 
-						const modesGrid = projectEl.createDiv({ cls: "ai-daily-welcome-harness-modes" });
-						for (const mode of modes) {
-							const modeEl = modesGrid.createDiv({ cls: "ai-daily-welcome-mode-group" });
-							const btn = modeEl.createSpan({
-								cls: "ai-daily-welcome-harness-mode-btn",
-								text: `${mode.emoji} ${mode.label}`,
-							});
-							const startWithMode = () => {
-								const resolveVars = (p: string) => {
-									let r = p;
-									r = r.replace(/\{active_project\}/g, project.name);
-									r = r.replace(/\{active_work_context\}/g, index.activeWorkContext || "");
-									return r;
-								};
-								const resolvedFiles = resolveFileEntries(mode.files, this.app, resolveVars);
-								const context: HarnessContext = { mode, injectedFiles: resolvedFiles };
-								return context;
+					const grid = group.createDiv({ cls: "ai-daily-welcome-grid" });
+					for (const mode of modes) {
+						const resolveContext = () => {
+							const resolveVars = (p: string) => {
+								let r = p;
+								r = r.replace(/\{active_project\}/g, project.name);
+								r = r.replace(/\{active_work_context\}/g, index.activeWorkContext || "");
+								return r;
 							};
+							const resolvedFiles = resolveFileEntries(mode.files, this.app, resolveVars);
+							return { mode, injectedFiles: resolvedFiles } as HarnessContext;
+						};
+
+						const isQuick = mode.actions.length === 1;
+						const btnCls = isQuick ? "ai-daily-welcome-mode quick" : "ai-daily-welcome-mode";
+						const btn = grid.createEl("button", { cls: btnCls });
+						btn.createSpan({ cls: "ai-daily-welcome-mode-emoji", text: mode.emoji });
+						btn.createSpan({ cls: "ai-daily-welcome-mode-name", text: mode.label });
+
+						if (isQuick) {
+							const bolt = btn.createSpan({ cls: "ai-daily-welcome-mode-bolt" });
+							bolt.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>';
 							btn.addEventListener("click", () => {
-								this.startWithContext(startWithMode());
+								const ctx = resolveContext();
+								this.startWithContext(ctx);
+								this.inputEl.value = mode.actions[0].prompt;
+								void this.handleSend();
 							});
-							if (mode.actions.length > 0) {
-								const actionsEl = modeEl.createDiv({ cls: "ai-daily-welcome-mode-actions" });
-								for (const action of mode.actions) {
-									const actionBtn = actionsEl.createDiv({ cls: "ai-daily-welcome-mode-action" });
-									if (action.icon) {
-										const iconEl = actionBtn.createSpan({ cls: "ai-daily-welcome-mode-action-icon" });
-										setIcon(iconEl, action.icon);
-									}
-									actionBtn.createSpan({ text: action.label });
-									actionBtn.addEventListener("click", (e) => {
-										e.stopPropagation();
-										const context = startWithMode();
-										this.startWithContext(context);
-										this.inputEl.value = action.prompt;
-										void this.handleSend();
-									});
+						} else if (mode.actions.length > 1) {
+							btn.addEventListener("click", () => {
+								this.startWithContext(resolveContext());
+							});
+							const actionsEl = grid.createDiv({ cls: "ai-daily-welcome-mode-actions" });
+							for (const action of mode.actions) {
+								const actionBtn = actionsEl.createEl("button", { cls: "ai-daily-welcome-mode-action" });
+								if (action.icon) {
+									const iconEl = actionBtn.createSpan({ cls: "ai-daily-welcome-mode-action-icon" });
+									setIcon(iconEl, action.icon);
 								}
+								actionBtn.createSpan({ text: action.label });
+								actionBtn.addEventListener("click", (e) => {
+									e.stopPropagation();
+									const ctx = resolveContext();
+									this.startWithContext(ctx);
+									this.inputEl.value = action.prompt;
+									void this.handleSend();
+								});
 							}
+						} else {
+							btn.addEventListener("click", () => {
+								this.startWithContext(resolveContext());
+							});
 						}
-					})
-				);
+					}
+				});
 			}
 		});
 	}

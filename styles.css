@@ -415,120 +415,206 @@
 .ai-daily-welcome {
 	display: flex;
 	flex-direction: column;
+	width: 100%;
+	max-width: 560px;
+	margin: 0 auto;
+	padding: 0 22px;
+}
+
+/* ── Masthead ── */
+
+.ai-daily-welcome-masthead {
+	text-align: center;
+	padding: 48px 0 32px;
+}
+
+.ai-daily-welcome-glyph {
+	width: 34px;
+	height: 34px;
+	margin: 0 auto 16px;
+	display: flex;
 	align-items: center;
 	justify-content: center;
-	height: 100%;
-	padding: 20px;
-	text-align: center;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 9px;
+	color: var(--interactive-accent);
+}
+
+.ai-daily-welcome-glyph svg {
+	width: 20px;
+	height: 20px;
 }
 
 .ai-daily-welcome-title {
-	font-size: 18px;
+	font-size: 21px;
 	font-weight: 600;
-	margin-bottom: 8px;
+	letter-spacing: -0.01em;
+	display: flex;
+	align-items: baseline;
+	justify-content: center;
+	gap: 9px;
+}
+
+.ai-daily-welcome-ver {
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--text-faint);
+	letter-spacing: 0.02em;
 }
 
 .ai-daily-welcome-hint {
-	color: var(--text-muted);
-	font-size: 13px;
-	margin-bottom: 20px;
-}
-
-.ai-daily-welcome-actions {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	width: 100%;
-	max-width: 280px;
-}
-
-.ai-daily-welcome-action {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	padding: 10px 14px;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 8px;
-	font-size: 13px;
-	cursor: pointer;
-	text-align: left;
-}
-
-.ai-daily-welcome-action:hover {
-	background: var(--background-modifier-hover);
-}
-
-.ai-daily-welcome-action-icon {
-	display: flex;
-	align-items: center;
+	margin-top: 9px;
+	font-size: 13.5px;
 	color: var(--text-muted);
 }
 
-.ai-daily-welcome-action-icon svg {
-	width: 16px;
-	height: 16px;
-}
-
-/* ── Welcome Harness quick-start ─────────────────────── */
+/* ── Harness groups ── */
 
 .ai-daily-welcome-harness {
 	width: 100%;
-	max-width: 320px;
-	margin-bottom: 12px;
 }
 
-.ai-daily-welcome-harness-project {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	margin-bottom: 8px;
+.ai-daily-welcome-group {
+	margin-bottom: 22px;
 }
 
-.ai-daily-welcome-harness-project-header {
-	font-size: 12px;
+.ai-daily-welcome-group-label {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.09em;
+	text-transform: uppercase;
 	color: var(--text-faint);
-}
-
-.ai-daily-welcome-harness-modes {
+	padding: 0 4px 10px;
 	display: flex;
-	flex-direction: column;
-	gap: 4px;
+	align-items: center;
+	gap: 9px;
 }
 
-.ai-daily-welcome-mode-group {
+.ai-daily-welcome-group-label::after {
+	content: "";
+	flex: 1;
+	height: 1px;
+	background: var(--background-modifier-border);
+}
+
+/* ── Mode grid ── */
+
+.ai-daily-welcome-grid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 8px;
+}
+
+@media (min-width: 460px) {
+	.ai-daily-welcome-grid {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+
+.ai-daily-welcome-mode {
+	position: relative;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border-hover);
+	border-radius: 9px;
+	padding: 12px;
 	display: flex;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.ai-daily-welcome-harness-mode-btn {
+	align-items: center;
+	gap: 9px;
 	cursor: pointer;
-	font-size: 12px;
-	color: var(--text-muted);
-	font-weight: 500;
+	transition: border-color 0.14s ease, background 0.14s ease, transform 0.14s ease;
+	text-align: left;
+	min-width: 0;
+	font-family: inherit;
+	font-size: inherit;
+	color: inherit;
 }
 
-.ai-daily-welcome-harness-mode-btn:hover {
-	color: var(--text-normal);
+.ai-daily-welcome-mode:hover {
+	border-color: var(--background-modifier-border-focus);
+	background: var(--background-modifier-hover);
 }
+
+.ai-daily-welcome-mode:active {
+	transform: scale(0.985);
+}
+
+.ai-daily-welcome-mode:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+.ai-daily-welcome-mode-emoji {
+	font-size: 17px;
+	line-height: 1;
+	flex-shrink: 0;
+}
+
+.ai-daily-welcome-mode-name {
+	font-size: 13.5px;
+	font-weight: 500;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* ── Quick mode (single-action, auto-send) ── */
+
+.ai-daily-welcome-mode.quick {
+	padding-right: 28px;
+}
+
+.ai-daily-welcome-mode-bolt {
+	position: absolute;
+	top: 0;
+	right: 0;
+	width: 22px;
+	height: 22px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--interactive-accent);
+}
+
+.ai-daily-welcome-mode-bolt svg {
+	width: 11px;
+	height: 11px;
+}
+
+.ai-daily-welcome-mode.quick::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	right: 0;
+	border-width: 0 20px 20px 0;
+	border-style: solid;
+	border-color: transparent var(--interactive-accent) transparent transparent;
+	border-radius: 0 9px 0 0;
+	opacity: 0.14;
+}
+
+/* ── Mode sub-actions (multi-action modes) ── */
 
 .ai-daily-welcome-mode-actions {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 4px;
-	padding-left: 20px;
+	grid-column: 1 / -1;
+	padding-left: 4px;
 }
 
 .ai-daily-welcome-mode-action {
 	display: flex;
 	align-items: center;
 	gap: 4px;
-	padding: 2px 8px;
-	border-radius: 4px;
+	padding: 3px 9px;
+	border-radius: 5px;
 	font-size: 11px;
 	color: var(--text-muted);
 	cursor: pointer;
 	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	font-family: inherit;
+	transition: background 0.14s, color 0.14s;
 }
 
 .ai-daily-welcome-mode-action:hover {
@@ -544,6 +630,52 @@
 .ai-daily-welcome-mode-action-icon svg {
 	width: 12px;
 	height: 12px;
+}
+
+/* ── Global tools bar ── */
+
+.ai-daily-welcome-tools {
+	display: flex;
+	gap: 6px;
+	padding: 16px 0 20px;
+	border-top: 1px solid var(--background-modifier-border);
+	margin-top: 6px;
+}
+
+.ai-daily-welcome-tool {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	font-size: 12.5px;
+	color: var(--text-muted);
+	background: none;
+	border: none;
+	cursor: pointer;
+	padding: 7px 11px;
+	border-radius: 8px;
+	font-family: inherit;
+	transition: color 0.14s, background 0.14s;
+}
+
+.ai-daily-welcome-tool:hover {
+	color: var(--text-normal);
+	background: var(--background-secondary);
+}
+
+.ai-daily-welcome-tool:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+.ai-daily-welcome-tool-icon {
+	display: flex;
+	align-items: center;
+	opacity: 0.85;
+}
+
+.ai-daily-welcome-tool-icon svg {
+	width: 14px;
+	height: 14px;
 }
 
 /* ── Settings: full-width layout for textareas ────────── */

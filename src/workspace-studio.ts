@@ -251,14 +251,20 @@ export class WorkspaceStudio {
 
 	private async switchWorkspace(name: string): Promise<void> {
 		const projectsFolder = this.plugin.settings.harnessProjectsFolder;
-		const file = this.app.vault.getAbstractFileByPath(`${projectsFolder}/_INDEX.md`);
-		if (!(file instanceof TFile)) return;
+		const indexPath = `${projectsFolder}/_INDEX.md`;
+		const file = this.app.vault.getAbstractFileByPath(indexPath);
+		if (!(file instanceof TFile)) {
+			new Notice(`[debug] switchWorkspace: _INDEX.md not found at: ${indexPath}`);
+			return;
+		}
 		let content = await this.app.vault.read(file);
-		if (/^active_project:/m.test(content)) {
+		const hadFm = /^active_project:/m.test(content);
+		if (hadFm) {
 			content = content.replace(/^(active_project:\s*).*$/m, `$1${name}`);
 		} else {
 			content = `---\nactive_project: ${name}\n---\n\n${content}`;
 		}
+		new Notice(`[debug] switchWorkspace: hadFm=${hadFm}, writing to ${indexPath}`);
 		await this.app.vault.modify(file, content);
 		await this.render();
 	}
@@ -342,11 +348,16 @@ export class WorkspaceStudio {
 		const projectsFolder = this.plugin.settings.harnessProjectsFolder;
 		const indexPath = `${projectsFolder}/_INDEX.md`;
 		const indexFile = this.app.vault.getAbstractFileByPath(indexPath);
-		if (!(indexFile instanceof TFile)) return;
-		let content = await this.app.vault.read(indexFile);
+		if (!(indexFile instanceof TFile)) {
+			new Notice(`[debug] _INDEX.md not found at: ${indexPath}`);
+			return;
+		}
+		const before = await this.app.vault.read(indexFile);
 		const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 		const rowRe = new RegExp(`^(\\|\\s*${escaped}\\s*\\|)\\s*\\w+\\s*\\|`, "m");
-		content = content.replace(rowRe, `$1 ${status} |`);
+		const matched = rowRe.test(before);
+		const content = before.replace(rowRe, `$1 ${status} |`);
+		new Notice(`[debug] regex matched: ${matched}, changed: ${before !== content}`);
 		await this.app.vault.modify(indexFile, content);
 	}
 

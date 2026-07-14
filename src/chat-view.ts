@@ -1046,6 +1046,7 @@ export class ChatView extends ItemView {
 			const projectsFolder = this.plugin.settings.harnessProjectsFolder;
 
 			for (const project of index.projects) {
+				if (project.status === "archive") continue;
 				const modesPath = `${projectsFolder}/${project.name}/modes.md`;
 				const modesFile = this.app.vault.getAbstractFileByPath(modesPath);
 				if (!(modesFile instanceof TFile)) continue;

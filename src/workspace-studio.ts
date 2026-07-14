@@ -294,15 +294,16 @@ export class WorkspaceStudio {
 		}
 
 		const modesPath = `${wsFolder}/modes.md`;
-		if (!(await adapter.exists(modesPath))) {
+		if (!this.app.vault.getAbstractFileByPath(modesPath)) {
 			const template = defaultModesTemplate();
-			await adapter.write(modesPath, template);
+			await this.app.vault.create(modesPath, template);
 		}
 
 		const indexPath = `${projectsFolder}/_INDEX.md`;
+		const indexFile = this.app.vault.getAbstractFileByPath(indexPath);
 		let indexContent: string;
-		if (await adapter.exists(indexPath)) {
-			indexContent = await adapter.read(indexPath);
+		if (indexFile instanceof TFile) {
+			indexContent = await this.app.vault.read(indexFile);
 		} else {
 			indexContent = `---\nactive_project: ${name}\nactive_work_context: \n---\n\n| 项目 | 状态 | 来源 | 最近更新 |\n|------|------|------|----------|\n`;
 		}
@@ -315,7 +316,12 @@ export class WorkspaceStudio {
 		if (/^active_project:/m.test(indexContent)) {
 			indexContent = indexContent.replace(/^(active_project:\s*).*$/m, `$1${name}`);
 		}
-		await adapter.write(indexPath, indexContent);
+
+		if (indexFile instanceof TFile) {
+			await this.app.vault.modify(indexFile, indexContent);
+		} else {
+			await this.app.vault.create(indexPath, indexContent);
+		}
 
 		new Notice(`已创建 workspace「${name}」`);
 	}
@@ -335,13 +341,13 @@ export class WorkspaceStudio {
 	private async setWorkspaceStatus(name: string, status: string): Promise<void> {
 		const projectsFolder = this.plugin.settings.harnessProjectsFolder;
 		const indexPath = `${projectsFolder}/_INDEX.md`;
-		const adapter = this.app.vault.adapter;
-		if (!(await adapter.exists(indexPath))) return;
-		let content = await adapter.read(indexPath);
+		const indexFile = this.app.vault.getAbstractFileByPath(indexPath);
+		if (!(indexFile instanceof TFile)) return;
+		let content = await this.app.vault.read(indexFile);
 		const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 		const rowRe = new RegExp(`^(\\|\\s*${escaped}\\s*\\|)\\s*\\w+\\s*\\|`, "m");
 		content = content.replace(rowRe, `$1 ${status} |`);
-		await adapter.write(indexPath, content);
+		await this.app.vault.modify(indexFile, content);
 	}
 
 	private openEditWorkspaceModal(name: string): void {
@@ -475,13 +481,13 @@ class EditWorkspaceModal extends Modal {
 			if (!confirm(`确定要归档「${this.workspaceName}」吗？文件将保留，可随时恢复。`)) return;
 			const projectsFolder = this.plugin.settings.harnessProjectsFolder;
 			const indexPath = `${projectsFolder}/_INDEX.md`;
-			const adapter = this.app.vault.adapter;
-			if (!(await adapter.exists(indexPath))) return;
-			let content = await adapter.read(indexPath);
+			const indexFile = this.app.vault.getAbstractFileByPath(indexPath);
+			if (!(indexFile instanceof TFile)) return;
+			let content = await this.app.vault.read(indexFile);
 			const escaped = this.workspaceName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 			const rowRe = new RegExp(`^(\\|\\s*${escaped}\\s*\\|)\\s*\\w+\\s*\\|`, "m");
 			content = content.replace(rowRe, `$1 archive |`);
-			await adapter.write(indexPath, content);
+			await this.app.vault.modify(indexFile, content);
 			new Notice(`已归档「${this.workspaceName}」`);
 			this.close();
 			await this.onSave();

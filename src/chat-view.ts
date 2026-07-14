@@ -1603,6 +1603,10 @@ export class ChatView extends ItemView {
 		const knowledgeContext = await this.vaultTools.loadKnowledgeContext(5);
 		const proxyActive = this.plugin.settings.proxyEnabled;
 
+		const hc = this.harnessContext;
+		const debugPrompt = hc ? `mode=${hc.mode.id}, prompt=${(hc.mode.systemPromptAppend || "").slice(0, 40)}..., files=${hc.injectedFiles.length}` : "null";
+		new Notice(`[debug] initClient harnessContext: ${debugPrompt}`, 8000);
+
 		const systemPrompt = buildSystemPrompt({
 			mode: proxyActive ? "proxy" : "api",
 			knowledgeFolders,
@@ -1614,6 +1618,8 @@ export class ChatView extends ItemView {
 			harnessContext: this.harnessContext,
 			knowledgeContext: knowledgeContext || undefined,
 		});
+
+		new Notice(`[debug] systemPrompt includes harness: ${systemPrompt.includes("Harness 模式")}`, 8000);
 
 		this.client = new ClaudeClient(apiKey, model, systemPrompt, {
 			streamMode: chatStreamMode,

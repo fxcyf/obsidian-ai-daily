@@ -508,21 +508,41 @@ class EditWorkspaceModal extends Modal {
 			filesHeader.createEl("span", { cls: "ws-studio-edit-field-label", text: "Files" });
 			const addFileBtn = filesHeader.createEl("button", { cls: "ws-studio-edit-add-file-btn" });
 			setIcon(addFileBtn.createSpan(), "file-plus");
-			addFileBtn.createSpan({ text: "选择文件" });
+			addFileBtn.createSpan({ text: "添加" });
 			addFileBtn.addEventListener("click", () => {
 				new FileSuggestModal(this.app, (path) => {
-					mode.files.push(path);
-					filesArea.value = mode.files.join("\n");
+					if (!mode.files.includes(path)) {
+						mode.files.push(path);
+						renderFilePills();
+					}
 				}).open();
 			});
 
-			const filesArea = card.createEl("textarea", { cls: "ws-studio-edit-files" });
-			filesArea.value = mode.files.join("\n");
-			filesArea.rows = 3;
-			filesArea.setAttribute("placeholder", "每行一个路径或 [[wikilink]]，或点击上方按钮选择");
-			filesArea.addEventListener("input", () => {
-				mode.files = filesArea.value.split("\n").map((s) => s.trim()).filter(Boolean);
-			});
+			const pillsContainer = card.createDiv({ cls: "ws-studio-edit-files-pills" });
+			const renderFilePills = () => {
+				pillsContainer.empty();
+				if (mode.files.length === 0) {
+					pillsContainer.createSpan({ cls: "ws-studio-edit-files-empty", text: "点击「添加」选择文件" });
+					return;
+				}
+				for (let fi = 0; fi < mode.files.length; fi++) {
+					const filePath = mode.files[fi];
+					const pill = pillsContainer.createDiv({ cls: "ws-studio-edit-file-pill" });
+					const iconSpan = pill.createSpan({ cls: "ws-studio-edit-file-pill-icon" });
+					setIcon(iconSpan, "file-text");
+					const displayName = filePath.replace(/^.*\//, "").replace(/\.md$/, "");
+					pill.createSpan({ cls: "ws-studio-edit-file-pill-name", text: displayName });
+					pill.setAttribute("title", filePath);
+					const removeBtn = pill.createSpan({ cls: "ws-studio-edit-file-pill-remove" });
+					setIcon(removeBtn, "x");
+					removeBtn.addEventListener("click", (ev) => {
+						ev.stopPropagation();
+						mode.files.splice(fi, 1);
+						renderFilePills();
+					});
+				}
+			};
+			renderFilePills();
 
 			card.createEl("div", { cls: "ws-studio-edit-field-label", text: "Actions" });
 			const actionsList = card.createDiv({ cls: "ws-studio-edit-actions-list" });

@@ -522,12 +522,18 @@ class EditWorkspaceModal extends Modal {
 			const emojiInput = head.createEl("input", { type: "text", cls: "ws-studio-edit-emoji" });
 			emojiInput.value = mode.emoji;
 			emojiInput.setAttribute("placeholder", "🔖");
+			emojiInput.setAttribute("maxlength", "2");
 			emojiInput.addEventListener("input", () => { mode.emoji = emojiInput.value; });
 
 			const labelInput = head.createEl("input", { type: "text", cls: "ws-studio-edit-label" });
 			labelInput.value = mode.label;
-			labelInput.setAttribute("placeholder", "显示名称");
+			labelInput.setAttribute("placeholder", "名称");
 			labelInput.addEventListener("input", () => { mode.label = labelInput.value; });
+
+			const idInput = head.createEl("input", { type: "text", cls: "ws-studio-edit-id" });
+			idInput.value = mode.id;
+			idInput.setAttribute("placeholder", "ID");
+			idInput.addEventListener("input", () => { mode.id = idInput.value; });
 
 			const delBtn = head.createEl("button", { cls: "ws-studio-edit-mode-del" });
 			setIcon(delBtn, "trash-2");
@@ -535,13 +541,6 @@ class EditWorkspaceModal extends Modal {
 				this.modes.splice(i, 1);
 				this.renderModesList();
 			});
-
-			const idRow = card.createDiv({ cls: "ws-studio-edit-id-row" });
-			idRow.createEl("span", { cls: "ws-studio-edit-id-label", text: "ID" });
-			const idInput = idRow.createEl("input", { type: "text", cls: "ws-studio-edit-id" });
-			idInput.value = mode.id;
-			idInput.setAttribute("placeholder", "唯一标识，如 review");
-			idInput.addEventListener("input", () => { mode.id = idInput.value; });
 
 			card.createEl("div", { cls: "ws-studio-edit-field-label", text: "Prompt" });
 			const promptArea = card.createEl("textarea", { cls: "ws-studio-edit-prompt" });

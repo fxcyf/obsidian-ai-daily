@@ -4837,28 +4837,27 @@ var EditWorkspaceModal = class extends import_obsidian10.Modal {
       const emojiInput = head.createEl("input", { type: "text", cls: "ws-studio-edit-emoji" });
       emojiInput.value = mode.emoji;
       emojiInput.setAttribute("placeholder", "\u{1F516}");
+      emojiInput.setAttribute("maxlength", "2");
       emojiInput.addEventListener("input", () => {
         mode.emoji = emojiInput.value;
       });
       const labelInput = head.createEl("input", { type: "text", cls: "ws-studio-edit-label" });
       labelInput.value = mode.label;
-      labelInput.setAttribute("placeholder", "\u663E\u793A\u540D\u79F0");
+      labelInput.setAttribute("placeholder", "\u540D\u79F0");
       labelInput.addEventListener("input", () => {
         mode.label = labelInput.value;
+      });
+      const idInput = head.createEl("input", { type: "text", cls: "ws-studio-edit-id" });
+      idInput.value = mode.id;
+      idInput.setAttribute("placeholder", "ID");
+      idInput.addEventListener("input", () => {
+        mode.id = idInput.value;
       });
       const delBtn = head.createEl("button", { cls: "ws-studio-edit-mode-del" });
       (0, import_obsidian10.setIcon)(delBtn, "trash-2");
       delBtn.addEventListener("click", () => {
         this.modes.splice(i, 1);
         this.renderModesList();
-      });
-      const idRow = card.createDiv({ cls: "ws-studio-edit-id-row" });
-      idRow.createEl("span", { cls: "ws-studio-edit-id-label", text: "ID" });
-      const idInput = idRow.createEl("input", { type: "text", cls: "ws-studio-edit-id" });
-      idInput.value = mode.id;
-      idInput.setAttribute("placeholder", "\u552F\u4E00\u6807\u8BC6\uFF0C\u5982 review");
-      idInput.addEventListener("input", () => {
-        mode.id = idInput.value;
       });
       card.createEl("div", { cls: "ws-studio-edit-field-label", text: "Prompt" });
       const promptArea = card.createEl("textarea", { cls: "ws-studio-edit-prompt" });

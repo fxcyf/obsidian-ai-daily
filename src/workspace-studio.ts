@@ -546,7 +546,7 @@ class EditWorkspaceModal extends Modal {
 			card.createEl("div", { cls: "ws-studio-edit-field-label", text: "Prompt" });
 			const promptArea = card.createEl("textarea", { cls: "ws-studio-edit-prompt" });
 			promptArea.value = mode.systemPromptAppend;
-			promptArea.rows = 5;
+			promptArea.rows = 8;
 			promptArea.addEventListener("input", () => { mode.systemPromptAppend = promptArea.value; });
 
 			const filesHeader = card.createDiv({ cls: "ws-studio-edit-files-header" });

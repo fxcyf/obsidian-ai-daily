@@ -1008,11 +1008,12 @@ export class ChatView extends ItemView {
 
 						const modesGrid = projectEl.createDiv({ cls: "ai-daily-welcome-harness-modes" });
 						for (const mode of modes) {
-							const btn = modesGrid.createSpan({
+							const modeEl = modesGrid.createDiv({ cls: "ai-daily-welcome-mode-group" });
+							const btn = modeEl.createSpan({
 								cls: "ai-daily-welcome-harness-mode-btn",
 								text: `${mode.emoji} ${mode.label}`,
 							});
-							btn.addEventListener("click", () => {
+							const startWithMode = () => {
 								const resolveVars = (p: string) => {
 									let r = p;
 									r = r.replace(/\{active_project\}/g, project.name);
@@ -1021,8 +1022,29 @@ export class ChatView extends ItemView {
 								};
 								const resolvedFiles = resolveFileEntries(mode.files, this.app, resolveVars);
 								const context: HarnessContext = { mode, injectedFiles: resolvedFiles };
-								this.startWithContext(context);
+								return context;
+							};
+							btn.addEventListener("click", () => {
+								this.startWithContext(startWithMode());
 							});
+							if (mode.actions.length > 0) {
+								const actionsEl = modeEl.createDiv({ cls: "ai-daily-welcome-mode-actions" });
+								for (const action of mode.actions) {
+									const actionBtn = actionsEl.createDiv({ cls: "ai-daily-welcome-mode-action" });
+									if (action.icon) {
+										const iconEl = actionBtn.createSpan({ cls: "ai-daily-welcome-mode-action-icon" });
+										setIcon(iconEl, action.icon);
+									}
+									actionBtn.createSpan({ text: action.label });
+									actionBtn.addEventListener("click", (e) => {
+										e.stopPropagation();
+										const context = startWithMode();
+										this.startWithContext(context);
+										this.inputEl.value = action.prompt;
+										void this.handleSend();
+									});
+								}
+							}
 						}
 					})
 				);
@@ -2713,7 +2735,9 @@ export class ChatView extends ItemView {
 		this.claudeCodeSessionId = data.claudeCodeSessionId;
 		this.restoredProxySessionId = data.proxySessionId;
 		this.restoredProxyTaskId = data.proxyTaskId;
-		this.harnessContext = data.harnessContext ?? null;
+		this.harnessContext = data.harnessContext
+			? { ...data.harnessContext, mode: { ...data.harnessContext.mode, actions: data.harnessContext.mode.actions ?? [] } }
+			: null;
 		this.lastMode = data.lastMode ?? null;
 		this.messages = data.messages.map((m) => ({
 			role: m.role,

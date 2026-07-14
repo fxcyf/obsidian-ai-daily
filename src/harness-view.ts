@@ -111,12 +111,22 @@ export function parseModesFromContent(content: string): HarnessMode[] {
 	return raw
 		.map((m) => {
 			const id = String(m.id ?? "");
+			const rawActions = Array.isArray(m.actions) ? m.actions : [];
+			const actions = rawActions
+				.filter((a): a is Record<string, unknown> => !!a && typeof a === "object")
+				.map((a) => ({
+					label: String(a.label ?? ""),
+					icon: a.icon ? String(a.icon) : undefined,
+					prompt: String(a.prompt ?? ""),
+				}))
+				.filter((a) => a.label && a.prompt);
 			return {
 				id,
 				label: String(m.label ?? ""),
 				emoji: String(m.emoji ?? "📋"),
 				files: Array.isArray(m.files) ? m.files.map(String) : [],
 				systemPromptAppend: sections.get(id) ?? "",
+				actions,
 			};
 		})
 		.filter((m) => m.id && m.label);
@@ -128,30 +138,45 @@ function parseModesYamlBlock(content: string): Record<string, unknown>[] {
 	const yaml = match[1];
 	const modes: Record<string, unknown>[] = [];
 	let current: Record<string, unknown> | null = null;
-	let inFiles = false;
+	let listKey: "files" | "actions" | null = null;
+	let currentAction: Record<string, string> | null = null;
 	for (const line of yaml.split("\n")) {
 		if (line.match(/^- id:\s*/)) {
+			if (currentAction && current) (current.actions as Record<string, string>[]).push(currentAction);
+			currentAction = null;
 			if (current) modes.push(current);
 			current = { id: line.replace(/^- id:\s*/, "").trim() };
-			inFiles = false;
-		} else if (current && line.match(/^\s+label:\s*/)) {
+			listKey = null;
+		} else if (current && line.match(/^\s+label:\s*/) && listKey !== "actions") {
 			current.label = line.replace(/^\s+label:\s*/, "").trim();
-			inFiles = false;
+			listKey = null;
 		} else if (current && line.match(/^\s+emoji:\s*/)) {
 			current.emoji = line.replace(/^\s+emoji:\s*/, "").trim().replace(/^["']|["']$/g, "");
-			inFiles = false;
+			listKey = null;
 		} else if (current && line.match(/^\s+files:\s*$/)) {
 			current.files = [];
-			inFiles = true;
+			listKey = "files";
 		} else if (current && line.match(/^\s+files:\s*\[\s*\]\s*$/)) {
 			current.files = [];
-			inFiles = false;
-		} else if (inFiles && current && line.match(/^\s+-\s+/)) {
+			listKey = null;
+		} else if (current && line.match(/^\s+actions:\s*$/)) {
+			current.actions = [];
+			listKey = "actions";
+			currentAction = null;
+		} else if (listKey === "files" && current && line.match(/^\s+-\s+/)) {
 			(current.files as string[]).push(line.replace(/^\s+-\s+/, "").trim());
+		} else if (listKey === "actions" && current && line.match(/^\s+-\s+label:\s*/)) {
+			if (currentAction) (current.actions as Record<string, string>[]).push(currentAction);
+			currentAction = { label: line.replace(/^\s+-\s+label:\s*/, "").trim() };
+		} else if (listKey === "actions" && currentAction && line.match(/^\s+icon:\s*/)) {
+			currentAction.icon = line.replace(/^\s+icon:\s*/, "").trim();
+		} else if (listKey === "actions" && currentAction && line.match(/^\s+prompt:\s*/)) {
+			currentAction.prompt = line.replace(/^\s+prompt:\s*/, "").trim().replace(/^["']|["']$/g, "");
 		} else {
-			inFiles = false;
+			if (listKey !== "actions") listKey = null;
 		}
 	}
+	if (currentAction && current) (current.actions as Record<string, string>[]).push(currentAction);
 	if (current) modes.push(current);
 	return modes;
 }

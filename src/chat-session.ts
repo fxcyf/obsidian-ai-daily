@@ -18,6 +18,7 @@ export interface PersistedHarnessContext {
 		emoji: string;
 		files: string[];
 		systemPromptAppend: string;
+		actions?: { label: string; icon?: string; prompt: string }[];
 	};
 	injectedFiles: { path: string }[];
 }

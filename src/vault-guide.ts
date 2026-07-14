@@ -271,6 +271,10 @@ active_work_context: ""
        如果有文件：写成多行格式，每行一个 "    - 路径"
        如果无文件：写成 "files: []" 或 "files:" 后面空着
        ❌ 不支持: files: [file1.md, file2.md]（单行数组格式）
+     - actions: 快捷动作按钮列表（可选）— 显示在 Chat 封面上
+       每个 action 必须以 "    - label:" 开头
+       支持字段：label（必填）、prompt（必填）、icon（可选，Lucide 图标名）
+       点击按钮 = 切换到该模式 + 自动发送 prompt
        路径支持两种格式：
        - vault 路径: ${sourceFolder}/some-note.md
        - Wikilink: [[笔记名]]
@@ -279,6 +283,12 @@ active_work_context: ""
        - {active_work_context} → 替换为 _INDEX.md 中的 active_work_context 值
 
   4. 你可以自由添加、删除、重排模式
+
+  5. actions（可选）：定义显示在 Chat 封面上的快捷动作按钮
+     每个 action 需要 label 和 prompt 字段，icon 可选（使用 Lucide 图标名）
+     点击按钮 = 切换到该模式 + 自动发送预设 prompt
+     ❌ 错误: actions 缩进不对或缺少 label/prompt
+     ✅ 正确: 见下方示例中 feed 模式的 actions 写法
 -->
 
 \`\`\`yaml modes
@@ -295,10 +305,24 @@ active_work_context: ""
   label: 生成 Feed
   emoji: "📰"
   files: []
+  actions:
+    - label: 生成今日 Feed
+      icon: rss
+      prompt: "抓取今日资讯并生成 Feed 日报"
+    - label: 抓取播客更新
+      icon: mic
+      prompt: "检查播客订阅源，生成播客摘要"
 - id: organize
   label: 整理知识
   emoji: "🗂️"
   files: []
+  actions:
+    - label: 整理未归类笔记
+      icon: sparkles
+      prompt: "扫描未整理的笔记并归类到 Wiki"
+    - label: 知识健康检查
+      icon: heart-pulse
+      prompt: "运行知识库健康检查，报告孤岛和重复"
 \`\`\`
 
 <!--

@@ -4,12 +4,19 @@ import { DEFAULT_FEEDS, type FeedSource } from "./feeds";
 import type { StreamMode } from "./claude";
 import { generateGuideFiles, getGuideFolderPath } from "./vault-guide";
 
+export interface HarnessModeAction {
+	label: string;
+	icon?: string;
+	prompt: string;
+}
+
 export interface HarnessMode {
 	id: string;
 	label: string;
 	emoji: string;
 	files: string[];
 	systemPromptAppend: string;
+	actions: HarnessModeAction[];
 }
 
 export interface PromptTemplate {

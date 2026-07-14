@@ -81,13 +81,17 @@ export class WorkspaceStudio {
 
 	private buildWorkspaceSelector(): void {
 		const section = this.container.createDiv({ cls: "ws-studio-section" });
-		section.createDiv({ cls: "ws-studio-section-label", text: "WORKSPACES" });
+		const label = section.createDiv({ cls: "ws-studio-section-label" });
+		label.createSpan({ text: "WORKSPACES" });
 
-		const scroller = section.createDiv({ cls: "ws-studio-ws-scroller" });
-		const projects = this.projectIndex?.projects ?? [];
+		const allProjects = this.projectIndex?.projects ?? [];
+		const activeProjects = allProjects.filter((p) => p.status !== "archive");
+		const archivedProjects = allProjects.filter((p) => p.status === "archive");
 		const active = this.projectIndex?.activeProject;
 
-		for (const p of projects) {
+		const scroller = section.createDiv({ cls: "ws-studio-ws-scroller" });
+
+		for (const p of activeProjects) {
 			const card = scroller.createEl("button", { cls: "ws-studio-ws-card" });
 			if (p.name === active) card.addClass("active");
 			card.createDiv({ cls: "ws-studio-ws-name", text: p.name });
@@ -111,6 +115,30 @@ export class WorkspaceStudio {
 		setIcon(addCard.createSpan({ cls: "ws-studio-ws-add-icon" }), "plus");
 		addCard.createDiv({ text: "新建" });
 		addCard.addEventListener("click", () => this.openCreateWorkspaceModal());
+
+		if (archivedProjects.length > 0) {
+			const archiveToggle = section.createEl("button", { cls: "ws-studio-archive-toggle" });
+			setIcon(archiveToggle.createSpan({ cls: "ws-studio-archive-toggle-icon" }), "archive");
+			archiveToggle.createSpan({ text: `${archivedProjects.length} 个已归档` });
+			let expanded = false;
+			const archiveList = section.createDiv({ cls: "ws-studio-archive-list" });
+			archiveList.style.display = "none";
+
+			archiveToggle.addEventListener("click", () => {
+				expanded = !expanded;
+				archiveList.style.display = expanded ? "flex" : "none";
+				archiveToggle.toggleClass("is-expanded", expanded);
+			});
+
+			for (const p of archivedProjects) {
+				const row = archiveList.createDiv({ cls: "ws-studio-archive-row" });
+				row.createSpan({ cls: "ws-studio-archive-name", text: p.name });
+				const restoreBtn = row.createEl("button", { cls: "ws-studio-archive-restore", text: "恢复" });
+				restoreBtn.addEventListener("click", () => {
+					void this.unarchiveWorkspace(p.name);
+				});
+			}
+		}
 	}
 
 	private buildModes(): void {
@@ -241,7 +269,7 @@ export class WorkspaceStudio {
 			it.setTitle("编辑").setIcon("pencil").onClick(() => this.openEditWorkspaceModal(name)),
 		);
 		menu.addItem((it) =>
-			it.setTitle("从 Studio 移除").setIcon("archive").onClick(() => this.archiveWorkspace(name)),
+			it.setTitle("归档").setIcon("archive").onClick(() => this.archiveWorkspace(name)),
 		);
 		menu.showAtMouseEvent(ev);
 	}
@@ -293,17 +321,27 @@ export class WorkspaceStudio {
 	}
 
 	private async archiveWorkspace(name: string): Promise<void> {
+		await this.setWorkspaceStatus(name, "archive");
+		new Notice(`已归档「${name}」`);
+		await this.render();
+	}
+
+	private async unarchiveWorkspace(name: string): Promise<void> {
+		await this.setWorkspaceStatus(name, "active");
+		new Notice(`已恢复「${name}」`);
+		await this.render();
+	}
+
+	private async setWorkspaceStatus(name: string, status: string): Promise<void> {
 		const projectsFolder = this.plugin.settings.harnessProjectsFolder;
 		const indexPath = `${projectsFolder}/_INDEX.md`;
 		const adapter = this.app.vault.adapter;
 		if (!(await adapter.exists(indexPath))) return;
 		let content = await adapter.read(indexPath);
 		const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-		const rowRe = new RegExp(`^\\|\\s*${escaped}\\s*\\|.*$\\n?`, "m");
-		content = content.replace(rowRe, "");
+		const rowRe = new RegExp(`^(\\|\\s*${escaped}\\s*\\|)\\s*\\w+\\s*\\|`, "m");
+		content = content.replace(rowRe, `$1 ${status} |`);
 		await adapter.write(indexPath, content);
-		new Notice(`已从 Studio 移除「${name}」（文件保留）`);
-		await this.render();
 	}
 
 	private openEditWorkspaceModal(name: string): void {
@@ -430,21 +468,21 @@ class EditWorkspaceModal extends Modal {
 
 		const footer = contentEl.createDiv({ cls: "ws-studio-edit-footer" });
 		const deleteBtn = footer.createEl("button", {
-			text: "移除 Workspace",
+			text: "归档",
 			cls: "ws-studio-edit-delete",
 		});
 		deleteBtn.addEventListener("click", async () => {
-			if (!confirm(`确定要从 Studio 移除「${this.workspaceName}」吗？文件将保留。`)) return;
+			if (!confirm(`确定要归档「${this.workspaceName}」吗？文件将保留，可随时恢复。`)) return;
 			const projectsFolder = this.plugin.settings.harnessProjectsFolder;
 			const indexPath = `${projectsFolder}/_INDEX.md`;
 			const adapter = this.app.vault.adapter;
 			if (!(await adapter.exists(indexPath))) return;
 			let content = await adapter.read(indexPath);
 			const escaped = this.workspaceName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-			const rowRe = new RegExp(`^\\|\\s*${escaped}\\s*\\|.*$\\n?`, "m");
-			content = content.replace(rowRe, "");
+			const rowRe = new RegExp(`^(\\|\\s*${escaped}\\s*\\|)\\s*\\w+\\s*\\|`, "m");
+			content = content.replace(rowRe, `$1 archive |`);
 			await adapter.write(indexPath, content);
-			new Notice(`已从 Studio 移除「${this.workspaceName}」`);
+			new Notice(`已归档「${this.workspaceName}」`);
 			this.close();
 			await this.onSave();
 		});

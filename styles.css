@@ -2072,6 +2072,71 @@
 	height: 14px;
 }
 
+.ws-studio-archive-toggle {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	background: none;
+	border: none;
+	color: var(--text-faint);
+	cursor: pointer;
+	padding: 4px 8px;
+	margin-top: 6px;
+	border-radius: 5px;
+	font-size: 12px;
+	font-family: inherit;
+}
+
+.ws-studio-archive-toggle:hover {
+	color: var(--text-muted);
+	background: var(--background-modifier-hover);
+}
+
+.ws-studio-archive-toggle-icon {
+	display: flex;
+}
+
+.ws-studio-archive-toggle-icon svg {
+	width: 13px;
+	height: 13px;
+}
+
+.ws-studio-archive-list {
+	flex-direction: column;
+	gap: 4px;
+	margin-top: 6px;
+	padding-left: 4px;
+}
+
+.ws-studio-archive-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 6px 10px;
+	border-radius: 6px;
+	background: var(--background-secondary);
+}
+
+.ws-studio-archive-name {
+	font-size: 13px;
+	color: var(--text-muted);
+}
+
+.ws-studio-archive-restore {
+	background: none;
+	border: none;
+	color: var(--interactive-accent);
+	cursor: pointer;
+	font-size: 12px;
+	font-family: inherit;
+	padding: 2px 8px;
+	border-radius: 4px;
+}
+
+.ws-studio-archive-restore:hover {
+	background: var(--background-modifier-hover);
+}
+
 /* Mode grid — reuse welcome page styling */
 
 .ws-studio-mode-grid {

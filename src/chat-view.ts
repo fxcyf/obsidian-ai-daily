@@ -1422,8 +1422,25 @@ export class ChatView extends ItemView {
 						content: m.content,
 					}));
 				}
+				let proxyMessage = userMessage;
+				if (isFirstProxyMessage && this.harnessContext) {
+					const hm = this.harnessContext.mode;
+					const filesList = this.harnessContext.injectedFiles.map((f) => f.path).join("\n");
+					const harnessBlock = [
+						`[Harness 模式：${hm.emoji} ${hm.label}]`,
+						"",
+						hm.systemPromptAppend,
+						"",
+						filesList ? `相关文件（需要时请用工具读取）：\n${filesList}` : "",
+						"",
+						"请严格按照上述模式要求回复，不要偏离角色。",
+						"---",
+						"",
+					].filter(Boolean).join("\n");
+					proxyMessage = harnessBlock + proxyMessage;
+				}
 				try {
-					reply = await this.client!.proxyChat(userMessage, streamCb, onToolCall, seedHistory);
+					reply = await this.client!.proxyChat(proxyMessage, streamCb, onToolCall, seedHistory);
 					actualSource = "proxy";
 				} catch (proxyErr) {
 					if (this.plugin.settings.proxyFallbackToApi && this.plugin.getEffectiveApiKey()) {

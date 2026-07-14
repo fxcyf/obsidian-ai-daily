@@ -954,7 +954,7 @@ export class ChatView extends ItemView {
 
 		const masthead = welcomeEl.createDiv({ cls: "ai-daily-welcome-masthead" });
 		const glyph = masthead.createDiv({ cls: "ai-daily-welcome-glyph" });
-		setIcon(glyph, "brain-circuit");
+		glyph.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 0 0-3 3 3 3 0 0 0-2 5.2A2.5 2.5 0 0 0 9 18a3 3 0 0 0 3 1 3 3 0 0 0 3-1 2.5 2.5 0 0 0 2-4.8A3 3 0 0 0 15 8a3 3 0 0 0-3-3Z"/><path d="M12 5v14"/></svg>';
 		const titleRow = masthead.createEl("h1", { cls: "ai-daily-welcome-title" });
 		titleRow.createSpan({ text: "Cortex" });
 		titleRow.createSpan({ cls: "ai-daily-welcome-ver", text: `v${this.plugin.manifest.version}` });
@@ -1016,35 +1016,22 @@ export class ChatView extends ItemView {
 							return { mode, injectedFiles: resolvedFiles } as HarnessContext;
 						};
 
-						const isQuick = mode.actions.length === 1;
-						const btnCls = isQuick ? "ai-daily-welcome-mode quick" : "ai-daily-welcome-mode";
-						const btn = grid.createEl("button", { cls: btnCls });
-						btn.createSpan({ cls: "ai-daily-welcome-mode-emoji", text: mode.emoji });
-						btn.createSpan({ cls: "ai-daily-welcome-mode-name", text: mode.label });
+						const boltSvg = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>';
 
-						if (isQuick) {
-							const bolt = btn.createSpan({ cls: "ai-daily-welcome-mode-bolt" });
-							bolt.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>';
-							btn.addEventListener("click", () => {
-								const ctx = resolveContext();
-								this.startWithContext(ctx);
-								this.inputEl.value = mode.actions[0].prompt;
-								void this.handleSend();
-							});
-						} else if (mode.actions.length > 1) {
-							btn.addEventListener("click", () => {
-								this.startWithContext(resolveContext());
-							});
-							const actionsEl = grid.createDiv({ cls: "ai-daily-welcome-mode-actions" });
+						if (mode.actions.length >= 1) {
 							for (const action of mode.actions) {
-								const actionBtn = actionsEl.createEl("button", { cls: "ai-daily-welcome-mode-action" });
+								const card = grid.createEl("button", { cls: "ai-daily-welcome-mode quick" });
+								const icon = action.icon || mode.emoji;
 								if (action.icon) {
-									const iconEl = actionBtn.createSpan({ cls: "ai-daily-welcome-mode-action-icon" });
+									const iconEl = card.createSpan({ cls: "ai-daily-welcome-mode-emoji ai-daily-welcome-mode-emoji--icon" });
 									setIcon(iconEl, action.icon);
+								} else {
+									card.createSpan({ cls: "ai-daily-welcome-mode-emoji", text: mode.emoji });
 								}
-								actionBtn.createSpan({ text: action.label });
-								actionBtn.addEventListener("click", (e) => {
-									e.stopPropagation();
+								card.createSpan({ cls: "ai-daily-welcome-mode-name", text: action.label });
+								const bolt = card.createSpan({ cls: "ai-daily-welcome-mode-bolt" });
+								bolt.innerHTML = boltSvg;
+								card.addEventListener("click", () => {
 									const ctx = resolveContext();
 									this.startWithContext(ctx);
 									this.inputEl.value = action.prompt;
@@ -1052,6 +1039,9 @@ export class ChatView extends ItemView {
 								});
 							}
 						} else {
+							const btn = grid.createEl("button", { cls: "ai-daily-welcome-mode" });
+							btn.createSpan({ cls: "ai-daily-welcome-mode-emoji", text: mode.emoji });
+							btn.createSpan({ cls: "ai-daily-welcome-mode-name", text: mode.label });
 							btn.addEventListener("click", () => {
 								this.startWithContext(resolveContext());
 							});

@@ -425,18 +425,18 @@
 
 .ai-daily-welcome-masthead {
 	text-align: center;
-	padding: 48px 0 32px;
+	padding: 56px 0 36px;
 }
 
 .ai-daily-welcome-glyph {
-	width: 34px;
-	height: 34px;
-	margin: 0 auto 16px;
+	width: 36px;
+	height: 36px;
+	margin: 0 auto 18px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: 9px;
+	border-radius: 10px;
 	color: var(--interactive-accent);
 }
 
@@ -446,7 +446,7 @@
 }
 
 .ai-daily-welcome-title {
-	font-size: 21px;
+	font-size: 22px;
 	font-weight: 600;
 	letter-spacing: -0.01em;
 	display: flex;
@@ -463,7 +463,7 @@
 }
 
 .ai-daily-welcome-hint {
-	margin-top: 9px;
+	margin-top: 10px;
 	font-size: 13.5px;
 	color: var(--text-muted);
 }
@@ -475,7 +475,7 @@
 }
 
 .ai-daily-welcome-group {
-	margin-bottom: 22px;
+	margin-bottom: 24px;
 }
 
 .ai-daily-welcome-group-label {
@@ -502,7 +502,7 @@
 .ai-daily-welcome-grid {
 	display: grid;
 	grid-template-columns: repeat(2, 1fr);
-	gap: 8px;
+	gap: 9px;
 }
 
 @media (min-width: 460px) {
@@ -513,13 +513,13 @@
 
 .ai-daily-welcome-mode {
 	position: relative;
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border-hover);
+	background: rgba(var(--mono-rgb-100), 0.06);
+	border: 1px solid rgba(var(--mono-rgb-100), 0.06);
 	border-radius: 9px;
-	padding: 12px;
+	padding: 13px;
 	display: flex;
 	align-items: center;
-	gap: 9px;
+	gap: 10px;
 	cursor: pointer;
 	transition: border-color 0.14s ease, background 0.14s ease, transform 0.14s ease;
 	text-align: left;
@@ -530,8 +530,8 @@
 }
 
 .ai-daily-welcome-mode:hover {
-	border-color: var(--background-modifier-border-focus);
-	background: var(--background-modifier-hover);
+	border-color: rgba(var(--mono-rgb-100), 0.12);
+	background: rgba(var(--mono-rgb-100), 0.1);
 }
 
 .ai-daily-welcome-mode:active {
@@ -549,6 +549,18 @@
 	flex-shrink: 0;
 }
 
+.ai-daily-welcome-mode-emoji--icon {
+	font-size: inherit;
+	display: flex;
+	align-items: center;
+	color: var(--text-muted);
+}
+
+.ai-daily-welcome-mode-emoji--icon svg {
+	width: 17px;
+	height: 17px;
+}
+
 .ai-daily-welcome-mode-name {
 	font-size: 13.5px;
 	font-weight: 500;
@@ -557,7 +569,7 @@
 	text-overflow: ellipsis;
 }
 
-/* ── Quick mode (single-action, auto-send) ── */
+/* ── Quick mode (auto-send on click) ── */
 
 .ai-daily-welcome-mode.quick {
 	padding-right: 28px;
@@ -590,46 +602,6 @@
 	border-color: transparent var(--interactive-accent) transparent transparent;
 	border-radius: 0 9px 0 0;
 	opacity: 0.14;
-}
-
-/* ── Mode sub-actions (multi-action modes) ── */
-
-.ai-daily-welcome-mode-actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 4px;
-	grid-column: 1 / -1;
-	padding-left: 4px;
-}
-
-.ai-daily-welcome-mode-action {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	padding: 3px 9px;
-	border-radius: 5px;
-	font-size: 11px;
-	color: var(--text-muted);
-	cursor: pointer;
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
-	font-family: inherit;
-	transition: background 0.14s, color 0.14s;
-}
-
-.ai-daily-welcome-mode-action:hover {
-	background: var(--background-modifier-hover);
-	color: var(--text-normal);
-}
-
-.ai-daily-welcome-mode-action-icon {
-	display: flex;
-	align-items: center;
-}
-
-.ai-daily-welcome-mode-action-icon svg {
-	width: 12px;
-	height: 12px;
 }
 
 /* ── Global tools bar ── */

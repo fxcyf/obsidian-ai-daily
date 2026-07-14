@@ -24,6 +24,7 @@ import { FeedTools } from "./feed-tools";
 import { buildSystemPrompt } from "./system-prompt";
 import type { PromptTemplate } from "./settings";
 import { loadProjectIndex, parseModesFromContent, resolveFileEntries, type HarnessContext } from "./harness-view";
+import { WorkspaceStudio } from "./workspace-studio";
 import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
 import type { PreparedImage } from "./image-tools";
 import { distillConversation, prepareDistillation, prepareHealthFix, type HealthCheckResult } from "./knowledge-agent";
@@ -217,6 +218,8 @@ export class ChatView extends ItemView {
 	private mentionPopupEl: HTMLElement | null = null;
 	private mentionStartPos: number | null = null;
 	private mentionCursorPos: number | null = null;
+	private studioEl: HTMLElement | null = null;
+	private studio: WorkspaceStudio | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AIDailyChat) {
 		super(leaf);
@@ -289,6 +292,13 @@ export class ChatView extends ItemView {
 			const spacer = this.headerEl.createDiv();
 			spacer.style.flex = "1";
 		}
+
+		const studioBtn = this.headerEl.createDiv({
+			cls: "ai-daily-header-btn",
+			attr: { "aria-label": "Workspace Studio", title: "Workspace Studio" },
+		});
+		setIcon(studioBtn, "layout-grid");
+		studioBtn.addEventListener("click", () => this.toggleStudio());
 
 		const newChatBtn = this.headerEl.createDiv({
 			cls: "ai-daily-header-btn",
@@ -963,6 +973,7 @@ export class ChatView extends ItemView {
 		this.buildWelcomeHarness(welcomeEl);
 
 		const tools: { icon: string; label: string; action: () => void }[] = [
+			{ icon: "layout-grid", label: "Studio", action: () => void this.openStudio() },
 			{ icon: "history", label: "历史", action: () => this.openHistoryPanel() },
 			{ icon: "heart-pulse", label: "Wiki 检查", action: () => this.plugin.runWikiHealthCheck() },
 		];
@@ -976,6 +987,50 @@ export class ChatView extends ItemView {
 		}
 
 		this.updateTokenBar();
+	}
+
+	private toggleStudio(): void {
+		if (this.studioEl) {
+			this.closeStudio();
+		} else {
+			void this.openStudio();
+		}
+	}
+
+	private async openStudio(): Promise<void> {
+		if (this.studioEl) return;
+		this.messagesEl.style.display = "none";
+		this.inputAreaEl.style.display = "none";
+		this.tokenBarEl.style.display = "none";
+
+		this.studioEl = this.chatContainerEl.createDiv({ cls: "ai-daily-studio-panel" });
+		this.studio = new WorkspaceStudio(this.studioEl, this.plugin, {
+			onStartWithContext: (ctx) => {
+				this.closeStudio();
+				this.startWithContext(ctx);
+			},
+			onOpenSession: (id) => {
+				this.closeStudio();
+				void this.loadSession(id);
+			},
+			onStartFresh: () => {
+				this.closeStudio();
+				this.clearChat();
+			},
+			onClose: () => this.closeStudio(),
+		});
+		await this.studio.render();
+	}
+
+	private closeStudio(): void {
+		if (!this.studioEl) return;
+		this.studio?.destroy();
+		this.studio = null;
+		this.studioEl.remove();
+		this.studioEl = null;
+		this.messagesEl.style.display = "";
+		this.inputAreaEl.style.display = "";
+		this.tokenBarEl.style.display = "";
 	}
 
 	private buildWelcomeHarness(welcomeEl: HTMLElement): void {
@@ -1013,7 +1068,7 @@ export class ChatView extends ItemView {
 								return r;
 							};
 							const resolvedFiles = resolveFileEntries(mode.files, this.app, resolveVars);
-							return { mode, injectedFiles: resolvedFiles } as HarnessContext;
+							return { mode, injectedFiles: resolvedFiles, workspace: project.name } as HarnessContext;
 						};
 
 						const boltSvg = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>';
@@ -1603,6 +1658,7 @@ export class ChatView extends ItemView {
 			proxyTaskId: this.client?.getProxyTaskId(),
 			harnessContext: this.harnessContext ?? undefined,
 			lastMode: this.lastMode ?? undefined,
+			workspace: this.harnessContext?.workspace ?? existing?.workspace,
 		};
 		try {
 			await saveChatSession(this.app.vault, chatHistoryFolder, file);
@@ -2637,14 +2693,42 @@ export class ChatView extends ItemView {
 
 		const listEl = overlay.createDiv({ cls: "ai-daily-history-list" });
 
+		const expandedGroups = new Set<string>();
+
 		const renderList = (items: ChatSessionFile[]) => {
 			listEl.empty();
+
+			if (items.length === 0) {
+				listEl.createDiv({
+					cls: "ai-daily-history-empty",
+					text: "暂无历史会话",
+				});
+				return;
+			}
+
+			const groups = new Map<string, ChatSessionFile[]>();
 			for (const s of items) {
+				const key = s.workspace || s.harnessContext?.workspace || "未分类";
+				const arr = groups.get(key) ?? [];
+				arr.push(s);
+				groups.set(key, arr);
+			}
+
+			const orderedKeys = Array.from(groups.keys()).sort((a, b) => {
+				if (a === "未分类") return 1;
+				if (b === "未分类") return -1;
+				return a.localeCompare(b);
+			});
+
+			const renderSession = (s: ChatSessionFile) => {
 				const row = listEl.createDiv({ cls: "ai-daily-history-row" });
 				const info = row.createDiv({ cls: "ai-daily-history-row-info" });
+				const modeLabel = s.harnessContext?.mode
+					? `${s.harnessContext.mode.emoji} ${s.harnessContext.mode.label} · `
+					: "";
 				info.createDiv({
 					cls: "ai-daily-history-row-title",
-					text: s.title || s.id,
+					text: `${modeLabel}${s.title || s.id}`,
 				});
 				info.createDiv({
 					cls: "ai-daily-history-row-meta",
@@ -2677,10 +2761,7 @@ export class ChatView extends ItemView {
 							renderList(
 								sessions.filter((x) =>
 									search.value
-										? x.title
-												.toLowerCase()
-												.includes(search.value.toLowerCase()) ||
-										  x.id.toLowerCase().includes(search.value.toLowerCase())
+										? matchSession(x, search.value.toLowerCase())
 										: true
 								)
 							);
@@ -2688,13 +2769,44 @@ export class ChatView extends ItemView {
 						}
 					).open();
 				});
-			}
-			if (items.length === 0) {
-				listEl.createDiv({
-					cls: "ai-daily-history-empty",
-					text: "暂无历史会话",
+			};
+
+			const DEFAULT_LIMIT = 3;
+
+			for (const key of orderedKeys) {
+				const groupSessions = groups.get(key) ?? [];
+				const isExpanded = expandedGroups.has(key) || !!search.value;
+
+				const groupEl = listEl.createDiv({ cls: "ai-daily-history-group" });
+				const labelEl = groupEl.createDiv({ cls: "ai-daily-history-group-label" });
+				labelEl.createSpan({ text: key });
+				labelEl.createSpan({
+					cls: "ai-daily-history-group-count",
+					text: `${groupSessions.length}`,
 				});
+
+				const shown = isExpanded ? groupSessions : groupSessions.slice(0, DEFAULT_LIMIT);
+				for (const s of shown) renderSession(s);
+
+				if (!isExpanded && groupSessions.length > DEFAULT_LIMIT) {
+					const more = listEl.createDiv({
+						cls: "ai-daily-history-group-more",
+						text: `查看更多 (${groupSessions.length - DEFAULT_LIMIT})`,
+					});
+					more.addEventListener("click", () => {
+						expandedGroups.add(key);
+						renderList(items);
+					});
+				}
 			}
+		};
+
+		const matchSession = (s: ChatSessionFile, q: string): boolean => {
+			if (s.title.toLowerCase().includes(q)) return true;
+			if (s.id.toLowerCase().includes(q)) return true;
+			if ((s.workspace || "").toLowerCase().includes(q)) return true;
+			if ((s.harnessContext?.mode.label || "").toLowerCase().includes(q)) return true;
+			return false;
 		};
 
 		renderList(sessions);
@@ -2705,13 +2817,7 @@ export class ChatView extends ItemView {
 				renderList(sessions);
 				return;
 			}
-			renderList(
-				sessions.filter(
-					(s) =>
-						s.title.toLowerCase().includes(q) ||
-						s.id.toLowerCase().includes(q)
-				)
-			);
+			renderList(sessions.filter((s) => matchSession(s, q)));
 		});
 
 		overlay.addEventListener("click", (ev) => {

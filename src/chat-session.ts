@@ -21,6 +21,7 @@ export interface PersistedHarnessContext {
 		actions?: { label: string; icon?: string; prompt: string }[];
 	};
 	injectedFiles: { path: string }[];
+	workspace?: string;
 }
 
 export interface ChatSessionFile {
@@ -35,6 +36,7 @@ export interface ChatSessionFile {
 	proxyTaskId?: string;
 	harnessContext?: PersistedHarnessContext;
 	lastMode?: MessageSource;
+	workspace?: string;
 }
 
 export function newSessionId(): string {

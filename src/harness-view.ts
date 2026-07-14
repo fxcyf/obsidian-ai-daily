@@ -32,6 +32,7 @@ export const HARNESS_VIEW_TYPE = "ai-daily-harness";
 export interface HarnessContext {
 	mode: HarnessMode;
 	injectedFiles: { path: string }[];
+	workspace?: string;
 }
 
 export interface ProjectIndex {
@@ -475,7 +476,11 @@ export class HarnessView extends ItemView {
 		if (!mode) return;
 
 		const injectedFiles = this.resolveFiles(mode.files);
-		const context: HarnessContext = { mode, injectedFiles };
+		const context: HarnessContext = {
+			mode,
+			injectedFiles,
+			workspace: this.projectIndex?.activeProject || undefined,
+		};
 		await this.plugin.startChatWithContext(context);
 	}
 

@@ -1,0 +1,566 @@
+/**
+ * Workspace Studio — a page rendered inside Chat View for managing workspaces,
+ * modes, and recent conversations per workspace.
+ *
+ * Not a standalone Obsidian View. The Chat View calls `render()` when the user
+ * clicks the Studio entry, and calls `destroy()` when returning to chat.
+ *
+ * Callbacks decouple the studio from ChatView specifics — the studio doesn't
+ * know how a mode is launched or how a session is loaded.
+ */
+
+import { App, TFile, setIcon, Menu, Modal, Setting, Notice } from "obsidian";
+import type AIDailyChat from "./main";
+import {
+	loadProjectIndex,
+	parseModesFromContent,
+	resolveFileEntries,
+	type ProjectIndex,
+	type HarnessContext,
+} from "./harness-view";
+import type { HarnessMode, HarnessModeAction } from "./settings";
+import type { ChatSessionFile } from "./chat-session";
+import { listChatSessions } from "./chat-session";
+import { serializeModesToContent } from "./modes-serializer";
+
+export interface StudioCallbacks {
+	onStartWithContext: (ctx: HarnessContext) => void;
+	onOpenSession: (sessionId: string) => void;
+	onStartFresh: () => void;
+	onClose: () => void;
+}
+
+export class WorkspaceStudio {
+	private container: HTMLElement;
+	private app: App;
+	private plugin: AIDailyChat;
+	private callbacks: StudioCallbacks;
+	private projectIndex: ProjectIndex | null = null;
+	private sessions: ChatSessionFile[] = [];
+
+	constructor(container: HTMLElement, plugin: AIDailyChat, callbacks: StudioCallbacks) {
+		this.container = container;
+		this.plugin = plugin;
+		this.app = plugin.app;
+		this.callbacks = callbacks;
+	}
+
+	async render(): Promise<void> {
+		this.container.empty();
+		this.container.addClass("ws-studio");
+
+		await this.loadData();
+		this.buildHeader();
+		this.buildWorkspaceSelector();
+		this.buildModes();
+		this.buildRecent();
+		this.buildStartFresh();
+	}
+
+	private async loadData(): Promise<void> {
+		this.projectIndex = await loadProjectIndex(
+			this.app.vault,
+			this.app.metadataCache,
+			this.plugin.settings.harnessProjectsFolder,
+		);
+		this.sessions = await listChatSessions(
+			this.app.vault,
+			this.plugin.settings.chatHistoryFolder,
+		);
+	}
+
+	private buildHeader(): void {
+		const head = this.container.createDiv({ cls: "ws-studio-head" });
+		const back = head.createEl("button", { cls: "ws-studio-back" });
+		setIcon(back.createSpan({ cls: "ws-studio-back-icon" }), "arrow-left");
+		back.createSpan({ text: "返回对话" });
+		back.addEventListener("click", () => this.callbacks.onClose());
+
+		head.createDiv({ cls: "ws-studio-title", text: "Workspace Studio" });
+	}
+
+	private buildWorkspaceSelector(): void {
+		const section = this.container.createDiv({ cls: "ws-studio-section" });
+		section.createDiv({ cls: "ws-studio-section-label", text: "WORKSPACES" });
+
+		const scroller = section.createDiv({ cls: "ws-studio-ws-scroller" });
+		const projects = this.projectIndex?.projects ?? [];
+		const active = this.projectIndex?.activeProject;
+
+		for (const p of projects) {
+			const card = scroller.createEl("button", { cls: "ws-studio-ws-card" });
+			if (p.name === active) card.addClass("active");
+			card.createDiv({ cls: "ws-studio-ws-name", text: p.name });
+			const meta = card.createDiv({ cls: "ws-studio-ws-meta" });
+			const count = this.sessions.filter(
+				(s) => (s.workspace || s.harnessContext?.workspace) === p.name,
+			).length;
+			meta.createSpan({ text: `${count} 对话` });
+
+			card.addEventListener("click", () => {
+				void this.switchWorkspace(p.name);
+			});
+
+			card.addEventListener("contextmenu", (ev) => {
+				ev.preventDefault();
+				this.showWorkspaceMenu(p.name, ev as MouseEvent);
+			});
+		}
+
+		const addCard = scroller.createEl("button", { cls: "ws-studio-ws-card ws-studio-ws-add" });
+		setIcon(addCard.createSpan({ cls: "ws-studio-ws-add-icon" }), "plus");
+		addCard.createDiv({ text: "新建" });
+		addCard.addEventListener("click", () => this.openCreateWorkspaceModal());
+	}
+
+	private buildModes(): void {
+		const section = this.container.createDiv({ cls: "ws-studio-section" });
+		const label = section.createDiv({ cls: "ws-studio-section-label" });
+		label.createSpan({ text: "MODES" });
+
+		const active = this.projectIndex?.activeProject;
+		if (active) {
+			const editBtn = label.createSpan({ cls: "ws-studio-section-action" });
+			setIcon(editBtn, "pencil");
+			editBtn.setAttribute("title", "编辑 modes");
+			editBtn.addEventListener("click", () => this.openEditWorkspaceModal(active));
+		}
+
+		const modes = this.projectIndex?.modes ?? [];
+		if (modes.length === 0) {
+			section.createDiv({
+				cls: "ws-studio-empty",
+				text: active ? "当前 workspace 没有 modes.md" : "请选择一个 workspace",
+			});
+			return;
+		}
+
+		const grid = section.createDiv({ cls: "ws-studio-mode-grid" });
+		for (const mode of modes) {
+			const resolveContext = (): HarnessContext => {
+				const resolveVars = (p: string) => {
+					let r = p;
+					r = r.replace(/\{active_project\}/g, this.projectIndex?.activeProject || "");
+					r = r.replace(/\{active_work_context\}/g, this.projectIndex?.activeWorkContext || "");
+					return r;
+				};
+				return {
+					mode,
+					injectedFiles: resolveFileEntries(mode.files, this.app, resolveVars),
+					workspace: this.projectIndex?.activeProject,
+				};
+			};
+
+			if (mode.actions.length >= 1) {
+				for (const action of mode.actions) {
+					const card = grid.createEl("button", { cls: "ws-studio-mode-card quick" });
+					if (action.icon) {
+						const iconEl = card.createSpan({ cls: "ws-studio-mode-emoji ws-studio-mode-emoji--icon" });
+						setIcon(iconEl, action.icon);
+					} else {
+						card.createSpan({ cls: "ws-studio-mode-emoji", text: mode.emoji });
+					}
+					card.createSpan({ cls: "ws-studio-mode-name", text: action.label });
+					const bolt = card.createSpan({ cls: "ws-studio-mode-bolt" });
+					bolt.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>';
+					card.addEventListener("click", () => {
+						const ctx = resolveContext();
+						this.callbacks.onStartWithContext(ctx);
+					});
+				}
+			} else {
+				const card = grid.createEl("button", { cls: "ws-studio-mode-card" });
+				card.createSpan({ cls: "ws-studio-mode-emoji", text: mode.emoji });
+				card.createSpan({ cls: "ws-studio-mode-name", text: mode.label });
+				card.addEventListener("click", () => {
+					this.callbacks.onStartWithContext(resolveContext());
+				});
+			}
+		}
+	}
+
+	private buildRecent(): void {
+		const active = this.projectIndex?.activeProject;
+		if (!active) return;
+
+		const section = this.container.createDiv({ cls: "ws-studio-section" });
+		section.createDiv({ cls: "ws-studio-section-label", text: "RECENT" });
+
+		const wsSessions = this.sessions.filter(
+			(s) => (s.workspace || s.harnessContext?.workspace) === active,
+		).slice(0, 5);
+
+		if (wsSessions.length === 0) {
+			section.createDiv({ cls: "ws-studio-empty", text: "该 workspace 暂无对话" });
+			return;
+		}
+
+		const list = section.createDiv({ cls: "ws-studio-recent-list" });
+		for (const s of wsSessions) {
+			const row = list.createDiv({ cls: "ws-studio-recent-row" });
+			const modeLabel = s.harnessContext?.mode
+				? `${s.harnessContext.mode.emoji} ${s.harnessContext.mode.label} · `
+				: "";
+			row.createDiv({
+				cls: "ws-studio-recent-title",
+				text: `${modeLabel}${s.title || s.id}`,
+			});
+			row.createDiv({
+				cls: "ws-studio-recent-meta",
+				text: s.updated?.slice(0, 16) ?? "",
+			});
+			row.addEventListener("click", () => this.callbacks.onOpenSession(s.id));
+		}
+	}
+
+	private buildStartFresh(): void {
+		const wrap = this.container.createDiv({ cls: "ws-studio-fresh-wrap" });
+		const btn = wrap.createEl("button", { cls: "ws-studio-fresh-btn" });
+		setIcon(btn.createSpan({ cls: "ws-studio-fresh-icon" }), "play");
+		btn.createSpan({ text: "开始新对话" });
+		btn.addEventListener("click", () => this.callbacks.onStartFresh());
+	}
+
+	private async switchWorkspace(name: string): Promise<void> {
+		const projectsFolder = this.plugin.settings.harnessProjectsFolder;
+		const file = this.app.vault.getAbstractFileByPath(`${projectsFolder}/_INDEX.md`);
+		if (!(file instanceof TFile)) return;
+		let content = await this.app.vault.read(file);
+		if (/^active_project:/m.test(content)) {
+			content = content.replace(/^(active_project:\s*).*$/m, `$1${name}`);
+		} else {
+			content = `---\nactive_project: ${name}\n---\n\n${content}`;
+		}
+		await this.app.vault.modify(file, content);
+		await this.render();
+	}
+
+	private showWorkspaceMenu(name: string, ev: MouseEvent): void {
+		const menu = new Menu();
+		menu.addItem((it) =>
+			it.setTitle("编辑").setIcon("pencil").onClick(() => this.openEditWorkspaceModal(name)),
+		);
+		menu.addItem((it) =>
+			it.setTitle("从 Studio 移除").setIcon("archive").onClick(() => this.archiveWorkspace(name)),
+		);
+		menu.showAtMouseEvent(ev);
+	}
+
+	private openCreateWorkspaceModal(): void {
+		new CreateWorkspaceModal(this.app, this.plugin, async (name) => {
+			await this.createWorkspace(name);
+			await this.render();
+		}).open();
+	}
+
+	private async createWorkspace(name: string): Promise<void> {
+		const projectsFolder = this.plugin.settings.harnessProjectsFolder;
+		const adapter = this.app.vault.adapter;
+		const wsFolder = `${projectsFolder}/${name}`;
+
+		if (!(await adapter.exists(projectsFolder))) {
+			await adapter.mkdir(projectsFolder);
+		}
+		if (!(await adapter.exists(wsFolder))) {
+			await adapter.mkdir(wsFolder);
+		}
+
+		const modesPath = `${wsFolder}/modes.md`;
+		if (!(await adapter.exists(modesPath))) {
+			const template = defaultModesTemplate();
+			await adapter.write(modesPath, template);
+		}
+
+		const indexPath = `${projectsFolder}/_INDEX.md`;
+		let indexContent: string;
+		if (await adapter.exists(indexPath)) {
+			indexContent = await adapter.read(indexPath);
+		} else {
+			indexContent = `---\nactive_project: ${name}\nactive_work_context: \n---\n\n| 项目 | 状态 | 来源 | 最近更新 |\n|------|------|------|----------|\n`;
+		}
+
+		const today = new Date().toISOString().slice(0, 10);
+		const newRow = `| ${name} | active | manual | ${today} |`;
+		if (!indexContent.includes(`| ${name} |`)) {
+			indexContent = indexContent.trimEnd() + "\n" + newRow + "\n";
+		}
+		if (/^active_project:/m.test(indexContent)) {
+			indexContent = indexContent.replace(/^(active_project:\s*).*$/m, `$1${name}`);
+		}
+		await adapter.write(indexPath, indexContent);
+
+		new Notice(`已创建 workspace「${name}」`);
+	}
+
+	private async archiveWorkspace(name: string): Promise<void> {
+		const projectsFolder = this.plugin.settings.harnessProjectsFolder;
+		const indexPath = `${projectsFolder}/_INDEX.md`;
+		const adapter = this.app.vault.adapter;
+		if (!(await adapter.exists(indexPath))) return;
+		let content = await adapter.read(indexPath);
+		const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		const rowRe = new RegExp(`^\\|\\s*${escaped}\\s*\\|.*$\\n?`, "m");
+		content = content.replace(rowRe, "");
+		await adapter.write(indexPath, content);
+		new Notice(`已从 Studio 移除「${name}」（文件保留）`);
+		await this.render();
+	}
+
+	private openEditWorkspaceModal(name: string): void {
+		new EditWorkspaceModal(this.app, this.plugin, name, async () => {
+			await this.render();
+		}).open();
+	}
+
+	destroy(): void {
+		this.container.empty();
+		this.container.removeClass("ws-studio");
+	}
+}
+
+function defaultModesTemplate(): string {
+	return `\`\`\`yaml modes
+- id: default
+  label: 默认
+  emoji: "💬"
+  files: []
+  actions: []
+\`\`\`
+
+## default
+
+You are a helpful assistant.
+`;
+}
+
+// ── Create Workspace Modal ───────────────────────────────
+
+class CreateWorkspaceModal extends Modal {
+	private plugin: AIDailyChat;
+	private onSubmit: (name: string) => void;
+	private nameValue = "";
+
+	constructor(app: App, plugin: AIDailyChat, onSubmit: (name: string) => void) {
+		super(app);
+		this.plugin = plugin;
+		this.onSubmit = onSubmit;
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		contentEl.createEl("h3", { text: "新建 Workspace" });
+
+		new Setting(contentEl).setName("名称").addText((text) => {
+			text.setPlaceholder("例如: my-project").onChange((v) => {
+				this.nameValue = v.trim();
+			});
+			text.inputEl.focus();
+		});
+
+		new Setting(contentEl).addButton((btn) =>
+			btn.setButtonText("创建").setCta().onClick(async () => {
+				const name = this.nameValue.trim();
+				if (!name) {
+					new Notice("请输入 workspace 名称");
+					return;
+				}
+				if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+					new Notice("名称只允许字母、数字、下划线、连字符");
+					return;
+				}
+				this.onSubmit(name);
+				this.close();
+			}),
+		);
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
+}
+
+// ── Edit Workspace Modal ─────────────────────────────────
+
+class EditWorkspaceModal extends Modal {
+	private plugin: AIDailyChat;
+	private workspaceName: string;
+	private modes: HarnessMode[] = [];
+	private onSave: () => Promise<void>;
+
+	constructor(
+		app: App,
+		plugin: AIDailyChat,
+		workspaceName: string,
+		onSave: () => Promise<void>,
+	) {
+		super(app);
+		this.plugin = plugin;
+		this.workspaceName = workspaceName;
+		this.onSave = onSave;
+	}
+
+	async onOpen(): Promise<void> {
+		const { contentEl } = this;
+		contentEl.addClass("ws-studio-edit-modal");
+		contentEl.empty();
+
+		contentEl.createEl("h3", { text: `编辑: ${this.workspaceName}` });
+
+		const modesPath = `${this.plugin.settings.harnessProjectsFolder}/${this.workspaceName}/modes.md`;
+		const file = this.app.vault.getAbstractFileByPath(modesPath);
+		if (file instanceof TFile) {
+			const content = await this.app.vault.read(file);
+			this.modes = parseModesFromContent(content);
+		}
+
+		this.renderModesList();
+
+		const addBtn = contentEl.createEl("button", { text: "+ 添加新 Mode", cls: "ws-studio-edit-add" });
+		addBtn.addEventListener("click", () => {
+			this.modes.push({
+				id: `mode-${this.modes.length + 1}`,
+				label: "新模式",
+				emoji: "📋",
+				files: [],
+				systemPromptAppend: "",
+				actions: [],
+			});
+			this.renderModesList();
+		});
+
+		const footer = contentEl.createDiv({ cls: "ws-studio-edit-footer" });
+		const saveBtn = footer.createEl("button", { text: "保存", cls: "mod-cta" });
+		saveBtn.addEventListener("click", async () => {
+			await this.save();
+			this.close();
+		});
+		const cancelBtn = footer.createEl("button", { text: "取消" });
+		cancelBtn.addEventListener("click", () => this.close());
+
+		const danger = contentEl.createDiv({ cls: "ws-studio-edit-danger" });
+		danger.createDiv({ cls: "ws-studio-edit-danger-label", text: "⚠️ 危险区域" });
+		const deleteBtn = danger.createEl("button", {
+			text: "从 Studio 移除该 Workspace",
+			cls: "ws-studio-edit-delete",
+		});
+		deleteBtn.addEventListener("click", async () => {
+			const projectsFolder = this.plugin.settings.harnessProjectsFolder;
+			const indexPath = `${projectsFolder}/_INDEX.md`;
+			const adapter = this.app.vault.adapter;
+			if (!(await adapter.exists(indexPath))) return;
+			let content = await adapter.read(indexPath);
+			const escaped = this.workspaceName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+			const rowRe = new RegExp(`^\\|\\s*${escaped}\\s*\\|.*$\\n?`, "m");
+			content = content.replace(rowRe, "");
+			await adapter.write(indexPath, content);
+			new Notice(`已从 Studio 移除「${this.workspaceName}」`);
+			this.close();
+			await this.onSave();
+		});
+	}
+
+	private renderModesList(): void {
+		let listEl = this.contentEl.querySelector<HTMLElement>(".ws-studio-edit-modes");
+		if (!listEl) {
+			listEl = this.contentEl.createDiv({ cls: "ws-studio-edit-modes" });
+			const addBtn = this.contentEl.querySelector(".ws-studio-edit-add");
+			if (addBtn && listEl && listEl.parentElement === this.contentEl) {
+				this.contentEl.insertBefore(listEl, addBtn);
+			}
+		}
+		listEl.empty();
+
+		for (let i = 0; i < this.modes.length; i++) {
+			const mode = this.modes[i];
+			const card = listEl.createDiv({ cls: "ws-studio-edit-mode" });
+
+			const head = card.createDiv({ cls: "ws-studio-edit-mode-head" });
+			const emojiInput = head.createEl("input", { type: "text", cls: "ws-studio-edit-emoji" });
+			emojiInput.value = mode.emoji;
+			emojiInput.addEventListener("input", () => { mode.emoji = emojiInput.value; });
+
+			const labelInput = head.createEl("input", { type: "text", cls: "ws-studio-edit-label" });
+			labelInput.value = mode.label;
+			labelInput.addEventListener("input", () => { mode.label = labelInput.value; });
+
+			const idInput = head.createEl("input", { type: "text", cls: "ws-studio-edit-id" });
+			idInput.value = mode.id;
+			idInput.setAttribute("placeholder", "id");
+			idInput.addEventListener("input", () => { mode.id = idInput.value; });
+
+			const delBtn = head.createEl("button", { cls: "ws-studio-edit-mode-del" });
+			setIcon(delBtn, "trash-2");
+			delBtn.addEventListener("click", () => {
+				this.modes.splice(i, 1);
+				this.renderModesList();
+			});
+
+			const promptLabel = card.createEl("div", { cls: "ws-studio-edit-field-label", text: "Prompt" });
+			void promptLabel;
+			const promptArea = card.createEl("textarea", { cls: "ws-studio-edit-prompt" });
+			promptArea.value = mode.systemPromptAppend;
+			promptArea.rows = 3;
+			promptArea.addEventListener("input", () => { mode.systemPromptAppend = promptArea.value; });
+
+			const filesLabel = card.createEl("div", { cls: "ws-studio-edit-field-label", text: "Files (每行一个路径或 [[wikilink]])" });
+			void filesLabel;
+			const filesArea = card.createEl("textarea", { cls: "ws-studio-edit-files" });
+			filesArea.value = mode.files.join("\n");
+			filesArea.rows = 2;
+			filesArea.addEventListener("input", () => {
+				mode.files = filesArea.value.split("\n").map((s) => s.trim()).filter(Boolean);
+			});
+
+			card.createEl("div", { cls: "ws-studio-edit-field-label", text: "Actions" });
+			const actionsList = card.createDiv({ cls: "ws-studio-edit-actions-list" });
+			this.renderActions(actionsList, mode);
+
+			const addActionBtn = card.createEl("button", { text: "+ 添加 Action", cls: "ws-studio-edit-add-action" });
+			addActionBtn.addEventListener("click", () => {
+				mode.actions.push({ label: "新 Action", prompt: "" });
+				this.renderActions(actionsList, mode);
+			});
+		}
+	}
+
+	private renderActions(container: HTMLElement, mode: HarnessMode): void {
+		container.empty();
+		for (let j = 0; j < mode.actions.length; j++) {
+			const action = mode.actions[j];
+			const row = container.createDiv({ cls: "ws-studio-edit-action-row" });
+			const labelIn = row.createEl("input", { type: "text", cls: "ws-studio-edit-action-label" });
+			labelIn.value = action.label;
+			labelIn.setAttribute("placeholder", "label");
+			labelIn.addEventListener("input", () => { action.label = labelIn.value; });
+
+			const promptIn = row.createEl("input", { type: "text", cls: "ws-studio-edit-action-prompt" });
+			promptIn.value = action.prompt;
+			promptIn.setAttribute("placeholder", "prompt");
+			promptIn.addEventListener("input", () => { action.prompt = promptIn.value; });
+
+			const del = row.createEl("button", { cls: "ws-studio-edit-action-del" });
+			setIcon(del, "x");
+			del.addEventListener("click", () => {
+				mode.actions.splice(j, 1);
+				this.renderActions(container, mode);
+			});
+		}
+	}
+
+	private async save(): Promise<void> {
+		const modesPath = `${this.plugin.settings.harnessProjectsFolder}/${this.workspaceName}/modes.md`;
+		const content = serializeModesToContent(this.modes);
+		const adapter = this.app.vault.adapter;
+		await adapter.write(modesPath, content);
+		new Notice("已保存 modes.md");
+		await this.onSave();
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
+}
+
+// suppress unused warning for HarnessModeAction (kept for future action-icon editing)
+type _EnsureUsed = HarnessModeAction;
+void (null as unknown as _EnsureUsed);

@@ -2312,7 +2312,6 @@
 /* Edit Workspace modal */
 
 .ws-studio-edit-modal {
-	min-width: 520px;
 	max-width: 720px;
 }
 
@@ -2320,7 +2319,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
-	margin-top: 12px;
+	margin-bottom: 12px;
 	max-height: 60vh;
 	overflow-y: auto;
 	padding-right: 4px;
@@ -2329,134 +2328,60 @@
 .ws-studio-edit-mode {
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 8px;
-	padding: 10px;
+	padding: 8px;
 	background: var(--background-secondary);
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
 }
 
-.ws-studio-edit-mode-head {
-	display: flex;
-	flex-wrap: nowrap;
-	gap: 4px;
-	align-items: center;
+.ws-studio-edit-mode .setting-item {
+	border-top: none;
+	padding: 4px 0;
+}
+
+.ws-studio-edit-mode-head .setting-item-info {
+	flex: 0 0 auto;
 }
 
 .ws-studio-edit-emoji {
-	width: 36px !important;
-	max-width: 36px !important;
-	min-width: 36px !important;
-	box-sizing: border-box;
+	width: 40px !important;
 	text-align: center;
-	padding: 4px 2px;
 	font-size: 16px;
-	border: 1px solid var(--background-modifier-border);
-	background: var(--background-primary);
-	color: var(--text-normal);
-	border-radius: 5px;
-	flex: 0 0 36px;
-}
-
-.ws-studio-edit-label {
-	flex: 1 1 auto;
-	min-width: 0;
-	padding: 4px 6px;
-	font-size: 13px;
-	border: 1px solid var(--background-modifier-border);
-	background: var(--background-primary);
-	color: var(--text-normal);
-	border-radius: 5px;
-	box-sizing: border-box;
 }
 
 .ws-studio-edit-id {
 	width: 72px !important;
-	max-width: 72px !important;
-	min-width: 72px !important;
-	flex: 0 0 72px;
-	box-sizing: border-box;
-	padding: 4px 6px;
 	font-size: 11px;
-	border: 1px solid var(--background-modifier-border);
-	background: var(--background-primary);
-	color: var(--text-muted);
-	border-radius: 5px;
 	font-family: monospace;
+	color: var(--text-muted);
 }
 
-.ws-studio-edit-icon-btn {
-	-webkit-appearance: none !important;
-	appearance: none !important;
-	background: transparent !important;
-	border: 1px solid var(--background-modifier-border) !important;
-	color: var(--text-muted) !important;
-	cursor: pointer;
-	padding: 0 !important;
-	margin: 0 !important;
-	border-radius: 6px !important;
-	display: flex !important;
-	align-items: center;
-	justify-content: center;
-	width: 30px !important;
-	height: 30px !important;
-	min-width: 30px !important;
-	max-width: 30px !important;
-	min-height: 30px !important;
-	max-height: 30px !important;
-	flex: 0 0 30px;
-	box-sizing: border-box;
-	box-shadow: none !important;
+.ws-studio-edit-prompt-row {
+	flex-direction: column !important;
+	align-items: flex-start !important;
 }
 
-.ws-studio-edit-icon-btn:hover {
-	color: var(--text-normal) !important;
-	border-color: var(--text-muted) !important;
-	background: var(--background-modifier-hover) !important;
+.ws-studio-edit-prompt-row .setting-item-info {
+	align-self: flex-start;
 }
 
-.ws-studio-edit-icon-btn.danger:hover {
-	color: var(--text-error) !important;
-	border-color: var(--text-error) !important;
-	background: var(--background-modifier-error) !important;
-}
-
-.ws-studio-edit-icon-btn svg {
-	width: 14px !important;
-	height: 14px !important;
-	color: inherit;
-}
-
-.ws-studio-edit-field-label {
-	font-size: 11px;
-	font-weight: 600;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
-	color: var(--text-faint);
-	margin-top: 4px;
+.ws-studio-edit-prompt-row .setting-item-control {
+	width: 100%;
 }
 
 .ws-studio-edit-prompt {
-	width: 100%;
-	padding: 8px;
+	width: 100% !important;
 	font-family: monospace;
 	font-size: 12px;
 	line-height: 1.5;
-	border: 1px solid var(--background-modifier-border);
-	background: var(--background-primary);
-	color: var(--text-normal);
-	border-radius: 5px;
 	resize: vertical;
-	min-height: 120px;
-	flex: 1;
+	min-height: 100px;
 }
 
 .ws-studio-edit-files-pills {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 6px;
-	padding: 6px 0;
-	min-height: 28px;
+	width: 100%;
+	padding: 4px 0;
 }
 
 .ws-studio-edit-files-empty {
@@ -2514,152 +2439,12 @@
 	height: 12px;
 }
 
-.ws-studio-edit-file-add {
-	-webkit-appearance: none !important;
-	appearance: none !important;
-	display: inline-flex !important;
-	align-items: center;
-	justify-content: center;
-	width: 26px !important;
-	height: 26px !important;
-	min-width: 26px !important;
-	max-width: 26px !important;
-	min-height: 26px !important;
-	max-height: 26px !important;
-	padding: 0 !important;
-	margin: 0 !important;
-	background: transparent !important;
-	border: 1px dashed var(--background-modifier-border) !important;
-	color: var(--text-faint) !important;
-	cursor: pointer;
-	border-radius: 13px !important;
-	flex-shrink: 0;
-	box-sizing: border-box;
-	box-shadow: none !important;
-}
-
-.ws-studio-edit-file-add:hover {
-	color: var(--text-normal) !important;
-	border-color: var(--text-muted) !important;
-	background: var(--background-modifier-hover) !important;
-}
-
-.ws-studio-edit-file-add svg {
-	width: 14px !important;
-	height: 14px !important;
-	color: inherit;
-}
-
-.ws-studio-edit-actions-list {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
-.ws-studio-edit-action-row {
-	display: flex;
-	gap: 6px;
-	align-items: center;
+.ws-studio-edit-actions-list .setting-item {
+	border-top: none;
+	padding: 4px 0;
 }
 
 .ws-studio-edit-action-label {
-	width: 90px !important;
-	min-width: 90px !important;
-	max-width: 90px !important;
-	flex: 0 0 90px;
-	box-sizing: border-box;
-	padding: 5px 8px;
-	font-size: 12px;
-	border: 1px solid var(--background-modifier-border);
-	background: var(--background-primary);
-	color: var(--text-normal);
-	border-radius: 5px;
-}
-
-.ws-studio-edit-action-prompt {
-	flex: 1 1 auto;
-	min-width: 0;
-	box-sizing: border-box;
-	padding: 5px 8px;
-	font-size: 12px;
-	border: 1px solid var(--background-modifier-border);
-	background: var(--background-primary);
-	color: var(--text-normal);
-	border-radius: 5px;
-}
-
-.ws-studio-edit-add,
-.ws-studio-edit-add-action {
-	background: none;
-	border: 1px dashed var(--background-modifier-border);
-	color: var(--text-muted);
-	cursor: pointer;
-	padding: 6px;
-	border-radius: 6px;
-	font-family: inherit;
-	font-size: 12px;
-	margin-top: 6px;
-	transition: color 0.15s, border-color 0.15s, background 0.15s;
-}
-
-.ws-studio-edit-add:hover,
-.ws-studio-edit-add-action:hover {
-	color: var(--text-normal);
-	border-color: var(--text-muted);
-	background: var(--background-modifier-hover);
-}
-
-.ws-studio-edit-footer {
-	display: flex;
-	gap: 8px;
-	align-items: center;
-	justify-content: space-between;
-	margin-top: 16px;
-	padding-top: 12px;
-	border-top: 1px solid var(--background-modifier-border);
-}
-
-.ws-studio-edit-footer-right {
-	display: flex;
-	gap: 8px;
-}
-
-.ws-studio-edit-footer button {
-	font-family: inherit;
-	font-size: 13px;
-	padding: 6px 14px;
-	border-radius: 6px;
-	cursor: pointer;
-	border: 1px solid var(--background-modifier-border);
-	background: none;
-	color: var(--text-muted);
-	transition: color 0.15s, border-color 0.15s, background 0.15s;
-}
-
-.ws-studio-edit-footer button:hover {
-	color: var(--text-normal);
-	border-color: var(--text-muted);
-	background: var(--background-modifier-hover);
-}
-
-.ws-studio-edit-footer button.mod-cta {
-	background: var(--interactive-accent);
-	color: var(--text-on-accent);
-	border-color: var(--interactive-accent);
-}
-
-.ws-studio-edit-footer button.mod-cta:hover {
-	opacity: 0.9;
-	background: var(--interactive-accent);
-	border-color: var(--interactive-accent);
-}
-
-.ws-studio-edit-delete {
-	border-color: transparent;
-}
-
-.ws-studio-edit-delete:hover {
-	color: var(--text-error);
-	border-color: var(--text-error);
-	background: var(--background-modifier-error);
+	width: 80px !important;
+	flex-shrink: 0;
 }

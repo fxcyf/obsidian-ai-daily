@@ -460,56 +460,57 @@ class EditWorkspaceModal extends Modal {
 
 		this.renderModesList();
 
-		const addBtn = contentEl.createEl("button", { text: "+ 添加新 Mode", cls: "ws-studio-edit-add" });
-		addBtn.addEventListener("click", () => {
-			this.modes.push({
-				id: `mode-${this.modes.length + 1}`,
-				label: "新模式",
-				emoji: "📋",
-				files: [],
-				systemPromptAppend: "",
-				actions: [],
-			});
-			this.renderModesList();
-		});
+		new Setting(contentEl).addButton((btn) =>
+			btn.setButtonText("+ 添加新 Mode").onClick(() => {
+				this.modes.push({
+					id: `mode-${this.modes.length + 1}`,
+					label: "新模式",
+					emoji: "📋",
+					files: [],
+					systemPromptAppend: "",
+					actions: [],
+				});
+				this.renderModesList();
+			}),
+		);
 
-		const footer = contentEl.createDiv({ cls: "ws-studio-edit-footer" });
-		const deleteBtn = footer.createEl("button", {
-			text: "归档",
-			cls: "ws-studio-edit-delete",
-		});
-		deleteBtn.addEventListener("click", async () => {
-			if (!confirm(`确定要归档「${this.workspaceName}」吗？文件将保留，可随时恢复。`)) return;
-			const projectsFolder = this.plugin.settings.harnessProjectsFolder;
-			const indexPath = `${projectsFolder}/_INDEX.md`;
-			const indexFile = this.app.vault.getAbstractFileByPath(indexPath);
-			if (!(indexFile instanceof TFile)) return;
-			let content = await this.app.vault.read(indexFile);
-			const escaped = this.workspaceName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-			const rowRe = new RegExp(`^(\\|\\s*${escaped}\\s*\\|)\\s*\\w+\\s*\\|`, "m");
-			content = content.replace(rowRe, `$1 archive |`);
-			await this.app.vault.modify(indexFile, content);
-			new Notice(`已归档「${this.workspaceName}」`);
-			this.close();
-			await this.onSave();
-		});
-		const footerRight = footer.createDiv({ cls: "ws-studio-edit-footer-right" });
-		const cancelBtn = footerRight.createEl("button", { text: "取消" });
-		cancelBtn.addEventListener("click", () => this.close());
-		const saveBtn = footerRight.createEl("button", { text: "保存", cls: "mod-cta" });
-		saveBtn.addEventListener("click", async () => {
-			await this.save();
-			this.close();
-		});
+		new Setting(contentEl)
+			.addButton((btn) =>
+				btn.setButtonText("归档").setWarning().onClick(async () => {
+					if (!confirm(`确定要归档「${this.workspaceName}」吗？文件将保留，可随时恢复。`)) return;
+					const projectsFolder = this.plugin.settings.harnessProjectsFolder;
+					const indexPath = `${projectsFolder}/_INDEX.md`;
+					const indexFile = this.app.vault.getAbstractFileByPath(indexPath);
+					if (!(indexFile instanceof TFile)) return;
+					let content = await this.app.vault.read(indexFile);
+					const escaped = this.workspaceName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+					const rowRe = new RegExp(`^(\\|\\s*${escaped}\\s*\\|)\\s*\\w+\\s*\\|`, "m");
+					content = content.replace(rowRe, `$1 archive |`);
+					await this.app.vault.modify(indexFile, content);
+					new Notice(`已归档「${this.workspaceName}」`);
+					this.close();
+					await this.onSave();
+				}),
+			)
+			.addButton((btn) =>
+				btn.setButtonText("取消").onClick(() => this.close()),
+			)
+			.addButton((btn) =>
+				btn.setButtonText("保存").setCta().onClick(async () => {
+					await this.save();
+					this.close();
+				}),
+			);
 	}
 
 	private renderModesList(): void {
 		let listEl = this.contentEl.querySelector<HTMLElement>(".ws-studio-edit-modes");
 		if (!listEl) {
 			listEl = this.contentEl.createDiv({ cls: "ws-studio-edit-modes" });
-			const addBtn = this.contentEl.querySelector(".ws-studio-edit-add");
-			if (addBtn && listEl && listEl.parentElement === this.contentEl) {
-				this.contentEl.insertBefore(listEl, addBtn);
+			const settingItems = this.contentEl.querySelectorAll(":scope > .setting-item");
+			const firstSetting = settingItems[0];
+			if (firstSetting) {
+				this.contentEl.insertBefore(listEl, firstSetting);
 			}
 		}
 		listEl.empty();
@@ -518,43 +519,58 @@ class EditWorkspaceModal extends Modal {
 			const mode = this.modes[i];
 			const card = listEl.createDiv({ cls: "ws-studio-edit-mode" });
 
-			const head = card.createDiv({ cls: "ws-studio-edit-mode-head" });
-			const emojiInput = head.createEl("input", { type: "text", cls: "ws-studio-edit-emoji" });
-			emojiInput.value = mode.emoji;
-			emojiInput.setAttribute("placeholder", "🔖");
-			emojiInput.setAttribute("maxlength", "2");
-			emojiInput.addEventListener("input", () => { mode.emoji = emojiInput.value; });
+			new Setting(card)
+				.setName("Mode")
+				.addText((text) => {
+					text.setPlaceholder("🔖").setValue(mode.emoji)
+						.onChange((v) => { mode.emoji = v; });
+					text.inputEl.addClass("ws-studio-edit-emoji");
+					text.inputEl.setAttribute("maxlength", "2");
+				})
+				.addText((text) => {
+					text.setPlaceholder("名称").setValue(mode.label)
+						.onChange((v) => { mode.label = v; });
+				})
+				.addText((text) => {
+					text.setPlaceholder("ID").setValue(mode.id)
+						.onChange((v) => { mode.id = v; });
+					text.inputEl.addClass("ws-studio-edit-id");
+				})
+				.addButton((btn) => {
+					btn.setIcon("trash-2").setWarning().onClick(() => {
+						this.modes.splice(i, 1);
+						this.renderModesList();
+					});
+				})
+				.then((s) => { s.settingEl.addClass("ws-studio-edit-mode-head"); });
 
-			const labelInput = head.createEl("input", { type: "text", cls: "ws-studio-edit-label" });
-			labelInput.value = mode.label;
-			labelInput.setAttribute("placeholder", "名称");
-			labelInput.addEventListener("input", () => { mode.label = labelInput.value; });
+			new Setting(card)
+				.setName("Prompt")
+				.addTextArea((ta) => {
+					ta.setValue(mode.systemPromptAppend)
+						.onChange((v) => { mode.systemPromptAppend = v; });
+					ta.inputEl.rows = 6;
+					ta.inputEl.addClass("ws-studio-edit-prompt");
+				})
+				.then((s) => { s.settingEl.addClass("ws-studio-edit-prompt-row"); });
 
-			const idInput = head.createEl("input", { type: "text", cls: "ws-studio-edit-id" });
-			idInput.value = mode.id;
-			idInput.setAttribute("placeholder", "ID");
-			idInput.addEventListener("input", () => { mode.id = idInput.value; });
-
-			const delBtn = head.createEl("button", { cls: "ws-studio-edit-icon-btn danger" });
-			setIcon(delBtn, "trash-2");
-			delBtn.addEventListener("click", () => {
-				this.modes.splice(i, 1);
-				this.renderModesList();
+			const filesSetting = new Setting(card).setName("Files");
+			filesSetting.addButton((btn) => {
+				btn.setIcon("plus").setTooltip("添加文件").onClick(() => {
+					new FileSuggestModal(this.app, (path) => {
+						if (!mode.files.includes(path)) {
+							mode.files.push(path);
+							renderFilePills();
+						}
+					}).open();
+				});
 			});
-
-			card.createEl("div", { cls: "ws-studio-edit-field-label", text: "Prompt" });
-			const promptArea = card.createEl("textarea", { cls: "ws-studio-edit-prompt" });
-			promptArea.value = mode.systemPromptAppend;
-			promptArea.rows = 8;
-			promptArea.addEventListener("input", () => { mode.systemPromptAppend = promptArea.value; });
-
-			card.createEl("div", { cls: "ws-studio-edit-field-label", text: "Files" });
-
-			const pillsContainer = card.createDiv({ cls: "ws-studio-edit-files-pills" });
+			const pillsContainer = filesSetting.settingEl.createDiv({ cls: "ws-studio-edit-files-pills" });
 			const renderFilePills = () => {
 				pillsContainer.empty();
 				if (mode.files.length === 0) {
 					pillsContainer.createSpan({ cls: "ws-studio-edit-files-empty", text: "无附件" });
+					return;
 				}
 				for (let fi = 0; fi < mode.files.length; fi++) {
 					const filePath = mode.files[fi];
@@ -572,28 +588,18 @@ class EditWorkspaceModal extends Modal {
 						renderFilePills();
 					});
 				}
-				const addPill = pillsContainer.createEl("button", { cls: "ws-studio-edit-file-add" });
-				setIcon(addPill, "plus");
-				addPill.addEventListener("click", () => {
-					new FileSuggestModal(this.app, (path) => {
-						if (!mode.files.includes(path)) {
-							mode.files.push(path);
-							renderFilePills();
-						}
-					}).open();
-				});
 			};
 			renderFilePills();
 
-			card.createEl("div", { cls: "ws-studio-edit-field-label", text: "Actions" });
-			const actionsList = card.createDiv({ cls: "ws-studio-edit-actions-list" });
-			this.renderActions(actionsList, mode);
-
-			const addActionBtn = card.createEl("button", { text: "+ 添加 Action", cls: "ws-studio-edit-add-action" });
-			addActionBtn.addEventListener("click", () => {
-				mode.actions.push({ label: "新 Action", prompt: "" });
-				this.renderActions(actionsList, mode);
+			const actionsSetting = new Setting(card).setName("Actions");
+			actionsSetting.addButton((btn) => {
+				btn.setIcon("plus").setTooltip("添加 Action").onClick(() => {
+					mode.actions.push({ label: "新 Action", prompt: "" });
+					this.renderActions(actionsContainer, mode);
+				});
 			});
+			const actionsContainer = card.createDiv({ cls: "ws-studio-edit-actions-list" });
+			this.renderActions(actionsContainer, mode);
 		}
 	}
 
@@ -601,23 +607,22 @@ class EditWorkspaceModal extends Modal {
 		container.empty();
 		for (let j = 0; j < mode.actions.length; j++) {
 			const action = mode.actions[j];
-			const row = container.createDiv({ cls: "ws-studio-edit-action-row" });
-			const labelIn = row.createEl("input", { type: "text", cls: "ws-studio-edit-action-label" });
-			labelIn.value = action.label;
-			labelIn.setAttribute("placeholder", "label");
-			labelIn.addEventListener("input", () => { action.label = labelIn.value; });
-
-			const promptIn = row.createEl("input", { type: "text", cls: "ws-studio-edit-action-prompt" });
-			promptIn.value = action.prompt;
-			promptIn.setAttribute("placeholder", "prompt");
-			promptIn.addEventListener("input", () => { action.prompt = promptIn.value; });
-
-			const del = row.createEl("button", { cls: "ws-studio-edit-icon-btn danger" });
-			setIcon(del, "x");
-			del.addEventListener("click", () => {
-				mode.actions.splice(j, 1);
-				this.renderActions(container, mode);
-			});
+			new Setting(container)
+				.addText((text) => {
+					text.setPlaceholder("label").setValue(action.label)
+						.onChange((v) => { action.label = v; });
+					text.inputEl.addClass("ws-studio-edit-action-label");
+				})
+				.addText((text) => {
+					text.setPlaceholder("prompt").setValue(action.prompt)
+						.onChange((v) => { action.prompt = v; });
+				})
+				.addButton((btn) => {
+					btn.setIcon("x").setWarning().onClick(() => {
+						mode.actions.splice(j, 1);
+						this.renderActions(container, mode);
+					});
+				});
 		}
 	}
 

@@ -2337,8 +2337,17 @@
 	padding: 4px 0;
 }
 
-.ws-studio-edit-mode-head .setting-item-info {
+.ws-studio-edit-mode .setting-item-info {
 	flex: 0 0 auto;
+	min-width: 0;
+	max-width: 60px;
+}
+
+.ws-studio-edit-mode .setting-item-info .setting-item-name {
+	font-size: 11px;
+	color: var(--text-faint);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
 }
 
 .ws-studio-edit-emoji {
@@ -2360,7 +2369,7 @@
 }
 
 .ws-studio-edit-prompt-row .setting-item-info {
-	align-self: flex-start;
+	max-width: none;
 }
 
 .ws-studio-edit-prompt-row .setting-item-control {
@@ -2373,7 +2382,7 @@
 	font-size: 12px;
 	line-height: 1.5;
 	resize: vertical;
-	min-height: 100px;
+	min-height: 120px;
 }
 
 .ws-studio-edit-files-pills {
@@ -2445,6 +2454,6 @@
 }
 
 .ws-studio-edit-action-label {
-	width: 80px !important;
+	width: 72px !important;
 	flex-shrink: 0;
 }

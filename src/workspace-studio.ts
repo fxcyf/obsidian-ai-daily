@@ -1,24 +1,23 @@
 /**
- * Workspace Studio — a page rendered inside Chat View for managing workspaces,
- * modes, and recent conversations per workspace.
+ * Workspace Studio — three-layer navigation for managing workspaces and modes.
  *
- * Not a standalone Obsidian View. The Chat View calls `render()` when the user
- * clicks the Studio entry, and calls `destroy()` when returning to chat.
+ * Screens:
+ *   3c  Studio Home — all workspaces list (active / archived)
+ *   3a  Workspace Overview — modes list with counts, workspace-level injection
+ *   3b  Mode Editor — name / system prompt / injected context / actions
  *
- * Callbacks decouple the studio from ChatView specifics — the studio doesn't
- * know how a mode is launched or how a session is loaded.
+ * Rendered inside Chat View (not a standalone Obsidian View).
  */
 
-import { App, TFile, setIcon, Menu, Modal, Setting, Notice, FuzzySuggestModal, type FuzzyMatch } from "obsidian";
+import { App, TFile, setIcon, Modal, Setting, Notice, FuzzySuggestModal, type FuzzyMatch } from "obsidian";
 import type AIDailyChat from "./main";
 import {
 	loadProjectIndex,
 	parseModesFromContent,
-	resolveFileEntries,
 	type ProjectIndex,
 	type HarnessContext,
 } from "./harness-view";
-import type { HarnessMode, HarnessModeAction } from "./settings";
+import type { HarnessMode } from "./settings";
 import type { ChatSessionFile } from "./chat-session";
 import { listChatSessions } from "./chat-session";
 import { serializeModesToContent } from "./modes-serializer";
@@ -30,6 +29,8 @@ export interface StudioCallbacks {
 	onClose: () => void;
 }
 
+type Screen = "home" | "workspace" | "mode";
+
 export class WorkspaceStudio {
 	private container: HTMLElement;
 	private app: App;
@@ -37,6 +38,13 @@ export class WorkspaceStudio {
 	private callbacks: StudioCallbacks;
 	private projectIndex: ProjectIndex | null = null;
 	private sessions: ChatSessionFile[] = [];
+
+	private screen: Screen = "home";
+	private selectedWorkspace: string | null = null;
+	private selectedModeIndex: number = -1;
+	private editingModes: HarnessMode[] = [];
+	private workspaceLevelFiles: string[] = [];
+	private dirty = false;
 
 	constructor(container: HTMLElement, plugin: AIDailyChat, callbacks: StudioCallbacks) {
 		this.container = container;
@@ -50,11 +58,18 @@ export class WorkspaceStudio {
 		this.container.addClass("ws-studio");
 
 		await this.loadData();
-		this.buildHeader();
-		this.buildWorkspaceSelector();
-		this.buildModes();
-		this.buildRecent();
-		this.buildStartFresh();
+
+		switch (this.screen) {
+			case "home":
+				this.renderHome();
+				break;
+			case "workspace":
+				await this.renderWorkspace();
+				break;
+			case "mode":
+				this.renderMode();
+				break;
+		}
 	}
 
 	private async loadData(): Promise<void> {
@@ -69,185 +84,518 @@ export class WorkspaceStudio {
 		);
 	}
 
-	private buildHeader(): void {
+	// ── 3c: Studio Home ─────────────────────────────────────
+
+	private renderHome(): void {
 		const head = this.container.createDiv({ cls: "ws-studio-head" });
-		const back = head.createEl("button", { cls: "ws-studio-back" });
-		setIcon(back.createSpan({ cls: "ws-studio-back-icon" }), "arrow-left");
-		back.createSpan({ text: "返回对话" });
-		back.addEventListener("click", () => this.callbacks.onClose());
+		const backBtn = head.createEl("button", { cls: "ws-studio-back" });
+		const backIcon = backBtn.createSpan({ cls: "ws-studio-back-icon" });
+		setIcon(backIcon, "chevron-left");
+		backBtn.createSpan({ text: "Studio" });
+		backBtn.addEventListener("click", () => this.callbacks.onClose());
 
-		head.createDiv({ cls: "ws-studio-title", text: "Workspace Studio" });
-	}
+		const addBtn = head.createEl("button", { cls: "ws-studio-head-action" });
+		const addIcon = addBtn.createSpan({ cls: "ws-studio-head-action-icon" });
+		setIcon(addIcon, "plus");
+		addBtn.createSpan({ text: "新建" });
+		addBtn.addEventListener("click", () => this.openCreateWorkspaceModal());
 
-	private buildWorkspaceSelector(): void {
-		const section = this.container.createDiv({ cls: "ws-studio-section" });
-		const label = section.createDiv({ cls: "ws-studio-section-label" });
-		label.createSpan({ text: "WORKSPACES" });
+		// Search
+		const searchWrap = this.container.createDiv({ cls: "ws-studio-search" });
+		const searchIcon = searchWrap.createSpan({ cls: "ws-studio-search-icon" });
+		setIcon(searchIcon, "search");
+		const searchInput = searchWrap.createEl("input", {
+			cls: "ws-studio-search-input",
+			attr: { placeholder: "搜索工作区…", type: "text" },
+		});
+		searchInput.addEventListener("input", () => {
+			const q = searchInput.value.toLowerCase();
+			const rows = this.container.querySelectorAll<HTMLElement>(".ws-studio-ws-row");
+			rows.forEach((row) => {
+				const name = row.dataset.name?.toLowerCase() ?? "";
+				row.style.display = name.includes(q) ? "" : "none";
+			});
+		});
 
 		const allProjects = this.projectIndex?.projects ?? [];
 		const activeProjects = allProjects.filter((p) => p.status !== "archive");
 		const archivedProjects = allProjects.filter((p) => p.status === "archive");
-		const active = this.projectIndex?.activeProject;
 
-		const scroller = section.createDiv({ cls: "ws-studio-ws-scroller" });
+		// Active section
+		if (activeProjects.length > 0) {
+			const secHead = this.container.createDiv({ cls: "ws-studio-sec-head" });
+			secHead.createSpan({ cls: "ws-studio-sec-label", text: "活跃" });
+			secHead.createSpan({ cls: "ws-studio-sec-count", text: String(activeProjects.length) });
 
-		for (const p of activeProjects) {
-			const card = scroller.createEl("button", { cls: "ws-studio-ws-card" });
-			if (p.name === active) card.addClass("active");
-			card.createDiv({ cls: "ws-studio-ws-name", text: p.name });
-			const meta = card.createDiv({ cls: "ws-studio-ws-meta" });
-			const count = this.sessions.filter(
-				(s) => (s.workspace || s.harnessContext?.workspace) === p.name,
-			).length;
-			meta.createSpan({ text: `${count} 对话` });
-
-			card.addEventListener("click", () => {
-				void this.switchWorkspace(p.name);
-			});
-
-			card.addEventListener("contextmenu", (ev) => {
-				ev.preventDefault();
-				this.showWorkspaceMenu(p.name, ev as MouseEvent);
-			});
+			const list = this.container.createDiv({ cls: "ws-studio-ws-list" });
+			for (const p of activeProjects) {
+				this.renderWorkspaceRow(list, p.name, false);
+			}
 		}
 
-		const addCard = scroller.createEl("button", { cls: "ws-studio-ws-card ws-studio-ws-add" });
-		setIcon(addCard.createSpan({ cls: "ws-studio-ws-add-icon" }), "plus");
-		addCard.createDiv({ text: "新建" });
-		addCard.addEventListener("click", () => this.openCreateWorkspaceModal());
-
+		// Archived section
 		if (archivedProjects.length > 0) {
-			const archiveToggle = section.createEl("button", { cls: "ws-studio-archive-toggle" });
-			setIcon(archiveToggle.createSpan({ cls: "ws-studio-archive-toggle-icon" }), "archive");
-			archiveToggle.createSpan({ text: `${archivedProjects.length} 个已归档` });
-			let expanded = false;
-			const archiveList = section.createDiv({ cls: "ws-studio-archive-list" });
-			archiveList.style.display = "none";
+			const secHead = this.container.createDiv({ cls: "ws-studio-sec-head" });
+			secHead.createSpan({ cls: "ws-studio-sec-label", text: "已归档" });
+			secHead.createSpan({ cls: "ws-studio-sec-count", text: String(archivedProjects.length) });
 
-			archiveToggle.addEventListener("click", () => {
-				expanded = !expanded;
-				archiveList.style.display = expanded ? "flex" : "none";
-				archiveToggle.toggleClass("is-expanded", expanded);
-			});
-
+			const list = this.container.createDiv({ cls: "ws-studio-ws-list" });
 			for (const p of archivedProjects) {
-				const row = archiveList.createDiv({ cls: "ws-studio-archive-row" });
-				row.createSpan({ cls: "ws-studio-archive-name", text: p.name });
-				const restoreBtn = row.createEl("button", { cls: "ws-studio-archive-restore", text: "恢复" });
-				restoreBtn.addEventListener("click", () => {
-					void this.unarchiveWorkspace(p.name);
-				});
+				this.renderWorkspaceRow(list, p.name, true);
 			}
 		}
 	}
 
-	private buildModes(): void {
-		const section = this.container.createDiv({ cls: "ws-studio-section" });
-		const label = section.createDiv({ cls: "ws-studio-section-label" });
-		label.createSpan({ text: "MODES" });
+	private renderWorkspaceRow(parent: HTMLElement, name: string, archived: boolean): void {
+		const row = parent.createDiv({ cls: "ws-studio-ws-row" });
+		row.dataset.name = name;
+		if (archived) row.addClass("ws-studio-ws-archived");
 
-		const active = this.projectIndex?.activeProject;
-		if (active) {
-			const editBtn = label.createSpan({ cls: "ws-studio-section-action" });
-			setIcon(editBtn, "pencil");
-			editBtn.setAttribute("title", "编辑 modes");
-			editBtn.addEventListener("click", () => this.openEditWorkspaceModal(active));
-		}
+		const iconWrap = row.createDiv({ cls: "ws-studio-ws-icon" });
+		setIcon(iconWrap, archived ? "archive" : "folder");
 
-		const modes = this.projectIndex?.modes ?? [];
-		if (modes.length === 0) {
-			section.createDiv({
-				cls: "ws-studio-empty",
-				text: active ? "当前 workspace 没有 modes.md" : "请选择一个 workspace",
-			});
-			return;
-		}
+		const info = row.createDiv({ cls: "ws-studio-ws-info" });
+		info.createDiv({ cls: "ws-studio-ws-name", text: name });
 
-		const grid = section.createDiv({ cls: "ws-studio-mode-grid" });
-		for (const mode of modes) {
-			const resolveContext = (): HarnessContext => {
-				const resolveVars = (p: string) => {
-					let r = p;
-					r = r.replace(/\{active_project\}/g, this.projectIndex?.activeProject || "");
-					r = r.replace(/\{active_work_context\}/g, this.projectIndex?.activeWorkContext || "");
-					return r;
-				};
-				return {
-					mode,
-					injectedFiles: resolveFileEntries(mode.files, this.app, resolveVars),
-					workspace: this.projectIndex?.activeProject,
-				};
-			};
-
-			if (mode.actions.length >= 1) {
-				for (const action of mode.actions) {
-					const card = grid.createEl("button", { cls: "ws-studio-mode-card quick" });
-					if (action.icon) {
-						const iconEl = card.createSpan({ cls: "ws-studio-mode-emoji ws-studio-mode-emoji--icon" });
-						setIcon(iconEl, action.icon);
-					} else {
-						card.createSpan({ cls: "ws-studio-mode-emoji", text: mode.emoji });
-					}
-					card.createSpan({ cls: "ws-studio-mode-name", text: action.label });
-					const bolt = card.createSpan({ cls: "ws-studio-mode-bolt" });
-					bolt.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>';
-					card.addEventListener("click", () => {
-						const ctx = resolveContext();
-						this.callbacks.onStartWithContext(ctx);
-					});
-				}
-			} else {
-				const card = grid.createEl("button", { cls: "ws-studio-mode-card" });
-				card.createSpan({ cls: "ws-studio-mode-emoji", text: mode.emoji });
-				card.createSpan({ cls: "ws-studio-mode-name", text: mode.label });
-				card.addEventListener("click", () => {
-					this.callbacks.onStartWithContext(resolveContext());
-				});
-			}
-		}
-	}
-
-	private buildRecent(): void {
-		const active = this.projectIndex?.activeProject;
-		if (!active) return;
-
-		const section = this.container.createDiv({ cls: "ws-studio-section" });
-		section.createDiv({ cls: "ws-studio-section-label", text: "RECENT" });
-
+		// Compute metadata
+		const projectsFolder = this.plugin.settings.harnessProjectsFolder;
+		const modesPath = `${projectsFolder}/${name}/modes.md`;
+		const modesFile = this.app.vault.getAbstractFileByPath(modesPath);
 		const wsSessions = this.sessions.filter(
-			(s) => (s.workspace || s.harnessContext?.workspace) === active,
-		).slice(0, 5);
+			(s) => (s.workspace || s.harnessContext?.workspace) === name,
+		);
+		const lastUsed = wsSessions.length > 0 ? this.formatRelativeTime(wsSessions[0].updated) : "";
 
-		if (wsSessions.length === 0) {
-			section.createDiv({ cls: "ws-studio-empty", text: "该 workspace 暂无对话" });
-			return;
+		if (modesFile instanceof TFile) {
+			void this.app.vault.read(modesFile).then((content) => {
+				const modes = parseModesFromContent(content);
+				const actionCount = modes.reduce((sum, m) => sum + m.actions.length, 0);
+				const metaParts: string[] = [];
+				metaParts.push(`${modes.length} 模式`);
+				if (actionCount > 0) metaParts.push(`${actionCount} action`);
+				if (archived) {
+					const archivedDate = this.getArchivedDate(name);
+					if (archivedDate) metaParts.push(`归档于 ${archivedDate}`);
+				} else if (lastUsed) {
+					metaParts.push(lastUsed);
+				}
+				const metaEl = info.querySelector<HTMLElement>(".ws-studio-ws-meta");
+				if (metaEl) metaEl.textContent = metaParts.join(" · ");
+			});
 		}
 
-		const list = section.createDiv({ cls: "ws-studio-recent-list" });
-		for (const s of wsSessions) {
-			const row = list.createDiv({ cls: "ws-studio-recent-row" });
-			const modeLabel = s.harnessContext?.mode
-				? `${s.harnessContext.mode.emoji} ${s.harnessContext.mode.label} · `
-				: "";
-			row.createDiv({
-				cls: "ws-studio-recent-title",
-				text: `${modeLabel}${s.title || s.id}`,
+		info.createDiv({ cls: "ws-studio-ws-meta", text: "…" });
+
+		if (archived) {
+			const restoreBtn = row.createEl("button", { cls: "ws-studio-ws-restore", text: "恢复" });
+			restoreBtn.addEventListener("click", (ev) => {
+				ev.stopPropagation();
+				void this.unarchiveWorkspace(name);
 			});
-			row.createDiv({
-				cls: "ws-studio-recent-meta",
-				text: s.updated?.slice(0, 16) ?? "",
-			});
-			row.addEventListener("click", () => this.callbacks.onOpenSession(s.id));
+		} else {
+			// Active dot for most recently used workspace
+			const active = this.projectIndex?.activeProject;
+			if (name === active) {
+				row.createSpan({ cls: "ws-studio-ws-dot" });
+			}
+			const chevron = row.createSpan({ cls: "ws-studio-ws-chevron" });
+			setIcon(chevron, "chevron-right");
 		}
+
+		row.addEventListener("click", () => {
+			if (archived) return;
+			this.navigateTo("workspace", name);
+		});
 	}
 
-	private buildStartFresh(): void {
-		const wrap = this.container.createDiv({ cls: "ws-studio-fresh-wrap" });
-		const btn = wrap.createEl("button", { cls: "ws-studio-fresh-btn" });
-		setIcon(btn.createSpan({ cls: "ws-studio-fresh-icon" }), "play");
-		btn.createSpan({ text: "开始新对话" });
-		btn.addEventListener("click", () => this.callbacks.onStartFresh());
+	// ── 3a: Workspace Overview ──────────────────────────────
+
+	private async renderWorkspace(): Promise<void> {
+		const name = this.selectedWorkspace!;
+
+		// Load modes if not already editing
+		if (this.editingModes.length === 0 || !this.dirty) {
+			const projectsFolder = this.plugin.settings.harnessProjectsFolder;
+			const modesPath = `${projectsFolder}/${name}/modes.md`;
+			const file = this.app.vault.getAbstractFileByPath(modesPath);
+			if (file instanceof TFile) {
+				const content = await this.app.vault.read(file);
+				this.editingModes = parseModesFromContent(content);
+			} else {
+				this.editingModes = [];
+			}
+			this.dirty = false;
+		}
+
+		// Header
+		const head = this.container.createDiv({ cls: "ws-studio-head" });
+		const backBtn = head.createEl("button", { cls: "ws-studio-back" });
+		const backIcon = backBtn.createSpan({ cls: "ws-studio-back-icon" });
+		setIcon(backIcon, "chevron-left");
+		backBtn.createSpan({ text: "Studio" });
+		backBtn.addEventListener("click", () => this.navigateTo("home"));
+
+		const addBtn = head.createEl("button", { cls: "ws-studio-head-action" });
+		const addIcon = addBtn.createSpan({ cls: "ws-studio-head-action-icon" });
+		setIcon(addIcon, "plus");
+		addBtn.createSpan({ text: "新建工作区" });
+		addBtn.addEventListener("click", () => this.openCreateWorkspaceModal());
+
+		// Workspace identity
+		const identity = this.container.createDiv({ cls: "ws-studio-identity" });
+		identity.createDiv({ cls: "ws-studio-identity-label", text: "工作区" });
+		const nameRow = identity.createDiv({ cls: "ws-studio-identity-name-row" });
+		const wsIcon = nameRow.createDiv({ cls: "ws-studio-identity-icon" });
+		setIcon(wsIcon, "folder");
+		const nameInput = nameRow.createEl("input", {
+			cls: "ws-studio-identity-input",
+			attr: { value: name, readonly: "" },
+		});
+
+		// Workspace-level injection
+		const injLabel = identity.createDiv({ cls: "ws-studio-inject-label" });
+		injLabel.createSpan({ text: "工作区级注入" });
+		injLabel.createSpan({ cls: "ws-studio-inject-sep" });
+
+		const injPills = identity.createDiv({ cls: "ws-studio-inject-pills" });
+		this.renderWorkspaceLevelFiles(injPills);
+
+		// Modes section
+		const modesSec = this.container.createDiv({ cls: "ws-studio-sec-head" });
+		modesSec.createSpan({ cls: "ws-studio-sec-label", text: "模式" });
+		const totalActions = this.editingModes.reduce((s, m) => s + m.actions.length, 0);
+		modesSec.createSpan({
+			cls: "ws-studio-sec-count",
+			text: `${this.editingModes.length} 个模式 · ${totalActions} 个 Action`,
+		});
+
+		const modeList = this.container.createDiv({ cls: "ws-studio-mode-list" });
+		for (let i = 0; i < this.editingModes.length; i++) {
+			this.renderModeRow(modeList, i);
+		}
+
+		// Add mode
+		const addMode = modeList.createDiv({ cls: "ws-studio-mode-add" });
+		const addModeIcon = addMode.createSpan({ cls: "ws-studio-mode-add-icon" });
+		setIcon(addModeIcon, "plus");
+		addMode.createSpan({ text: "新建模式" });
+		addMode.addEventListener("click", () => {
+			this.editingModes.push({
+				id: `mode-${this.editingModes.length + 1}`,
+				label: "新模式",
+				emoji: "📋",
+				files: [],
+				systemPromptAppend: "",
+				actions: [],
+			});
+			this.dirty = true;
+			this.navigateTo("mode", this.selectedWorkspace!, this.editingModes.length - 1);
+		});
+
+		// Footer buttons
+		const footer = this.container.createDiv({ cls: "ws-studio-footer" });
+		const saveBtn = footer.createEl("button", { cls: "ws-studio-save-btn" });
+		const saveIcon = saveBtn.createSpan({ cls: "ws-studio-save-icon" });
+		setIcon(saveIcon, "check");
+		saveBtn.createSpan({ text: "保存工作区" });
+		saveBtn.addEventListener("click", async () => {
+			await this.save();
+		});
+
+		const deleteBtn = footer.createEl("button", { cls: "ws-studio-delete-btn" });
+		setIcon(deleteBtn, "trash-2");
+		deleteBtn.addEventListener("click", async () => {
+			await this.archiveWorkspace(name);
+			this.navigateTo("home");
+		});
 	}
+
+	private renderModeRow(parent: HTMLElement, index: number): void {
+		const mode = this.editingModes[index];
+		const row = parent.createDiv({ cls: "ws-studio-mode-row" });
+
+		const iconWrap = row.createDiv({ cls: "ws-studio-mode-icon" });
+		iconWrap.textContent = mode.emoji;
+
+		const info = row.createDiv({ cls: "ws-studio-mode-info" });
+		info.createDiv({ cls: "ws-studio-mode-name", text: mode.label });
+		const metaParts: string[] = [];
+		metaParts.push(`${mode.files.length} files`);
+		if (mode.actions.length > 0) {
+			metaParts.push(`${mode.actions.length} action${mode.actions.length > 1 ? "s" : ""}`);
+		} else {
+			metaParts.push("无 action");
+		}
+		info.createDiv({ cls: "ws-studio-mode-meta", text: metaParts.join(" · ") });
+
+		if (mode.actions.length > 0) {
+			const badge = row.createSpan({ cls: "ws-studio-mode-badge" });
+			badge.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>';
+			badge.createSpan({ text: String(mode.actions.length) });
+		}
+
+		const chevron = row.createSpan({ cls: "ws-studio-mode-chevron" });
+		setIcon(chevron, "chevron-right");
+
+		row.addEventListener("click", () => {
+			this.navigateTo("mode", this.selectedWorkspace!, index);
+		});
+	}
+
+	private renderWorkspaceLevelFiles(container: HTMLElement): void {
+		container.empty();
+		// Currently workspace-level files aren't stored separately — this is a placeholder
+		// for future workspace-level context injection. For now, show an "add" button.
+		const addPill = container.createDiv({ cls: "ws-studio-inject-add" });
+		const addIcon = addPill.createSpan({ cls: "ws-studio-inject-add-icon" });
+		setIcon(addIcon, "plus");
+		addPill.createSpan({ text: "添加" });
+	}
+
+	// ── 3b: Mode Editor ─────────────────────────────────────
+
+	private renderMode(): void {
+		const mode = this.editingModes[this.selectedModeIndex];
+		if (!mode) return;
+
+		// Header
+		const head = this.container.createDiv({ cls: "ws-studio-head" });
+		const backBtn = head.createEl("button", { cls: "ws-studio-back" });
+		const backIcon = backBtn.createSpan({ cls: "ws-studio-back-icon" });
+		setIcon(backIcon, "chevron-left");
+		const breadcrumb = backBtn.createSpan();
+		breadcrumb.createSpan({ cls: "ws-studio-breadcrumb-ws", text: this.selectedWorkspace! });
+		breadcrumb.createSpan({ cls: "ws-studio-breadcrumb-sep", text: " / " });
+		breadcrumb.createSpan({ cls: "ws-studio-breadcrumb-mode", text: mode.label });
+		backBtn.addEventListener("click", () => this.navigateTo("workspace", this.selectedWorkspace!));
+
+		const saveLink = head.createEl("button", { cls: "ws-studio-head-save", text: "保存" });
+		saveLink.addEventListener("click", async () => {
+			await this.save();
+		});
+
+		// Mode name section
+		const nameSection = this.container.createDiv({ cls: "ws-studio-editor-section" });
+		nameSection.createDiv({ cls: "ws-studio-editor-label", text: "模式名称" });
+		const nameRow = nameSection.createDiv({ cls: "ws-studio-identity-name-row" });
+		const modeIconEl = nameRow.createDiv({ cls: "ws-studio-mode-icon ws-studio-mode-icon--accent" });
+		modeIconEl.textContent = mode.emoji;
+		const nameInput = nameRow.createEl("input", {
+			cls: "ws-studio-identity-input",
+			attr: { value: mode.label },
+		});
+		nameInput.addEventListener("input", () => {
+			mode.label = nameInput.value;
+			this.dirty = true;
+		});
+
+		// Hidden ID / emoji inputs
+		const metaRow = nameSection.createDiv({ cls: "ws-studio-mode-meta-row" });
+		const idWrap = metaRow.createDiv({ cls: "ws-studio-mode-meta-field" });
+		idWrap.createSpan({ cls: "ws-studio-mode-meta-label", text: "ID" });
+		const idInput = idWrap.createEl("input", {
+			cls: "ws-studio-mode-meta-input",
+			attr: { value: mode.id },
+		});
+		idInput.addEventListener("input", () => {
+			mode.id = idInput.value;
+			this.dirty = true;
+		});
+
+		const emojiWrap = metaRow.createDiv({ cls: "ws-studio-mode-meta-field" });
+		emojiWrap.createSpan({ cls: "ws-studio-mode-meta-label", text: "图标" });
+		const emojiInput = emojiWrap.createEl("input", {
+			cls: "ws-studio-mode-meta-input ws-studio-mode-meta-emoji",
+			attr: { value: mode.emoji, maxlength: "2" },
+		});
+		emojiInput.addEventListener("input", () => {
+			mode.emoji = emojiInput.value;
+			modeIconEl.textContent = mode.emoji;
+			this.dirty = true;
+		});
+
+		// System prompt section
+		const promptSection = this.container.createDiv({ cls: "ws-studio-editor-section" });
+		const promptHead = promptSection.createDiv({ cls: "ws-studio-editor-label-row" });
+		promptHead.createSpan({ cls: "ws-studio-editor-label", text: "系统提示" });
+		const charCount = promptSection.createSpan({
+			cls: "ws-studio-editor-count",
+			text: `${mode.systemPromptAppend.length} 字`,
+		});
+		promptHead.appendChild(charCount);
+
+		const promptEl = promptSection.createEl("textarea", { cls: "ws-studio-editor-prompt" });
+		promptEl.value = mode.systemPromptAppend;
+		promptEl.rows = 6;
+		promptEl.setAttribute("placeholder", "System prompt...");
+		promptEl.addEventListener("input", () => {
+			mode.systemPromptAppend = promptEl.value;
+			charCount.textContent = `${promptEl.value.length} 字`;
+			this.dirty = true;
+		});
+
+		// Injected context section
+		const ctxSection = this.container.createDiv({ cls: "ws-studio-editor-section" });
+		ctxSection.createDiv({
+			cls: "ws-studio-editor-label",
+			text: `注入上下文 · ${mode.files.length}`,
+		});
+		const filesList = ctxSection.createDiv({ cls: "ws-studio-editor-files" });
+		const renderFiles = () => {
+			filesList.empty();
+			for (let fi = 0; fi < mode.files.length; fi++) {
+				const filePath = mode.files[fi];
+				const fileRow = filesList.createDiv({ cls: "ws-studio-editor-file" });
+				const fIcon = fileRow.createSpan({ cls: "ws-studio-editor-file-icon" });
+				setIcon(fIcon, "file-text");
+				const displayName = filePath.replace(/^.*\//, "").replace(/\.md$/, "");
+				fileRow.createSpan({ cls: "ws-studio-editor-file-name", text: displayName });
+				fileRow.setAttribute("title", filePath);
+				const removeBtn = fileRow.createSpan({ cls: "ws-studio-editor-file-remove" });
+				setIcon(removeBtn, "x");
+				removeBtn.addEventListener("click", (ev) => {
+					ev.stopPropagation();
+					mode.files.splice(fi, 1);
+					this.dirty = true;
+					renderFiles();
+					ctxSection.querySelector(".ws-studio-editor-label")!.textContent =
+						`注入上下文 · ${mode.files.length}`;
+				});
+			}
+			const addFileBtn = filesList.createDiv({ cls: "ws-studio-editor-file-add" });
+			const afIcon = addFileBtn.createSpan({ cls: "ws-studio-editor-file-add-icon" });
+			setIcon(afIcon, "plus");
+			addFileBtn.createSpan({ text: "添加文件 / 文件夹" });
+			addFileBtn.addEventListener("click", () => {
+				new FileSuggestModal(this.app, (path) => {
+					if (!mode.files.includes(path)) {
+						mode.files.push(path);
+						this.dirty = true;
+						renderFiles();
+						ctxSection.querySelector(".ws-studio-editor-label")!.textContent =
+							`注入上下文 · ${mode.files.length}`;
+					}
+				}).open();
+			});
+		};
+		renderFiles();
+
+		// Actions section
+		const actSection = this.container.createDiv({ cls: "ws-studio-editor-section ws-studio-editor-actions" });
+		const actHead = actSection.createDiv({ cls: "ws-studio-editor-label-row ws-studio-editor-actions-head" });
+		const boltIcon = actHead.createSpan({ cls: "ws-studio-editor-bolt" });
+		boltIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>';
+		actHead.createSpan({
+			cls: "ws-studio-editor-label ws-studio-editor-label--accent",
+			text: `一键 Action · ${mode.actions.length}`,
+		});
+
+		const actionsList = actSection.createDiv({ cls: "ws-studio-editor-actions-list" });
+		const renderActions = () => {
+			actionsList.empty();
+			for (let j = 0; j < mode.actions.length; j++) {
+				const action = mode.actions[j];
+				const actionCard = actionsList.createDiv({ cls: "ws-studio-editor-action" });
+				const actionRow = actionCard.createDiv({ cls: "ws-studio-editor-action-head" });
+				const labelInput = actionRow.createEl("input", {
+					cls: "ws-studio-editor-action-label",
+					attr: { value: action.label, placeholder: "Action 名称" },
+				});
+				labelInput.addEventListener("input", () => {
+					action.label = labelInput.value;
+					this.dirty = true;
+				});
+				const editBtn = actionRow.createSpan({ cls: "ws-studio-editor-action-edit" });
+				setIcon(editBtn, "pencil");
+				const removeBtn = actionRow.createSpan({ cls: "ws-studio-editor-action-remove" });
+				setIcon(removeBtn, "x");
+				removeBtn.addEventListener("click", () => {
+					mode.actions.splice(j, 1);
+					this.dirty = true;
+					renderActions();
+					actHead.querySelector(".ws-studio-editor-label")!.textContent =
+						`一键 Action · ${mode.actions.length}`;
+				});
+
+				const promptInput = actionCard.createEl("textarea", {
+					cls: "ws-studio-editor-action-prompt",
+					attr: { placeholder: "Action prompt…", rows: "2" },
+				});
+				promptInput.value = action.prompt;
+				promptInput.addEventListener("input", () => {
+					action.prompt = promptInput.value;
+					this.dirty = true;
+				});
+			}
+
+			const addAction = actionsList.createDiv({ cls: "ws-studio-editor-action-add" });
+			const addAIcon = addAction.createSpan({ cls: "ws-studio-editor-action-add-icon" });
+			setIcon(addAIcon, "plus");
+			addAction.createSpan({ text: "新建 Action" });
+			addAction.addEventListener("click", () => {
+				mode.actions.push({ label: "新 Action", prompt: "" });
+				this.dirty = true;
+				renderActions();
+				actHead.querySelector(".ws-studio-editor-label")!.textContent =
+					`一键 Action · ${mode.actions.length}`;
+			});
+		};
+		renderActions();
+
+		// Delete mode
+		const dangerSection = this.container.createDiv({ cls: "ws-studio-editor-danger" });
+		const deleteBtn = dangerSection.createEl("button", { cls: "ws-studio-editor-delete-mode" });
+		setIcon(deleteBtn, "trash-2");
+		deleteBtn.createSpan({ text: "删除此模式" });
+		deleteBtn.addEventListener("click", () => {
+			this.editingModes.splice(this.selectedModeIndex, 1);
+			this.dirty = true;
+			this.navigateTo("workspace", this.selectedWorkspace!);
+		});
+	}
+
+	// ── Navigation ──────────────────────────────────────────
+
+	private navigateTo(screen: "home"): void;
+	private navigateTo(screen: "workspace", workspace: string): void;
+	private navigateTo(screen: "mode", workspace: string, modeIndex: number): void;
+	private navigateTo(screen: Screen, workspace?: string, modeIndex?: number): void {
+		this.screen = screen;
+		if (workspace !== undefined) this.selectedWorkspace = workspace;
+		if (modeIndex !== undefined) this.selectedModeIndex = modeIndex;
+		if (screen === "home") {
+			this.selectedWorkspace = null;
+			this.selectedModeIndex = -1;
+			this.editingModes = [];
+			this.dirty = false;
+		}
+		void this.render();
+	}
+
+	// ── Data helpers ────────────────────────────────────────
+
+	private formatRelativeTime(dateStr: string): string {
+		const now = Date.now();
+		const then = Date.parse(dateStr);
+		if (isNaN(then)) return "";
+		const diff = now - then;
+		const mins = Math.floor(diff / 60000);
+		if (mins < 60) return "刚刚";
+		const hours = Math.floor(mins / 60);
+		if (hours < 24) return `${hours} 小时前`;
+		const days = Math.floor(hours / 24);
+		if (days === 1) return "昨天";
+		if (days < 7) return `${days} 天前`;
+		if (days < 30) return "上周";
+		return `${Math.floor(days / 30)} 月前`;
+	}
+
+	private getArchivedDate(_name: string): string {
+		// Could parse from _INDEX.md updated field; simplified for now
+		return "";
+	}
+
+	// ── CRUD ────────────────────────────────────────────────
 
 	private async switchWorkspace(name: string): Promise<void> {
 		const projectsFolder = this.plugin.settings.harnessProjectsFolder;
@@ -261,18 +609,6 @@ export class WorkspaceStudio {
 			content = `---\nactive_project: ${name}\n---\n\n${content}`;
 		}
 		await this.app.vault.modify(file, content);
-		await this.render();
-	}
-
-	private showWorkspaceMenu(name: string, ev: MouseEvent): void {
-		const menu = new Menu();
-		menu.addItem((it) =>
-			it.setTitle("编辑").setIcon("pencil").onClick(() => this.openEditWorkspaceModal(name)),
-		);
-		menu.addItem((it) =>
-			it.setTitle("归档").setIcon("archive").onClick(() => this.archiveWorkspace(name)),
-		);
-		menu.showAtMouseEvent(ev);
 	}
 
 	private openCreateWorkspaceModal(): void {
@@ -330,7 +666,6 @@ export class WorkspaceStudio {
 	private async archiveWorkspace(name: string): Promise<void> {
 		await this.setWorkspaceStatus(name, "archive");
 		new Notice(`已归档「${name}」`);
-		await this.render();
 	}
 
 	private async unarchiveWorkspace(name: string): Promise<void> {
@@ -351,10 +686,14 @@ export class WorkspaceStudio {
 		await this.app.vault.modify(indexFile, content);
 	}
 
-	private openEditWorkspaceModal(name: string): void {
-		new EditWorkspaceModal(this.app, this.plugin, name, async () => {
-			await this.render();
-		}).open();
+	private async save(): Promise<void> {
+		if (!this.selectedWorkspace) return;
+		const modesPath = `${this.plugin.settings.harnessProjectsFolder}/${this.selectedWorkspace}/modes.md`;
+		const content = serializeModesToContent(this.editingModes);
+		const adapter = this.app.vault.adapter;
+		await adapter.write(modesPath, content);
+		this.dirty = false;
+		new Notice("已保存 modes.md");
 	}
 
 	destroy(): void {
@@ -424,217 +763,6 @@ class CreateWorkspaceModal extends Modal {
 	}
 }
 
-// ── Edit Workspace Modal ─────────────────────────────────
-
-class EditWorkspaceModal extends Modal {
-	private plugin: AIDailyChat;
-	private workspaceName: string;
-	private modes: HarnessMode[] = [];
-	private onSave: () => Promise<void>;
-
-	constructor(
-		app: App,
-		plugin: AIDailyChat,
-		workspaceName: string,
-		onSave: () => Promise<void>,
-	) {
-		super(app);
-		this.plugin = plugin;
-		this.workspaceName = workspaceName;
-		this.onSave = onSave;
-	}
-
-	async onOpen(): Promise<void> {
-		const { contentEl } = this;
-		contentEl.addClass("ws-studio-edit-modal");
-		contentEl.empty();
-
-		contentEl.createEl("h3", { text: `编辑: ${this.workspaceName}` });
-
-		const modesPath = `${this.plugin.settings.harnessProjectsFolder}/${this.workspaceName}/modes.md`;
-		const file = this.app.vault.getAbstractFileByPath(modesPath);
-		if (file instanceof TFile) {
-			const content = await this.app.vault.read(file);
-			this.modes = parseModesFromContent(content);
-		}
-
-		this.renderModesList();
-
-		new Setting(contentEl).addButton((btn) =>
-			btn.setButtonText("+ 添加新 Mode").onClick(() => {
-				this.modes.push({
-					id: `mode-${this.modes.length + 1}`,
-					label: "新模式",
-					emoji: "📋",
-					files: [],
-					systemPromptAppend: "",
-					actions: [],
-				});
-				this.renderModesList();
-			}),
-		);
-
-		new Setting(contentEl)
-			.addButton((btn) =>
-				btn.setButtonText("归档").setWarning().onClick(async () => {
-					if (!confirm(`确定要归档「${this.workspaceName}」吗？文件将保留，可随时恢复。`)) return;
-					const projectsFolder = this.plugin.settings.harnessProjectsFolder;
-					const indexPath = `${projectsFolder}/_INDEX.md`;
-					const indexFile = this.app.vault.getAbstractFileByPath(indexPath);
-					if (!(indexFile instanceof TFile)) return;
-					let content = await this.app.vault.read(indexFile);
-					const escaped = this.workspaceName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-					const rowRe = new RegExp(`^(\\|\\s*${escaped}\\s*\\|)\\s*\\w+\\s*\\|`, "m");
-					content = content.replace(rowRe, `$1 archive |`);
-					await this.app.vault.modify(indexFile, content);
-					new Notice(`已归档「${this.workspaceName}」`);
-					this.close();
-					await this.onSave();
-				}),
-			)
-			.addButton((btn) =>
-				btn.setButtonText("取消").onClick(() => this.close()),
-			)
-			.addButton((btn) =>
-				btn.setButtonText("保存").setCta().onClick(async () => {
-					await this.save();
-					this.close();
-				}),
-			);
-	}
-
-	private renderModesList(): void {
-		let listEl = this.contentEl.querySelector<HTMLElement>(".ws-studio-edit-modes");
-		if (!listEl) {
-			listEl = this.contentEl.createDiv({ cls: "ws-studio-edit-modes" });
-			const settingItems = this.contentEl.querySelectorAll(":scope > .setting-item");
-			const firstSetting = settingItems[0];
-			if (firstSetting) {
-				this.contentEl.insertBefore(listEl, firstSetting);
-			}
-		}
-		listEl.empty();
-
-		for (let i = 0; i < this.modes.length; i++) {
-			const mode = this.modes[i];
-			const card = listEl.createDiv({ cls: "ws-studio-edit-mode" });
-
-			new Setting(card)
-				.addText((text) => {
-					text.setPlaceholder("🔖").setValue(mode.emoji)
-						.onChange((v) => { mode.emoji = v; });
-					text.inputEl.addClass("ws-studio-edit-emoji");
-					text.inputEl.setAttribute("maxlength", "2");
-				})
-				.addText((text) => {
-					text.setPlaceholder("名称").setValue(mode.label)
-						.onChange((v) => { mode.label = v; });
-				})
-				.addText((text) => {
-					text.setPlaceholder("ID").setValue(mode.id)
-						.onChange((v) => { mode.id = v; });
-					text.inputEl.addClass("ws-studio-edit-id");
-				})
-				.addButton((btn) => {
-					btn.setIcon("trash-2").setWarning().onClick(() => {
-						this.modes.splice(i, 1);
-						this.renderModesList();
-					});
-				})
-				.then((s) => { s.settingEl.addClass("ws-studio-edit-mode-head"); });
-
-			const promptArea = card.createEl("textarea", { cls: "ws-studio-edit-prompt" });
-			promptArea.value = mode.systemPromptAppend;
-			promptArea.rows = 8;
-			promptArea.setAttribute("placeholder", "System prompt...");
-			promptArea.addEventListener("input", () => { mode.systemPromptAppend = promptArea.value; });
-
-			const pillsContainer = card.createDiv({ cls: "ws-studio-edit-files-pills" });
-			const renderFilePills = () => {
-				pillsContainer.empty();
-				if (mode.files.length === 0) {
-					pillsContainer.createSpan({ cls: "ws-studio-edit-files-empty", text: "无附件" });
-					return;
-				}
-				for (let fi = 0; fi < mode.files.length; fi++) {
-					const filePath = mode.files[fi];
-					const pill = pillsContainer.createDiv({ cls: "ws-studio-edit-file-pill" });
-					const iconSpan = pill.createSpan({ cls: "ws-studio-edit-file-pill-icon" });
-					setIcon(iconSpan, "file-text");
-					const displayName = filePath.replace(/^.*\//, "").replace(/\.md$/, "");
-					pill.createSpan({ cls: "ws-studio-edit-file-pill-name", text: displayName });
-					pill.setAttribute("title", filePath);
-					const removeBtn = pill.createSpan({ cls: "ws-studio-edit-file-pill-remove" });
-					setIcon(removeBtn, "x");
-					removeBtn.addEventListener("click", (ev) => {
-						ev.stopPropagation();
-						mode.files.splice(fi, 1);
-						renderFilePills();
-					});
-				}
-				const addPill = pillsContainer.createDiv({ cls: "ws-studio-edit-file-pill ws-studio-edit-file-add" });
-				setIcon(addPill.createSpan({ cls: "ws-studio-edit-file-pill-icon" }), "plus");
-				addPill.createSpan({ cls: "ws-studio-edit-file-pill-name", text: "添加" });
-				addPill.addEventListener("click", () => {
-					new FileSuggestModal(this.app, (path) => {
-						if (!mode.files.includes(path)) {
-							mode.files.push(path);
-							renderFilePills();
-						}
-					}).open();
-				});
-			};
-			renderFilePills();
-
-			const actionsContainer = card.createDiv({ cls: "ws-studio-edit-actions-list" });
-			this.renderActions(actionsContainer, mode);
-		}
-	}
-
-	private renderActions(container: HTMLElement, mode: HarnessMode): void {
-		container.empty();
-		for (let j = 0; j < mode.actions.length; j++) {
-			const action = mode.actions[j];
-			new Setting(container)
-				.addText((text) => {
-					text.setPlaceholder("label").setValue(action.label)
-						.onChange((v) => { action.label = v; });
-					text.inputEl.addClass("ws-studio-edit-action-label");
-				})
-				.addText((text) => {
-					text.setPlaceholder("prompt").setValue(action.prompt)
-						.onChange((v) => { action.prompt = v; });
-				})
-				.addButton((btn) => {
-					btn.setIcon("x").setWarning().onClick(() => {
-						mode.actions.splice(j, 1);
-						this.renderActions(container, mode);
-					});
-				});
-		}
-		new Setting(container)
-			.addButton((btn) => {
-				btn.setButtonText("+ Action").onClick(() => {
-					mode.actions.push({ label: "新 Action", prompt: "" });
-					this.renderActions(container, mode);
-				});
-			});
-	}
-
-	private async save(): Promise<void> {
-		const modesPath = `${this.plugin.settings.harnessProjectsFolder}/${this.workspaceName}/modes.md`;
-		const content = serializeModesToContent(this.modes);
-		const adapter = this.app.vault.adapter;
-		await adapter.write(modesPath, content);
-		new Notice("已保存 modes.md");
-		await this.onSave();
-	}
-
-	onClose(): void {
-		this.contentEl.empty();
-	}
-}
-
 // ── File Suggest Modal ──────────────────────────────────
 
 class FileSuggestModal extends FuzzySuggestModal<TFile> {
@@ -662,7 +790,3 @@ class FileSuggestModal extends FuzzySuggestModal<TFile> {
 		this.onChoose(item.path);
 	}
 }
-
-// suppress unused warning for HarnessModeAction (kept for future action-icon editing)
-type _EnsureUsed = HarnessModeAction;
-void (null as unknown as _EnsureUsed);

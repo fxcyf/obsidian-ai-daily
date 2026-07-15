@@ -962,20 +962,35 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-welcome",
 		});
 
+		// Masthead: logo + title
 		const masthead = welcomeEl.createDiv({ cls: "ai-daily-welcome-masthead" });
 		const glyph = masthead.createDiv({ cls: "ai-daily-welcome-glyph" });
 		glyph.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 0 0-3 3 3 3 0 0 0-2 5.2A2.5 2.5 0 0 0 9 18a3 3 0 0 0 3 1 3 3 0 0 0 3-1 2.5 2.5 0 0 0 2-4.8A3 3 0 0 0 15 8a3 3 0 0 0-3-3Z"/><path d="M12 5v14"/></svg>';
 		const titleRow = masthead.createEl("h1", { cls: "ai-daily-welcome-title" });
 		titleRow.createSpan({ text: "Cortex" });
 		titleRow.createSpan({ cls: "ai-daily-welcome-ver", text: `v${this.plugin.manifest.version}` });
-		masthead.createEl("p", { cls: "ai-daily-welcome-hint", text: "直接提问探索知识库，或选一个模式开始" });
 
+		// Resume hero card — shows last session
+		this.buildResumeHero(welcomeEl);
+
+		// Ask bar
+		const askBar = welcomeEl.createDiv({ cls: "ai-daily-welcome-ask" });
+		const askIcon = askBar.createSpan({ cls: "ai-daily-welcome-ask-icon" });
+		setIcon(askIcon, "message-circle");
+		askBar.createSpan({ cls: "ai-daily-welcome-ask-text", text: "直接提问探索知识库…" });
+		askBar.createSpan({ cls: "ai-daily-welcome-ask-hint", text: "@ · /" });
+		askBar.addEventListener("click", () => {
+			this.inputEl.focus();
+		});
+
+		// Workspace section header
 		this.buildWelcomeHarness(welcomeEl);
 
+		// Bottom toolbar
 		const tools: { icon: string; label: string; action: () => void }[] = [
 			{ icon: "layout-grid", label: "Studio", action: () => void this.openStudio() },
 			{ icon: "history", label: "历史", action: () => this.openHistoryPanel() },
-			{ icon: "heart-pulse", label: "Wiki 检查", action: () => this.plugin.runWikiHealthCheck() },
+			{ icon: "heart-pulse", label: "Wiki", action: () => this.plugin.runWikiHealthCheck() },
 		];
 		const toolsEl = welcomeEl.createDiv({ cls: "ai-daily-welcome-tools" });
 		for (const t of tools) {
@@ -987,6 +1002,64 @@ export class ChatView extends ItemView {
 		}
 
 		this.updateTokenBar();
+	}
+
+	private buildResumeHero(welcomeEl: HTMLElement): void {
+		// Find the most recent session
+		listChatSessions(
+			this.app.vault,
+			this.plugin.settings.chatHistoryFolder,
+		).then((sessions) => {
+			if (sessions.length === 0) return;
+			const last = sessions[0];
+			const hero = welcomeEl.createDiv({ cls: "ai-daily-welcome-hero" });
+
+			const playBtn = hero.createDiv({ cls: "ai-daily-welcome-hero-play" });
+			playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+
+			const info = hero.createDiv({ cls: "ai-daily-welcome-hero-info" });
+			info.createDiv({ cls: "ai-daily-welcome-hero-label", text: "继续上次" });
+			const modeName = last.harnessContext?.mode
+				? `${last.harnessContext.mode.label}`
+				: "";
+			const actionLabel = last.harnessContext?.mode?.actions?.[0]?.label;
+			const titleParts = [modeName, actionLabel].filter(Boolean).join(" · ");
+			info.createDiv({ cls: "ai-daily-welcome-hero-title", text: titleParts || last.title || "新对话" });
+			const wsName = last.workspace || last.harnessContext?.workspace || "";
+			const timeStr = last.updated ? this.formatRelativeTime(last.updated) : "";
+			const metaParts = [wsName, timeStr].filter(Boolean).join(" · ");
+			if (metaParts) {
+				info.createDiv({ cls: "ai-daily-welcome-hero-meta", text: metaParts });
+			}
+
+			const chevron = hero.createSpan({ cls: "ai-daily-welcome-hero-chevron" });
+			setIcon(chevron, "chevron-right");
+
+			hero.addEventListener("click", () => {
+				void this.loadSession(last.id);
+			});
+
+			// Insert hero before the ask bar
+			const askBar = welcomeEl.querySelector(".ai-daily-welcome-ask");
+			if (askBar) welcomeEl.insertBefore(hero, askBar);
+		});
+	}
+
+	private formatRelativeTime(dateStr: string): string {
+		const now = Date.now();
+		const then = Date.parse(dateStr);
+		if (isNaN(then)) return "";
+		const diff = now - then;
+		const mins = Math.floor(diff / 60000);
+		if (mins < 60) return "刚刚";
+		const hours = Math.floor(mins / 60);
+		if (hours < 24) return `${hours} 小时前`;
+		const days = Math.floor(hours / 24);
+		if (days === 0) return "今天";
+		if (days === 1) return "昨天";
+		if (days < 7) return `${days} 天前`;
+		if (days < 30) return "上周";
+		return `${Math.floor(days / 30)} 月前`;
 	}
 
 	private toggleStudio(): void {
@@ -1044,9 +1117,17 @@ export class ChatView extends ItemView {
 			if (!index || index.projects.length === 0) return;
 
 			const projectsFolder = this.plugin.settings.harnessProjectsFolder;
+			const activeProjects = index.projects.filter((p) => p.status !== "archive");
+			const archivedCount = index.projects.length - activeProjects.length;
 
-			for (const project of index.projects) {
-				if (project.status === "archive") continue;
+			// Section header
+			const secHead = container.createDiv({ cls: "ai-daily-welcome-sec-head" });
+			secHead.createSpan({ cls: "ai-daily-welcome-sec-label", text: "工作区" });
+			const countParts = [String(activeProjects.length)];
+			if (archivedCount > 0) countParts.push(`${archivedCount} 已归档`);
+			secHead.createSpan({ cls: "ai-daily-welcome-sec-count", text: countParts.join(" · ") });
+
+			for (const project of activeProjects) {
 				const modesPath = `${projectsFolder}/${project.name}/modes.md`;
 				const modesFile = this.app.vault.getAbstractFileByPath(modesPath);
 				if (!(modesFile instanceof TFile)) continue;
@@ -1055,11 +1136,21 @@ export class ChatView extends ItemView {
 					const modes = parseModesFromContent(content);
 					if (modes.length === 0) return;
 
-					const group = container.createDiv({ cls: "ai-daily-welcome-group" });
-					const label = group.createDiv({ cls: "ai-daily-welcome-group-label" });
-					label.createSpan({ text: project.name });
+					const card = container.createDiv({ cls: "ai-daily-welcome-card" });
 
-					const grid = group.createDiv({ cls: "ai-daily-welcome-grid" });
+					// Card header
+					const cardHead = card.createDiv({ cls: "ai-daily-welcome-card-head" });
+					const cardIcon = cardHead.createSpan({ cls: "ai-daily-welcome-card-icon" });
+					setIcon(cardIcon, "folder");
+					cardHead.createSpan({ cls: "ai-daily-welcome-card-name", text: project.name });
+
+					// Active dot for the currently active workspace
+					if (project.name === index.activeProject) {
+						cardHead.createSpan({ cls: "ai-daily-welcome-card-dot" });
+					}
+
+					// Chips: modes as plain chips, actions as bolt chips
+					const chips = card.createDiv({ cls: "ai-daily-welcome-chips" });
 					for (const mode of modes) {
 						const resolveContext = () => {
 							const resolveVars = (p: string) => {
@@ -1072,22 +1163,15 @@ export class ChatView extends ItemView {
 							return { mode, injectedFiles: resolvedFiles, workspace: project.name } as HarnessContext;
 						};
 
-						const boltSvg = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>';
+						const boltSvg = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>';
 
 						if (mode.actions.length >= 1) {
 							for (const action of mode.actions) {
-								const card = grid.createEl("button", { cls: "ai-daily-welcome-mode quick" });
-								const icon = action.icon || mode.emoji;
-								if (action.icon) {
-									const iconEl = card.createSpan({ cls: "ai-daily-welcome-mode-emoji ai-daily-welcome-mode-emoji--icon" });
-									setIcon(iconEl, action.icon);
-								} else {
-									card.createSpan({ cls: "ai-daily-welcome-mode-emoji", text: mode.emoji });
-								}
-								card.createSpan({ cls: "ai-daily-welcome-mode-name", text: action.label });
-								const bolt = card.createSpan({ cls: "ai-daily-welcome-mode-bolt" });
+								const chip = chips.createEl("button", { cls: "ai-daily-welcome-chip ai-daily-welcome-chip--action" });
+								const bolt = chip.createSpan({ cls: "ai-daily-welcome-chip-bolt" });
 								bolt.innerHTML = boltSvg;
-								card.addEventListener("click", () => {
+								chip.createSpan({ text: action.label });
+								chip.addEventListener("click", () => {
 									const ctx = resolveContext();
 									this.startWithContext(ctx);
 									this.inputEl.value = action.prompt;
@@ -1095,10 +1179,9 @@ export class ChatView extends ItemView {
 								});
 							}
 						} else {
-							const btn = grid.createEl("button", { cls: "ai-daily-welcome-mode" });
-							btn.createSpan({ cls: "ai-daily-welcome-mode-emoji", text: mode.emoji });
-							btn.createSpan({ cls: "ai-daily-welcome-mode-name", text: mode.label });
-							btn.addEventListener("click", () => {
+							const chip = chips.createEl("button", { cls: "ai-daily-welcome-chip" });
+							chip.createSpan({ text: mode.label });
+							chip.addEventListener("click", () => {
 								this.startWithContext(resolveContext());
 							});
 						}
@@ -1932,23 +2015,48 @@ export class ChatView extends ItemView {
 		this.harnessContext = context;
 
 		if (context) {
-			const modeLabel = `${context.mode.emoji} ${context.mode.label}`;
 			const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
 			if (welcome) welcome.remove();
 
-			const harnessEl = this.messagesEl.createDiv({ cls: "ai-daily-harness-banner" });
-			harnessEl.createDiv({
-				cls: "ai-daily-harness-banner-mode",
-				text: `模式：${modeLabel}`,
-			});
+			const banner = this.messagesEl.createDiv({ cls: "ai-daily-ctx-header" });
+			let expanded = false;
+
+			// Collapsed row (always visible)
+			const row = banner.createDiv({ cls: "ai-daily-ctx-row" });
+			const modeIcon = row.createDiv({ cls: "ai-daily-ctx-icon" });
+			modeIcon.textContent = context.mode.emoji;
+			const info = row.createDiv({ cls: "ai-daily-ctx-info" });
+			info.createDiv({ cls: "ai-daily-ctx-mode", text: context.mode.label });
+			if (context.workspace) {
+				info.createDiv({ cls: "ai-daily-ctx-ws", text: context.workspace });
+			}
 			if (context.injectedFiles.length > 0) {
-				const filesEl = harnessEl.createDiv({ cls: "ai-daily-harness-banner-files" });
-				filesEl.createSpan({ text: "已注入：" });
+				const toggle = row.createSpan({
+					cls: "ai-daily-ctx-toggle",
+					text: `${context.injectedFiles.length} files ⌄`,
+				});
+				toggle.addEventListener("click", (ev) => {
+					ev.stopPropagation();
+					expanded = !expanded;
+					banner.toggleClass("ai-daily-ctx-expanded", expanded);
+					toggle.textContent = expanded
+						? `${context.injectedFiles.length} files ⌃`
+						: `${context.injectedFiles.length} files ⌄`;
+				});
+			}
+
+			// Expanded detail (hidden by default)
+			if (context.injectedFiles.length > 0) {
+				const detail = banner.createDiv({ cls: "ai-daily-ctx-detail" });
+				detail.createDiv({ cls: "ai-daily-ctx-detail-label", text: `已注入 ${context.injectedFiles.length} 个文件` });
+				const pills = detail.createDiv({ cls: "ai-daily-ctx-pills" });
 				for (const f of context.injectedFiles) {
-					filesEl.createSpan({
-						cls: "ai-daily-harness-banner-file",
-						text: f.path,
-					});
+					const pill = pills.createSpan({ cls: "ai-daily-ctx-pill" });
+					const fIcon = pill.createSpan({ cls: "ai-daily-ctx-pill-icon" });
+					setIcon(fIcon, "file-text");
+					const displayName = f.path.replace(/^.*\//, "").replace(/\.md$/, "");
+					pill.createSpan({ text: displayName });
+					pill.setAttribute("title", f.path);
 				}
 			}
 

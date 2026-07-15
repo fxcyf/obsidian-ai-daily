@@ -4407,6 +4407,12 @@ var WorkspaceStudio = class {
   constructor(container, plugin, callbacks) {
     this.projectIndex = null;
     this.sessions = [];
+    this.screen = "home";
+    this.selectedWorkspace = null;
+    this.selectedModeIndex = -1;
+    this.editingModes = [];
+    this.workspaceLevelFiles = [];
+    this.dirty = false;
     this.container = container;
     this.plugin = plugin;
     this.app = plugin.app;
@@ -4416,11 +4422,17 @@ var WorkspaceStudio = class {
     this.container.empty();
     this.container.addClass("ws-studio");
     await this.loadData();
-    this.buildHeader();
-    this.buildWorkspaceSelector();
-    this.buildModes();
-    this.buildRecent();
-    this.buildStartFresh();
+    switch (this.screen) {
+      case "home":
+        this.renderHome();
+        break;
+      case "workspace":
+        await this.renderWorkspace();
+        break;
+      case "mode":
+        this.renderMode();
+        break;
+    }
   }
   async loadData() {
     this.projectIndex = await loadProjectIndex(
@@ -4433,172 +4445,437 @@ var WorkspaceStudio = class {
       this.plugin.settings.chatHistoryFolder
     );
   }
-  buildHeader() {
+  // ── 3c: Studio Home ─────────────────────────────────────
+  renderHome() {
+    var _a, _b;
     const head = this.container.createDiv({ cls: "ws-studio-head" });
-    const back = head.createEl("button", { cls: "ws-studio-back" });
-    (0, import_obsidian10.setIcon)(back.createSpan({ cls: "ws-studio-back-icon" }), "arrow-left");
-    back.createSpan({ text: "\u8FD4\u56DE\u5BF9\u8BDD" });
-    back.addEventListener("click", () => this.callbacks.onClose());
-    head.createDiv({ cls: "ws-studio-title", text: "Workspace Studio" });
-  }
-  buildWorkspaceSelector() {
-    var _a, _b, _c;
-    const section = this.container.createDiv({ cls: "ws-studio-section" });
-    const label = section.createDiv({ cls: "ws-studio-section-label" });
-    label.createSpan({ text: "WORKSPACES" });
+    const backBtn = head.createEl("button", { cls: "ws-studio-back" });
+    const backIcon = backBtn.createSpan({ cls: "ws-studio-back-icon" });
+    (0, import_obsidian10.setIcon)(backIcon, "chevron-left");
+    backBtn.createSpan({ text: "Studio" });
+    backBtn.addEventListener("click", () => this.callbacks.onClose());
+    const addBtn = head.createEl("button", { cls: "ws-studio-head-action" });
+    const addIcon = addBtn.createSpan({ cls: "ws-studio-head-action-icon" });
+    (0, import_obsidian10.setIcon)(addIcon, "plus");
+    addBtn.createSpan({ text: "\u65B0\u5EFA" });
+    addBtn.addEventListener("click", () => this.openCreateWorkspaceModal());
+    const searchWrap = this.container.createDiv({ cls: "ws-studio-search" });
+    const searchIcon = searchWrap.createSpan({ cls: "ws-studio-search-icon" });
+    (0, import_obsidian10.setIcon)(searchIcon, "search");
+    const searchInput = searchWrap.createEl("input", {
+      cls: "ws-studio-search-input",
+      attr: { placeholder: "\u641C\u7D22\u5DE5\u4F5C\u533A\u2026", type: "text" }
+    });
+    searchInput.addEventListener("input", () => {
+      const q = searchInput.value.toLowerCase();
+      const rows = this.container.querySelectorAll(".ws-studio-ws-row");
+      rows.forEach((row) => {
+        var _a2, _b2;
+        const name = (_b2 = (_a2 = row.dataset.name) == null ? void 0 : _a2.toLowerCase()) != null ? _b2 : "";
+        row.style.display = name.includes(q) ? "" : "none";
+      });
+    });
     const allProjects = (_b = (_a = this.projectIndex) == null ? void 0 : _a.projects) != null ? _b : [];
     const activeProjects = allProjects.filter((p) => p.status !== "archive");
     const archivedProjects = allProjects.filter((p) => p.status === "archive");
-    const active = (_c = this.projectIndex) == null ? void 0 : _c.activeProject;
-    const scroller = section.createDiv({ cls: "ws-studio-ws-scroller" });
-    for (const p of activeProjects) {
-      const card = scroller.createEl("button", { cls: "ws-studio-ws-card" });
-      if (p.name === active) card.addClass("active");
-      card.createDiv({ cls: "ws-studio-ws-name", text: p.name });
-      const meta = card.createDiv({ cls: "ws-studio-ws-meta" });
-      const count = this.sessions.filter(
-        (s) => {
-          var _a2;
-          return (s.workspace || ((_a2 = s.harnessContext) == null ? void 0 : _a2.workspace)) === p.name;
-        }
-      ).length;
-      meta.createSpan({ text: `${count} \u5BF9\u8BDD` });
-      card.addEventListener("click", () => {
-        void this.switchWorkspace(p.name);
-      });
-      card.addEventListener("contextmenu", (ev) => {
-        ev.preventDefault();
-        this.showWorkspaceMenu(p.name, ev);
-      });
+    if (activeProjects.length > 0) {
+      const secHead = this.container.createDiv({ cls: "ws-studio-sec-head" });
+      secHead.createSpan({ cls: "ws-studio-sec-label", text: "\u6D3B\u8DC3" });
+      secHead.createSpan({ cls: "ws-studio-sec-count", text: String(activeProjects.length) });
+      const list = this.container.createDiv({ cls: "ws-studio-ws-list" });
+      for (const p of activeProjects) {
+        this.renderWorkspaceRow(list, p.name, false);
+      }
     }
-    const addCard = scroller.createEl("button", { cls: "ws-studio-ws-card ws-studio-ws-add" });
-    (0, import_obsidian10.setIcon)(addCard.createSpan({ cls: "ws-studio-ws-add-icon" }), "plus");
-    addCard.createDiv({ text: "\u65B0\u5EFA" });
-    addCard.addEventListener("click", () => this.openCreateWorkspaceModal());
     if (archivedProjects.length > 0) {
-      const archiveToggle = section.createEl("button", { cls: "ws-studio-archive-toggle" });
-      (0, import_obsidian10.setIcon)(archiveToggle.createSpan({ cls: "ws-studio-archive-toggle-icon" }), "archive");
-      archiveToggle.createSpan({ text: `${archivedProjects.length} \u4E2A\u5DF2\u5F52\u6863` });
-      let expanded = false;
-      const archiveList = section.createDiv({ cls: "ws-studio-archive-list" });
-      archiveList.style.display = "none";
-      archiveToggle.addEventListener("click", () => {
-        expanded = !expanded;
-        archiveList.style.display = expanded ? "flex" : "none";
-        archiveToggle.toggleClass("is-expanded", expanded);
-      });
+      const secHead = this.container.createDiv({ cls: "ws-studio-sec-head" });
+      secHead.createSpan({ cls: "ws-studio-sec-label", text: "\u5DF2\u5F52\u6863" });
+      secHead.createSpan({ cls: "ws-studio-sec-count", text: String(archivedProjects.length) });
+      const list = this.container.createDiv({ cls: "ws-studio-ws-list" });
       for (const p of archivedProjects) {
-        const row = archiveList.createDiv({ cls: "ws-studio-archive-row" });
-        row.createSpan({ cls: "ws-studio-archive-name", text: p.name });
-        const restoreBtn = row.createEl("button", { cls: "ws-studio-archive-restore", text: "\u6062\u590D" });
-        restoreBtn.addEventListener("click", () => {
-          void this.unarchiveWorkspace(p.name);
-        });
+        this.renderWorkspaceRow(list, p.name, true);
       }
     }
   }
-  buildModes() {
-    var _a, _b, _c;
-    const section = this.container.createDiv({ cls: "ws-studio-section" });
-    const label = section.createDiv({ cls: "ws-studio-section-label" });
-    label.createSpan({ text: "MODES" });
-    const active = (_a = this.projectIndex) == null ? void 0 : _a.activeProject;
-    if (active) {
-      const editBtn = label.createSpan({ cls: "ws-studio-section-action" });
-      (0, import_obsidian10.setIcon)(editBtn, "pencil");
-      editBtn.setAttribute("title", "\u7F16\u8F91 modes");
-      editBtn.addEventListener("click", () => this.openEditWorkspaceModal(active));
-    }
-    const modes = (_c = (_b = this.projectIndex) == null ? void 0 : _b.modes) != null ? _c : [];
-    if (modes.length === 0) {
-      section.createDiv({
-        cls: "ws-studio-empty",
-        text: active ? "\u5F53\u524D workspace \u6CA1\u6709 modes.md" : "\u8BF7\u9009\u62E9\u4E00\u4E2A workspace"
-      });
-      return;
-    }
-    const grid = section.createDiv({ cls: "ws-studio-mode-grid" });
-    for (const mode of modes) {
-      const resolveContext = () => {
-        var _a2;
-        const resolveVars = (p) => {
-          var _a3, _b2;
-          let r = p;
-          r = r.replace(/\{active_project\}/g, ((_a3 = this.projectIndex) == null ? void 0 : _a3.activeProject) || "");
-          r = r.replace(/\{active_work_context\}/g, ((_b2 = this.projectIndex) == null ? void 0 : _b2.activeWorkContext) || "");
-          return r;
-        };
-        return {
-          mode,
-          injectedFiles: resolveFileEntries(mode.files, this.app, resolveVars),
-          workspace: (_a2 = this.projectIndex) == null ? void 0 : _a2.activeProject
-        };
-      };
-      if (mode.actions.length >= 1) {
-        for (const action of mode.actions) {
-          const card = grid.createEl("button", { cls: "ws-studio-mode-card quick" });
-          if (action.icon) {
-            const iconEl = card.createSpan({ cls: "ws-studio-mode-emoji ws-studio-mode-emoji--icon" });
-            (0, import_obsidian10.setIcon)(iconEl, action.icon);
-          } else {
-            card.createSpan({ cls: "ws-studio-mode-emoji", text: mode.emoji });
-          }
-          card.createSpan({ cls: "ws-studio-mode-name", text: action.label });
-          const bolt = card.createSpan({ cls: "ws-studio-mode-bolt" });
-          bolt.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>';
-          card.addEventListener("click", () => {
-            const ctx = resolveContext();
-            this.callbacks.onStartWithContext(ctx);
-          });
-        }
-      } else {
-        const card = grid.createEl("button", { cls: "ws-studio-mode-card" });
-        card.createSpan({ cls: "ws-studio-mode-emoji", text: mode.emoji });
-        card.createSpan({ cls: "ws-studio-mode-name", text: mode.label });
-        card.addEventListener("click", () => {
-          this.callbacks.onStartWithContext(resolveContext());
-        });
-      }
-    }
-  }
-  buildRecent() {
-    var _a, _b, _c, _d;
-    const active = (_a = this.projectIndex) == null ? void 0 : _a.activeProject;
-    if (!active) return;
-    const section = this.container.createDiv({ cls: "ws-studio-section" });
-    section.createDiv({ cls: "ws-studio-section-label", text: "RECENT" });
+  renderWorkspaceRow(parent, name, archived) {
+    var _a;
+    const row = parent.createDiv({ cls: "ws-studio-ws-row" });
+    row.dataset.name = name;
+    if (archived) row.addClass("ws-studio-ws-archived");
+    const iconWrap = row.createDiv({ cls: "ws-studio-ws-icon" });
+    (0, import_obsidian10.setIcon)(iconWrap, archived ? "archive" : "folder");
+    const info = row.createDiv({ cls: "ws-studio-ws-info" });
+    info.createDiv({ cls: "ws-studio-ws-name", text: name });
+    const projectsFolder = this.plugin.settings.harnessProjectsFolder;
+    const modesPath = `${projectsFolder}/${name}/modes.md`;
+    const modesFile = this.app.vault.getAbstractFileByPath(modesPath);
     const wsSessions = this.sessions.filter(
       (s) => {
         var _a2;
-        return (s.workspace || ((_a2 = s.harnessContext) == null ? void 0 : _a2.workspace)) === active;
+        return (s.workspace || ((_a2 = s.harnessContext) == null ? void 0 : _a2.workspace)) === name;
       }
-    ).slice(0, 5);
-    if (wsSessions.length === 0) {
-      section.createDiv({ cls: "ws-studio-empty", text: "\u8BE5 workspace \u6682\u65E0\u5BF9\u8BDD" });
-      return;
-    }
-    const list = section.createDiv({ cls: "ws-studio-recent-list" });
-    for (const s of wsSessions) {
-      const row = list.createDiv({ cls: "ws-studio-recent-row" });
-      const modeLabel = ((_b = s.harnessContext) == null ? void 0 : _b.mode) ? `${s.harnessContext.mode.emoji} ${s.harnessContext.mode.label} \xB7 ` : "";
-      row.createDiv({
-        cls: "ws-studio-recent-title",
-        text: `${modeLabel}${s.title || s.id}`
+    );
+    const lastUsed = wsSessions.length > 0 ? this.formatRelativeTime(wsSessions[0].updated) : "";
+    if (modesFile instanceof import_obsidian10.TFile) {
+      void this.app.vault.read(modesFile).then((content) => {
+        const modes = parseModesFromContent(content);
+        const actionCount = modes.reduce((sum, m) => sum + m.actions.length, 0);
+        const metaParts = [];
+        metaParts.push(`${modes.length} \u6A21\u5F0F`);
+        if (actionCount > 0) metaParts.push(`${actionCount} action`);
+        if (archived) {
+          const archivedDate = this.getArchivedDate(name);
+          if (archivedDate) metaParts.push(`\u5F52\u6863\u4E8E ${archivedDate}`);
+        } else if (lastUsed) {
+          metaParts.push(lastUsed);
+        }
+        const metaEl = info.querySelector(".ws-studio-ws-meta");
+        if (metaEl) metaEl.textContent = metaParts.join(" \xB7 ");
       });
-      row.createDiv({
-        cls: "ws-studio-recent-meta",
-        text: (_d = (_c = s.updated) == null ? void 0 : _c.slice(0, 16)) != null ? _d : ""
-      });
-      row.addEventListener("click", () => this.callbacks.onOpenSession(s.id));
     }
+    info.createDiv({ cls: "ws-studio-ws-meta", text: "\u2026" });
+    if (archived) {
+      const restoreBtn = row.createEl("button", { cls: "ws-studio-ws-restore", text: "\u6062\u590D" });
+      restoreBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        void this.unarchiveWorkspace(name);
+      });
+    } else {
+      const active = (_a = this.projectIndex) == null ? void 0 : _a.activeProject;
+      if (name === active) {
+        row.createSpan({ cls: "ws-studio-ws-dot" });
+      }
+      const chevron = row.createSpan({ cls: "ws-studio-ws-chevron" });
+      (0, import_obsidian10.setIcon)(chevron, "chevron-right");
+    }
+    row.addEventListener("click", () => {
+      if (archived) return;
+      this.navigateTo("workspace", name);
+    });
   }
-  buildStartFresh() {
-    const wrap = this.container.createDiv({ cls: "ws-studio-fresh-wrap" });
-    const btn = wrap.createEl("button", { cls: "ws-studio-fresh-btn" });
-    (0, import_obsidian10.setIcon)(btn.createSpan({ cls: "ws-studio-fresh-icon" }), "play");
-    btn.createSpan({ text: "\u5F00\u59CB\u65B0\u5BF9\u8BDD" });
-    btn.addEventListener("click", () => this.callbacks.onStartFresh());
+  // ── 3a: Workspace Overview ──────────────────────────────
+  async renderWorkspace() {
+    const name = this.selectedWorkspace;
+    if (this.editingModes.length === 0 || !this.dirty) {
+      const projectsFolder = this.plugin.settings.harnessProjectsFolder;
+      const modesPath = `${projectsFolder}/${name}/modes.md`;
+      const file = this.app.vault.getAbstractFileByPath(modesPath);
+      if (file instanceof import_obsidian10.TFile) {
+        const content = await this.app.vault.read(file);
+        this.editingModes = parseModesFromContent(content);
+      } else {
+        this.editingModes = [];
+      }
+      this.dirty = false;
+    }
+    const head = this.container.createDiv({ cls: "ws-studio-head" });
+    const backBtn = head.createEl("button", { cls: "ws-studio-back" });
+    const backIcon = backBtn.createSpan({ cls: "ws-studio-back-icon" });
+    (0, import_obsidian10.setIcon)(backIcon, "chevron-left");
+    backBtn.createSpan({ text: "Studio" });
+    backBtn.addEventListener("click", () => this.navigateTo("home"));
+    const addBtn = head.createEl("button", { cls: "ws-studio-head-action" });
+    const addIcon = addBtn.createSpan({ cls: "ws-studio-head-action-icon" });
+    (0, import_obsidian10.setIcon)(addIcon, "plus");
+    addBtn.createSpan({ text: "\u65B0\u5EFA\u5DE5\u4F5C\u533A" });
+    addBtn.addEventListener("click", () => this.openCreateWorkspaceModal());
+    const identity = this.container.createDiv({ cls: "ws-studio-identity" });
+    identity.createDiv({ cls: "ws-studio-identity-label", text: "\u5DE5\u4F5C\u533A" });
+    const nameRow = identity.createDiv({ cls: "ws-studio-identity-name-row" });
+    const wsIcon = nameRow.createDiv({ cls: "ws-studio-identity-icon" });
+    (0, import_obsidian10.setIcon)(wsIcon, "folder");
+    const nameInput = nameRow.createEl("input", {
+      cls: "ws-studio-identity-input",
+      attr: { value: name, readonly: "" }
+    });
+    const injLabel = identity.createDiv({ cls: "ws-studio-inject-label" });
+    injLabel.createSpan({ text: "\u5DE5\u4F5C\u533A\u7EA7\u6CE8\u5165" });
+    injLabel.createSpan({ cls: "ws-studio-inject-sep" });
+    const injPills = identity.createDiv({ cls: "ws-studio-inject-pills" });
+    this.renderWorkspaceLevelFiles(injPills);
+    const modesSec = this.container.createDiv({ cls: "ws-studio-sec-head" });
+    modesSec.createSpan({ cls: "ws-studio-sec-label", text: "\u6A21\u5F0F" });
+    const totalActions = this.editingModes.reduce((s, m) => s + m.actions.length, 0);
+    modesSec.createSpan({
+      cls: "ws-studio-sec-count",
+      text: `${this.editingModes.length} \u4E2A\u6A21\u5F0F \xB7 ${totalActions} \u4E2A Action`
+    });
+    const modeList = this.container.createDiv({ cls: "ws-studio-mode-list" });
+    for (let i = 0; i < this.editingModes.length; i++) {
+      this.renderModeRow(modeList, i);
+    }
+    const addMode = modeList.createDiv({ cls: "ws-studio-mode-add" });
+    const addModeIcon = addMode.createSpan({ cls: "ws-studio-mode-add-icon" });
+    (0, import_obsidian10.setIcon)(addModeIcon, "plus");
+    addMode.createSpan({ text: "\u65B0\u5EFA\u6A21\u5F0F" });
+    addMode.addEventListener("click", () => {
+      this.editingModes.push({
+        id: `mode-${this.editingModes.length + 1}`,
+        label: "\u65B0\u6A21\u5F0F",
+        emoji: "\u{1F4CB}",
+        files: [],
+        systemPromptAppend: "",
+        actions: []
+      });
+      this.dirty = true;
+      this.navigateTo("mode", this.selectedWorkspace, this.editingModes.length - 1);
+    });
+    const footer = this.container.createDiv({ cls: "ws-studio-footer" });
+    const saveBtn = footer.createEl("button", { cls: "ws-studio-save-btn" });
+    const saveIcon = saveBtn.createSpan({ cls: "ws-studio-save-icon" });
+    (0, import_obsidian10.setIcon)(saveIcon, "check");
+    saveBtn.createSpan({ text: "\u4FDD\u5B58\u5DE5\u4F5C\u533A" });
+    saveBtn.addEventListener("click", async () => {
+      await this.save();
+    });
+    const deleteBtn = footer.createEl("button", { cls: "ws-studio-delete-btn" });
+    (0, import_obsidian10.setIcon)(deleteBtn, "trash-2");
+    deleteBtn.addEventListener("click", async () => {
+      await this.archiveWorkspace(name);
+      this.navigateTo("home");
+    });
   }
+  renderModeRow(parent, index) {
+    const mode = this.editingModes[index];
+    const row = parent.createDiv({ cls: "ws-studio-mode-row" });
+    const iconWrap = row.createDiv({ cls: "ws-studio-mode-icon" });
+    iconWrap.textContent = mode.emoji;
+    const info = row.createDiv({ cls: "ws-studio-mode-info" });
+    info.createDiv({ cls: "ws-studio-mode-name", text: mode.label });
+    const metaParts = [];
+    metaParts.push(`${mode.files.length} files`);
+    if (mode.actions.length > 0) {
+      metaParts.push(`${mode.actions.length} action${mode.actions.length > 1 ? "s" : ""}`);
+    } else {
+      metaParts.push("\u65E0 action");
+    }
+    info.createDiv({ cls: "ws-studio-mode-meta", text: metaParts.join(" \xB7 ") });
+    if (mode.actions.length > 0) {
+      const badge = row.createSpan({ cls: "ws-studio-mode-badge" });
+      badge.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>';
+      badge.createSpan({ text: String(mode.actions.length) });
+    }
+    const chevron = row.createSpan({ cls: "ws-studio-mode-chevron" });
+    (0, import_obsidian10.setIcon)(chevron, "chevron-right");
+    row.addEventListener("click", () => {
+      this.navigateTo("mode", this.selectedWorkspace, index);
+    });
+  }
+  renderWorkspaceLevelFiles(container) {
+    container.empty();
+    const addPill = container.createDiv({ cls: "ws-studio-inject-add" });
+    const addIcon = addPill.createSpan({ cls: "ws-studio-inject-add-icon" });
+    (0, import_obsidian10.setIcon)(addIcon, "plus");
+    addPill.createSpan({ text: "\u6DFB\u52A0" });
+  }
+  // ── 3b: Mode Editor ─────────────────────────────────────
+  renderMode() {
+    const mode = this.editingModes[this.selectedModeIndex];
+    if (!mode) return;
+    const head = this.container.createDiv({ cls: "ws-studio-head" });
+    const backBtn = head.createEl("button", { cls: "ws-studio-back" });
+    const backIcon = backBtn.createSpan({ cls: "ws-studio-back-icon" });
+    (0, import_obsidian10.setIcon)(backIcon, "chevron-left");
+    const breadcrumb = backBtn.createSpan();
+    breadcrumb.createSpan({ cls: "ws-studio-breadcrumb-ws", text: this.selectedWorkspace });
+    breadcrumb.createSpan({ cls: "ws-studio-breadcrumb-sep", text: " / " });
+    breadcrumb.createSpan({ cls: "ws-studio-breadcrumb-mode", text: mode.label });
+    backBtn.addEventListener("click", () => this.navigateTo("workspace", this.selectedWorkspace));
+    const saveLink = head.createEl("button", { cls: "ws-studio-head-save", text: "\u4FDD\u5B58" });
+    saveLink.addEventListener("click", async () => {
+      await this.save();
+    });
+    const nameSection = this.container.createDiv({ cls: "ws-studio-editor-section" });
+    nameSection.createDiv({ cls: "ws-studio-editor-label", text: "\u6A21\u5F0F\u540D\u79F0" });
+    const nameRow = nameSection.createDiv({ cls: "ws-studio-identity-name-row" });
+    const modeIconEl = nameRow.createDiv({ cls: "ws-studio-mode-icon ws-studio-mode-icon--accent" });
+    modeIconEl.textContent = mode.emoji;
+    const nameInput = nameRow.createEl("input", {
+      cls: "ws-studio-identity-input",
+      attr: { value: mode.label }
+    });
+    nameInput.addEventListener("input", () => {
+      mode.label = nameInput.value;
+      this.dirty = true;
+    });
+    const metaRow = nameSection.createDiv({ cls: "ws-studio-mode-meta-row" });
+    const idWrap = metaRow.createDiv({ cls: "ws-studio-mode-meta-field" });
+    idWrap.createSpan({ cls: "ws-studio-mode-meta-label", text: "ID" });
+    const idInput = idWrap.createEl("input", {
+      cls: "ws-studio-mode-meta-input",
+      attr: { value: mode.id }
+    });
+    idInput.addEventListener("input", () => {
+      mode.id = idInput.value;
+      this.dirty = true;
+    });
+    const emojiWrap = metaRow.createDiv({ cls: "ws-studio-mode-meta-field" });
+    emojiWrap.createSpan({ cls: "ws-studio-mode-meta-label", text: "\u56FE\u6807" });
+    const emojiInput = emojiWrap.createEl("input", {
+      cls: "ws-studio-mode-meta-input ws-studio-mode-meta-emoji",
+      attr: { value: mode.emoji, maxlength: "2" }
+    });
+    emojiInput.addEventListener("input", () => {
+      mode.emoji = emojiInput.value;
+      modeIconEl.textContent = mode.emoji;
+      this.dirty = true;
+    });
+    const promptSection = this.container.createDiv({ cls: "ws-studio-editor-section" });
+    const promptHead = promptSection.createDiv({ cls: "ws-studio-editor-label-row" });
+    promptHead.createSpan({ cls: "ws-studio-editor-label", text: "\u7CFB\u7EDF\u63D0\u793A" });
+    const charCount = promptSection.createSpan({
+      cls: "ws-studio-editor-count",
+      text: `${mode.systemPromptAppend.length} \u5B57`
+    });
+    promptHead.appendChild(charCount);
+    const promptEl = promptSection.createEl("textarea", { cls: "ws-studio-editor-prompt" });
+    promptEl.value = mode.systemPromptAppend;
+    promptEl.rows = 6;
+    promptEl.setAttribute("placeholder", "System prompt...");
+    promptEl.addEventListener("input", () => {
+      mode.systemPromptAppend = promptEl.value;
+      charCount.textContent = `${promptEl.value.length} \u5B57`;
+      this.dirty = true;
+    });
+    const ctxSection = this.container.createDiv({ cls: "ws-studio-editor-section" });
+    ctxSection.createDiv({
+      cls: "ws-studio-editor-label",
+      text: `\u6CE8\u5165\u4E0A\u4E0B\u6587 \xB7 ${mode.files.length}`
+    });
+    const filesList = ctxSection.createDiv({ cls: "ws-studio-editor-files" });
+    const renderFiles = () => {
+      filesList.empty();
+      for (let fi = 0; fi < mode.files.length; fi++) {
+        const filePath = mode.files[fi];
+        const fileRow = filesList.createDiv({ cls: "ws-studio-editor-file" });
+        const fIcon = fileRow.createSpan({ cls: "ws-studio-editor-file-icon" });
+        (0, import_obsidian10.setIcon)(fIcon, "file-text");
+        const displayName = filePath.replace(/^.*\//, "").replace(/\.md$/, "");
+        fileRow.createSpan({ cls: "ws-studio-editor-file-name", text: displayName });
+        fileRow.setAttribute("title", filePath);
+        const removeBtn = fileRow.createSpan({ cls: "ws-studio-editor-file-remove" });
+        (0, import_obsidian10.setIcon)(removeBtn, "x");
+        removeBtn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          mode.files.splice(fi, 1);
+          this.dirty = true;
+          renderFiles();
+          ctxSection.querySelector(".ws-studio-editor-label").textContent = `\u6CE8\u5165\u4E0A\u4E0B\u6587 \xB7 ${mode.files.length}`;
+        });
+      }
+      const addFileBtn = filesList.createDiv({ cls: "ws-studio-editor-file-add" });
+      const afIcon = addFileBtn.createSpan({ cls: "ws-studio-editor-file-add-icon" });
+      (0, import_obsidian10.setIcon)(afIcon, "plus");
+      addFileBtn.createSpan({ text: "\u6DFB\u52A0\u6587\u4EF6 / \u6587\u4EF6\u5939" });
+      addFileBtn.addEventListener("click", () => {
+        new FileSuggestModal(this.app, (path) => {
+          if (!mode.files.includes(path)) {
+            mode.files.push(path);
+            this.dirty = true;
+            renderFiles();
+            ctxSection.querySelector(".ws-studio-editor-label").textContent = `\u6CE8\u5165\u4E0A\u4E0B\u6587 \xB7 ${mode.files.length}`;
+          }
+        }).open();
+      });
+    };
+    renderFiles();
+    const actSection = this.container.createDiv({ cls: "ws-studio-editor-section ws-studio-editor-actions" });
+    const actHead = actSection.createDiv({ cls: "ws-studio-editor-label-row ws-studio-editor-actions-head" });
+    const boltIcon = actHead.createSpan({ cls: "ws-studio-editor-bolt" });
+    boltIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>';
+    actHead.createSpan({
+      cls: "ws-studio-editor-label ws-studio-editor-label--accent",
+      text: `\u4E00\u952E Action \xB7 ${mode.actions.length}`
+    });
+    const actionsList = actSection.createDiv({ cls: "ws-studio-editor-actions-list" });
+    const renderActions = () => {
+      actionsList.empty();
+      for (let j = 0; j < mode.actions.length; j++) {
+        const action = mode.actions[j];
+        const actionCard = actionsList.createDiv({ cls: "ws-studio-editor-action" });
+        const actionRow = actionCard.createDiv({ cls: "ws-studio-editor-action-head" });
+        const labelInput = actionRow.createEl("input", {
+          cls: "ws-studio-editor-action-label",
+          attr: { value: action.label, placeholder: "Action \u540D\u79F0" }
+        });
+        labelInput.addEventListener("input", () => {
+          action.label = labelInput.value;
+          this.dirty = true;
+        });
+        const editBtn = actionRow.createSpan({ cls: "ws-studio-editor-action-edit" });
+        (0, import_obsidian10.setIcon)(editBtn, "pencil");
+        const removeBtn = actionRow.createSpan({ cls: "ws-studio-editor-action-remove" });
+        (0, import_obsidian10.setIcon)(removeBtn, "x");
+        removeBtn.addEventListener("click", () => {
+          mode.actions.splice(j, 1);
+          this.dirty = true;
+          renderActions();
+          actHead.querySelector(".ws-studio-editor-label").textContent = `\u4E00\u952E Action \xB7 ${mode.actions.length}`;
+        });
+        const promptInput = actionCard.createEl("textarea", {
+          cls: "ws-studio-editor-action-prompt",
+          attr: { placeholder: "Action prompt\u2026", rows: "2" }
+        });
+        promptInput.value = action.prompt;
+        promptInput.addEventListener("input", () => {
+          action.prompt = promptInput.value;
+          this.dirty = true;
+        });
+      }
+      const addAction = actionsList.createDiv({ cls: "ws-studio-editor-action-add" });
+      const addAIcon = addAction.createSpan({ cls: "ws-studio-editor-action-add-icon" });
+      (0, import_obsidian10.setIcon)(addAIcon, "plus");
+      addAction.createSpan({ text: "\u65B0\u5EFA Action" });
+      addAction.addEventListener("click", () => {
+        mode.actions.push({ label: "\u65B0 Action", prompt: "" });
+        this.dirty = true;
+        renderActions();
+        actHead.querySelector(".ws-studio-editor-label").textContent = `\u4E00\u952E Action \xB7 ${mode.actions.length}`;
+      });
+    };
+    renderActions();
+    const dangerSection = this.container.createDiv({ cls: "ws-studio-editor-danger" });
+    const deleteBtn = dangerSection.createEl("button", { cls: "ws-studio-editor-delete-mode" });
+    (0, import_obsidian10.setIcon)(deleteBtn, "trash-2");
+    deleteBtn.createSpan({ text: "\u5220\u9664\u6B64\u6A21\u5F0F" });
+    deleteBtn.addEventListener("click", () => {
+      this.editingModes.splice(this.selectedModeIndex, 1);
+      this.dirty = true;
+      this.navigateTo("workspace", this.selectedWorkspace);
+    });
+  }
+  navigateTo(screen, workspace, modeIndex) {
+    this.screen = screen;
+    if (workspace !== void 0) this.selectedWorkspace = workspace;
+    if (modeIndex !== void 0) this.selectedModeIndex = modeIndex;
+    if (screen === "home") {
+      this.selectedWorkspace = null;
+      this.selectedModeIndex = -1;
+      this.editingModes = [];
+      this.dirty = false;
+    }
+    void this.render();
+  }
+  // ── Data helpers ────────────────────────────────────────
+  formatRelativeTime(dateStr) {
+    const now = Date.now();
+    const then = Date.parse(dateStr);
+    if (isNaN(then)) return "";
+    const diff = now - then;
+    const mins = Math.floor(diff / 6e4);
+    if (mins < 60) return "\u521A\u521A";
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} \u5C0F\u65F6\u524D`;
+    const days = Math.floor(hours / 24);
+    if (days === 1) return "\u6628\u5929";
+    if (days < 7) return `${days} \u5929\u524D`;
+    if (days < 30) return "\u4E0A\u5468";
+    return `${Math.floor(days / 30)} \u6708\u524D`;
+  }
+  getArchivedDate(_name) {
+    return "";
+  }
+  // ── CRUD ────────────────────────────────────────────────
   async switchWorkspace(name) {
     const projectsFolder = this.plugin.settings.harnessProjectsFolder;
     const indexPath = `${projectsFolder}/_INDEX.md`;
@@ -4615,17 +4892,6 @@ active_project: ${name}
 ${content}`;
     }
     await this.app.vault.modify(file, content);
-    await this.render();
-  }
-  showWorkspaceMenu(name, ev) {
-    const menu = new import_obsidian10.Menu();
-    menu.addItem(
-      (it) => it.setTitle("\u7F16\u8F91").setIcon("pencil").onClick(() => this.openEditWorkspaceModal(name))
-    );
-    menu.addItem(
-      (it) => it.setTitle("\u5F52\u6863").setIcon("archive").onClick(() => this.archiveWorkspace(name))
-    );
-    menu.showAtMouseEvent(ev);
   }
   openCreateWorkspaceModal() {
     new CreateWorkspaceModal(this.app, this.plugin, async (name) => {
@@ -4681,7 +4947,6 @@ active_work_context:
   async archiveWorkspace(name) {
     await this.setWorkspaceStatus(name, "archive");
     new import_obsidian10.Notice(`\u5DF2\u5F52\u6863\u300C${name}\u300D`);
-    await this.render();
   }
   async unarchiveWorkspace(name) {
     await this.setWorkspaceStatus(name, "active");
@@ -4699,10 +4964,14 @@ active_work_context:
     content = content.replace(rowRe, `$1 ${status} |`);
     await this.app.vault.modify(indexFile, content);
   }
-  openEditWorkspaceModal(name) {
-    new EditWorkspaceModal(this.app, this.plugin, name, async () => {
-      await this.render();
-    }).open();
+  async save() {
+    if (!this.selectedWorkspace) return;
+    const modesPath = `${this.plugin.settings.harnessProjectsFolder}/${this.selectedWorkspace}/modes.md`;
+    const content = serializeModesToContent(this.editingModes);
+    const adapter = this.app.vault.adapter;
+    await adapter.write(modesPath, content);
+    this.dirty = false;
+    new import_obsidian10.Notice("\u5DF2\u4FDD\u5B58 modes.md");
   }
   destroy() {
     this.container.empty();
@@ -4754,187 +5023,6 @@ var CreateWorkspaceModal = class extends import_obsidian10.Modal {
         this.close();
       })
     );
-  }
-  onClose() {
-    this.contentEl.empty();
-  }
-};
-var EditWorkspaceModal = class extends import_obsidian10.Modal {
-  constructor(app, plugin, workspaceName, onSave) {
-    super(app);
-    this.modes = [];
-    this.plugin = plugin;
-    this.workspaceName = workspaceName;
-    this.onSave = onSave;
-  }
-  async onOpen() {
-    const { contentEl } = this;
-    contentEl.addClass("ws-studio-edit-modal");
-    contentEl.empty();
-    contentEl.createEl("h3", { text: `\u7F16\u8F91: ${this.workspaceName}` });
-    const modesPath = `${this.plugin.settings.harnessProjectsFolder}/${this.workspaceName}/modes.md`;
-    const file = this.app.vault.getAbstractFileByPath(modesPath);
-    if (file instanceof import_obsidian10.TFile) {
-      const content = await this.app.vault.read(file);
-      this.modes = parseModesFromContent(content);
-    }
-    this.renderModesList();
-    new import_obsidian10.Setting(contentEl).addButton(
-      (btn) => btn.setButtonText("+ \u6DFB\u52A0\u65B0 Mode").onClick(() => {
-        this.modes.push({
-          id: `mode-${this.modes.length + 1}`,
-          label: "\u65B0\u6A21\u5F0F",
-          emoji: "\u{1F4CB}",
-          files: [],
-          systemPromptAppend: "",
-          actions: []
-        });
-        this.renderModesList();
-      })
-    );
-    new import_obsidian10.Setting(contentEl).addButton(
-      (btn) => btn.setButtonText("\u5F52\u6863").setWarning().onClick(async () => {
-        if (!confirm(`\u786E\u5B9A\u8981\u5F52\u6863\u300C${this.workspaceName}\u300D\u5417\uFF1F\u6587\u4EF6\u5C06\u4FDD\u7559\uFF0C\u53EF\u968F\u65F6\u6062\u590D\u3002`)) return;
-        const projectsFolder = this.plugin.settings.harnessProjectsFolder;
-        const indexPath = `${projectsFolder}/_INDEX.md`;
-        const indexFile = this.app.vault.getAbstractFileByPath(indexPath);
-        if (!(indexFile instanceof import_obsidian10.TFile)) return;
-        let content = await this.app.vault.read(indexFile);
-        const escaped = this.workspaceName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const rowRe = new RegExp(`^(\\|\\s*${escaped}\\s*\\|)\\s*\\w+\\s*\\|`, "m");
-        content = content.replace(rowRe, `$1 archive |`);
-        await this.app.vault.modify(indexFile, content);
-        new import_obsidian10.Notice(`\u5DF2\u5F52\u6863\u300C${this.workspaceName}\u300D`);
-        this.close();
-        await this.onSave();
-      })
-    ).addButton(
-      (btn) => btn.setButtonText("\u53D6\u6D88").onClick(() => this.close())
-    ).addButton(
-      (btn) => btn.setButtonText("\u4FDD\u5B58").setCta().onClick(async () => {
-        await this.save();
-        this.close();
-      })
-    );
-  }
-  renderModesList() {
-    let listEl = this.contentEl.querySelector(".ws-studio-edit-modes");
-    if (!listEl) {
-      listEl = this.contentEl.createDiv({ cls: "ws-studio-edit-modes" });
-      const settingItems = this.contentEl.querySelectorAll(":scope > .setting-item");
-      const firstSetting = settingItems[0];
-      if (firstSetting) {
-        this.contentEl.insertBefore(listEl, firstSetting);
-      }
-    }
-    listEl.empty();
-    for (let i = 0; i < this.modes.length; i++) {
-      const mode = this.modes[i];
-      const card = listEl.createDiv({ cls: "ws-studio-edit-mode" });
-      new import_obsidian10.Setting(card).addText((text) => {
-        text.setPlaceholder("\u{1F516}").setValue(mode.emoji).onChange((v) => {
-          mode.emoji = v;
-        });
-        text.inputEl.addClass("ws-studio-edit-emoji");
-        text.inputEl.setAttribute("maxlength", "2");
-      }).addText((text) => {
-        text.setPlaceholder("\u540D\u79F0").setValue(mode.label).onChange((v) => {
-          mode.label = v;
-        });
-      }).addText((text) => {
-        text.setPlaceholder("ID").setValue(mode.id).onChange((v) => {
-          mode.id = v;
-        });
-        text.inputEl.addClass("ws-studio-edit-id");
-      }).addButton((btn) => {
-        btn.setIcon("trash-2").setWarning().onClick(() => {
-          this.modes.splice(i, 1);
-          this.renderModesList();
-        });
-      }).then((s) => {
-        s.settingEl.addClass("ws-studio-edit-mode-head");
-      });
-      const promptArea = card.createEl("textarea", { cls: "ws-studio-edit-prompt" });
-      promptArea.value = mode.systemPromptAppend;
-      promptArea.rows = 8;
-      promptArea.setAttribute("placeholder", "System prompt...");
-      promptArea.addEventListener("input", () => {
-        mode.systemPromptAppend = promptArea.value;
-      });
-      const pillsContainer = card.createDiv({ cls: "ws-studio-edit-files-pills" });
-      const renderFilePills = () => {
-        pillsContainer.empty();
-        if (mode.files.length === 0) {
-          pillsContainer.createSpan({ cls: "ws-studio-edit-files-empty", text: "\u65E0\u9644\u4EF6" });
-          return;
-        }
-        for (let fi = 0; fi < mode.files.length; fi++) {
-          const filePath = mode.files[fi];
-          const pill = pillsContainer.createDiv({ cls: "ws-studio-edit-file-pill" });
-          const iconSpan = pill.createSpan({ cls: "ws-studio-edit-file-pill-icon" });
-          (0, import_obsidian10.setIcon)(iconSpan, "file-text");
-          const displayName = filePath.replace(/^.*\//, "").replace(/\.md$/, "");
-          pill.createSpan({ cls: "ws-studio-edit-file-pill-name", text: displayName });
-          pill.setAttribute("title", filePath);
-          const removeBtn = pill.createSpan({ cls: "ws-studio-edit-file-pill-remove" });
-          (0, import_obsidian10.setIcon)(removeBtn, "x");
-          removeBtn.addEventListener("click", (ev) => {
-            ev.stopPropagation();
-            mode.files.splice(fi, 1);
-            renderFilePills();
-          });
-        }
-        const addPill = pillsContainer.createDiv({ cls: "ws-studio-edit-file-pill ws-studio-edit-file-add" });
-        (0, import_obsidian10.setIcon)(addPill.createSpan({ cls: "ws-studio-edit-file-pill-icon" }), "plus");
-        addPill.createSpan({ cls: "ws-studio-edit-file-pill-name", text: "\u6DFB\u52A0" });
-        addPill.addEventListener("click", () => {
-          new FileSuggestModal(this.app, (path) => {
-            if (!mode.files.includes(path)) {
-              mode.files.push(path);
-              renderFilePills();
-            }
-          }).open();
-        });
-      };
-      renderFilePills();
-      const actionsContainer = card.createDiv({ cls: "ws-studio-edit-actions-list" });
-      this.renderActions(actionsContainer, mode);
-    }
-  }
-  renderActions(container, mode) {
-    container.empty();
-    for (let j = 0; j < mode.actions.length; j++) {
-      const action = mode.actions[j];
-      new import_obsidian10.Setting(container).addText((text) => {
-        text.setPlaceholder("label").setValue(action.label).onChange((v) => {
-          action.label = v;
-        });
-        text.inputEl.addClass("ws-studio-edit-action-label");
-      }).addText((text) => {
-        text.setPlaceholder("prompt").setValue(action.prompt).onChange((v) => {
-          action.prompt = v;
-        });
-      }).addButton((btn) => {
-        btn.setIcon("x").setWarning().onClick(() => {
-          mode.actions.splice(j, 1);
-          this.renderActions(container, mode);
-        });
-      });
-    }
-    new import_obsidian10.Setting(container).addButton((btn) => {
-      btn.setButtonText("+ Action").onClick(() => {
-        mode.actions.push({ label: "\u65B0 Action", prompt: "" });
-        this.renderActions(container, mode);
-      });
-    });
-  }
-  async save() {
-    const modesPath = `${this.plugin.settings.harnessProjectsFolder}/${this.workspaceName}/modes.md`;
-    const content = serializeModesToContent(this.modes);
-    const adapter = this.app.vault.adapter;
-    await adapter.write(modesPath, content);
-    new import_obsidian10.Notice("\u5DF2\u4FDD\u5B58 modes.md");
-    await this.onSave();
   }
   onClose() {
     this.contentEl.empty();
@@ -6789,12 +6877,20 @@ ${entry}
     const titleRow = masthead.createEl("h1", { cls: "ai-daily-welcome-title" });
     titleRow.createSpan({ text: "Cortex" });
     titleRow.createSpan({ cls: "ai-daily-welcome-ver", text: `v${this.plugin.manifest.version}` });
-    masthead.createEl("p", { cls: "ai-daily-welcome-hint", text: "\u76F4\u63A5\u63D0\u95EE\u63A2\u7D22\u77E5\u8BC6\u5E93\uFF0C\u6216\u9009\u4E00\u4E2A\u6A21\u5F0F\u5F00\u59CB" });
+    this.buildResumeHero(welcomeEl);
+    const askBar = welcomeEl.createDiv({ cls: "ai-daily-welcome-ask" });
+    const askIcon = askBar.createSpan({ cls: "ai-daily-welcome-ask-icon" });
+    (0, import_obsidian12.setIcon)(askIcon, "message-circle");
+    askBar.createSpan({ cls: "ai-daily-welcome-ask-text", text: "\u76F4\u63A5\u63D0\u95EE\u63A2\u7D22\u77E5\u8BC6\u5E93\u2026" });
+    askBar.createSpan({ cls: "ai-daily-welcome-ask-hint", text: "@ \xB7 /" });
+    askBar.addEventListener("click", () => {
+      this.inputEl.focus();
+    });
     this.buildWelcomeHarness(welcomeEl);
     const tools = [
       { icon: "layout-grid", label: "Studio", action: () => void this.openStudio() },
       { icon: "history", label: "\u5386\u53F2", action: () => this.openHistoryPanel() },
-      { icon: "heart-pulse", label: "Wiki \u68C0\u67E5", action: () => this.plugin.runWikiHealthCheck() }
+      { icon: "heart-pulse", label: "Wiki", action: () => this.plugin.runWikiHealthCheck() }
     ];
     const toolsEl = welcomeEl.createDiv({ cls: "ai-daily-welcome-tools" });
     for (const t of tools) {
@@ -6805,6 +6901,54 @@ ${entry}
       btn.addEventListener("click", t.action);
     }
     this.updateTokenBar();
+  }
+  buildResumeHero(welcomeEl) {
+    listChatSessions(
+      this.app.vault,
+      this.plugin.settings.chatHistoryFolder
+    ).then((sessions) => {
+      var _a, _b, _c, _d, _e, _f;
+      if (sessions.length === 0) return;
+      const last = sessions[0];
+      const hero = welcomeEl.createDiv({ cls: "ai-daily-welcome-hero" });
+      const playBtn = hero.createDiv({ cls: "ai-daily-welcome-hero-play" });
+      playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+      const info = hero.createDiv({ cls: "ai-daily-welcome-hero-info" });
+      info.createDiv({ cls: "ai-daily-welcome-hero-label", text: "\u7EE7\u7EED\u4E0A\u6B21" });
+      const modeName = ((_a = last.harnessContext) == null ? void 0 : _a.mode) ? `${last.harnessContext.mode.label}` : "";
+      const actionLabel = (_e = (_d = (_c = (_b = last.harnessContext) == null ? void 0 : _b.mode) == null ? void 0 : _c.actions) == null ? void 0 : _d[0]) == null ? void 0 : _e.label;
+      const titleParts = [modeName, actionLabel].filter(Boolean).join(" \xB7 ");
+      info.createDiv({ cls: "ai-daily-welcome-hero-title", text: titleParts || last.title || "\u65B0\u5BF9\u8BDD" });
+      const wsName = last.workspace || ((_f = last.harnessContext) == null ? void 0 : _f.workspace) || "";
+      const timeStr = last.updated ? this.formatRelativeTime(last.updated) : "";
+      const metaParts = [wsName, timeStr].filter(Boolean).join(" \xB7 ");
+      if (metaParts) {
+        info.createDiv({ cls: "ai-daily-welcome-hero-meta", text: metaParts });
+      }
+      const chevron = hero.createSpan({ cls: "ai-daily-welcome-hero-chevron" });
+      (0, import_obsidian12.setIcon)(chevron, "chevron-right");
+      hero.addEventListener("click", () => {
+        void this.loadSession(last.id);
+      });
+      const askBar = welcomeEl.querySelector(".ai-daily-welcome-ask");
+      if (askBar) welcomeEl.insertBefore(hero, askBar);
+    });
+  }
+  formatRelativeTime(dateStr) {
+    const now = Date.now();
+    const then = Date.parse(dateStr);
+    if (isNaN(then)) return "";
+    const diff = now - then;
+    const mins = Math.floor(diff / 6e4);
+    if (mins < 60) return "\u521A\u521A";
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} \u5C0F\u65F6\u524D`;
+    const days = Math.floor(hours / 24);
+    if (days === 0) return "\u4ECA\u5929";
+    if (days === 1) return "\u6628\u5929";
+    if (days < 7) return `${days} \u5929\u524D`;
+    if (days < 30) return "\u4E0A\u5468";
+    return `${Math.floor(days / 30)} \u6708\u524D`;
   }
   toggleStudio() {
     if (this.studioEl) {
@@ -6856,18 +7000,29 @@ ${entry}
     ).then((index) => {
       if (!index || index.projects.length === 0) return;
       const projectsFolder = this.plugin.settings.harnessProjectsFolder;
-      for (const project of index.projects) {
-        if (project.status === "archive") continue;
+      const activeProjects = index.projects.filter((p) => p.status !== "archive");
+      const archivedCount = index.projects.length - activeProjects.length;
+      const secHead = container.createDiv({ cls: "ai-daily-welcome-sec-head" });
+      secHead.createSpan({ cls: "ai-daily-welcome-sec-label", text: "\u5DE5\u4F5C\u533A" });
+      const countParts = [String(activeProjects.length)];
+      if (archivedCount > 0) countParts.push(`${archivedCount} \u5DF2\u5F52\u6863`);
+      secHead.createSpan({ cls: "ai-daily-welcome-sec-count", text: countParts.join(" \xB7 ") });
+      for (const project of activeProjects) {
         const modesPath = `${projectsFolder}/${project.name}/modes.md`;
         const modesFile = this.app.vault.getAbstractFileByPath(modesPath);
         if (!(modesFile instanceof import_obsidian12.TFile)) continue;
         void this.app.vault.read(modesFile).then((content) => {
           const modes = parseModesFromContent(content);
           if (modes.length === 0) return;
-          const group = container.createDiv({ cls: "ai-daily-welcome-group" });
-          const label = group.createDiv({ cls: "ai-daily-welcome-group-label" });
-          label.createSpan({ text: project.name });
-          const grid = group.createDiv({ cls: "ai-daily-welcome-grid" });
+          const card = container.createDiv({ cls: "ai-daily-welcome-card" });
+          const cardHead = card.createDiv({ cls: "ai-daily-welcome-card-head" });
+          const cardIcon = cardHead.createSpan({ cls: "ai-daily-welcome-card-icon" });
+          (0, import_obsidian12.setIcon)(cardIcon, "folder");
+          cardHead.createSpan({ cls: "ai-daily-welcome-card-name", text: project.name });
+          if (project.name === index.activeProject) {
+            cardHead.createSpan({ cls: "ai-daily-welcome-card-dot" });
+          }
+          const chips = card.createDiv({ cls: "ai-daily-welcome-chips" });
           for (const mode of modes) {
             const resolveContext = () => {
               const resolveVars = (p) => {
@@ -6879,21 +7034,14 @@ ${entry}
               const resolvedFiles = resolveFileEntries(mode.files, this.app, resolveVars);
               return { mode, injectedFiles: resolvedFiles, workspace: project.name };
             };
-            const boltSvg = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>';
+            const boltSvg = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>';
             if (mode.actions.length >= 1) {
               for (const action of mode.actions) {
-                const card = grid.createEl("button", { cls: "ai-daily-welcome-mode quick" });
-                const icon = action.icon || mode.emoji;
-                if (action.icon) {
-                  const iconEl = card.createSpan({ cls: "ai-daily-welcome-mode-emoji ai-daily-welcome-mode-emoji--icon" });
-                  (0, import_obsidian12.setIcon)(iconEl, action.icon);
-                } else {
-                  card.createSpan({ cls: "ai-daily-welcome-mode-emoji", text: mode.emoji });
-                }
-                card.createSpan({ cls: "ai-daily-welcome-mode-name", text: action.label });
-                const bolt = card.createSpan({ cls: "ai-daily-welcome-mode-bolt" });
+                const chip = chips.createEl("button", { cls: "ai-daily-welcome-chip ai-daily-welcome-chip--action" });
+                const bolt = chip.createSpan({ cls: "ai-daily-welcome-chip-bolt" });
                 bolt.innerHTML = boltSvg;
-                card.addEventListener("click", () => {
+                chip.createSpan({ text: action.label });
+                chip.addEventListener("click", () => {
                   const ctx = resolveContext();
                   this.startWithContext(ctx);
                   this.inputEl.value = action.prompt;
@@ -6901,10 +7049,9 @@ ${entry}
                 });
               }
             } else {
-              const btn = grid.createEl("button", { cls: "ai-daily-welcome-mode" });
-              btn.createSpan({ cls: "ai-daily-welcome-mode-emoji", text: mode.emoji });
-              btn.createSpan({ cls: "ai-daily-welcome-mode-name", text: mode.label });
-              btn.addEventListener("click", () => {
+              const chip = chips.createEl("button", { cls: "ai-daily-welcome-chip" });
+              chip.createSpan({ text: mode.label });
+              chip.addEventListener("click", () => {
                 this.startWithContext(resolveContext());
               });
             }
@@ -7660,22 +7807,41 @@ ${filesList}` : "",
     this.clearChat();
     this.harnessContext = context;
     if (context) {
-      const modeLabel = `${context.mode.emoji} ${context.mode.label}`;
       const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
       if (welcome) welcome.remove();
-      const harnessEl = this.messagesEl.createDiv({ cls: "ai-daily-harness-banner" });
-      harnessEl.createDiv({
-        cls: "ai-daily-harness-banner-mode",
-        text: `\u6A21\u5F0F\uFF1A${modeLabel}`
-      });
+      const banner = this.messagesEl.createDiv({ cls: "ai-daily-ctx-header" });
+      let expanded = false;
+      const row = banner.createDiv({ cls: "ai-daily-ctx-row" });
+      const modeIcon = row.createDiv({ cls: "ai-daily-ctx-icon" });
+      modeIcon.textContent = context.mode.emoji;
+      const info = row.createDiv({ cls: "ai-daily-ctx-info" });
+      info.createDiv({ cls: "ai-daily-ctx-mode", text: context.mode.label });
+      if (context.workspace) {
+        info.createDiv({ cls: "ai-daily-ctx-ws", text: context.workspace });
+      }
       if (context.injectedFiles.length > 0) {
-        const filesEl = harnessEl.createDiv({ cls: "ai-daily-harness-banner-files" });
-        filesEl.createSpan({ text: "\u5DF2\u6CE8\u5165\uFF1A" });
+        const toggle = row.createSpan({
+          cls: "ai-daily-ctx-toggle",
+          text: `${context.injectedFiles.length} files \u2304`
+        });
+        toggle.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          expanded = !expanded;
+          banner.toggleClass("ai-daily-ctx-expanded", expanded);
+          toggle.textContent = expanded ? `${context.injectedFiles.length} files \u2303` : `${context.injectedFiles.length} files \u2304`;
+        });
+      }
+      if (context.injectedFiles.length > 0) {
+        const detail = banner.createDiv({ cls: "ai-daily-ctx-detail" });
+        detail.createDiv({ cls: "ai-daily-ctx-detail-label", text: `\u5DF2\u6CE8\u5165 ${context.injectedFiles.length} \u4E2A\u6587\u4EF6` });
+        const pills = detail.createDiv({ cls: "ai-daily-ctx-pills" });
         for (const f of context.injectedFiles) {
-          filesEl.createSpan({
-            cls: "ai-daily-harness-banner-file",
-            text: f.path
-          });
+          const pill = pills.createSpan({ cls: "ai-daily-ctx-pill" });
+          const fIcon = pill.createSpan({ cls: "ai-daily-ctx-pill-icon" });
+          (0, import_obsidian12.setIcon)(fIcon, "file-text");
+          const displayName = f.path.replace(/^.*\//, "").replace(/\.md$/, "");
+          pill.createSpan({ text: displayName });
+          pill.setAttribute("title", f.path);
         }
       }
       this.inputEl.focus();

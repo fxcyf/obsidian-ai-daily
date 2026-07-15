@@ -2386,41 +2386,45 @@
 }
 
 .ws-studio-edit-icon-btn {
-	-webkit-appearance: none;
-	appearance: none;
-	background: none;
-	border: 1px solid var(--background-modifier-border);
-	color: var(--text-muted);
+	-webkit-appearance: none !important;
+	appearance: none !important;
+	background: transparent !important;
+	border: 1px solid var(--background-modifier-border) !important;
+	color: var(--text-muted) !important;
 	cursor: pointer;
-	padding: 0;
-	border-radius: 6px;
-	display: flex;
+	padding: 0 !important;
+	margin: 0 !important;
+	border-radius: 6px !important;
+	display: flex !important;
 	align-items: center;
 	justify-content: center;
 	width: 30px !important;
 	height: 30px !important;
 	min-width: 30px !important;
 	max-width: 30px !important;
+	min-height: 30px !important;
+	max-height: 30px !important;
 	flex: 0 0 30px;
 	box-sizing: border-box;
-	transition: color 0.15s, border-color 0.15s, background 0.15s;
+	box-shadow: none !important;
 }
 
 .ws-studio-edit-icon-btn:hover {
-	color: var(--text-normal);
-	border-color: var(--text-muted);
-	background: var(--background-modifier-hover);
+	color: var(--text-normal) !important;
+	border-color: var(--text-muted) !important;
+	background: var(--background-modifier-hover) !important;
 }
 
 .ws-studio-edit-icon-btn.danger:hover {
-	color: var(--text-error);
-	border-color: var(--text-error);
-	background: var(--background-modifier-error);
+	color: var(--text-error) !important;
+	border-color: var(--text-error) !important;
+	background: var(--background-modifier-error) !important;
 }
 
 .ws-studio-edit-icon-btn svg {
-	width: 14px;
-	height: 14px;
+	width: 14px !important;
+	height: 14px !important;
+	color: inherit;
 }
 
 .ws-studio-edit-field-label {
@@ -2511,35 +2515,39 @@
 }
 
 .ws-studio-edit-file-add {
-	-webkit-appearance: none;
-	appearance: none;
-	display: inline-flex;
+	-webkit-appearance: none !important;
+	appearance: none !important;
+	display: inline-flex !important;
 	align-items: center;
 	justify-content: center;
 	width: 26px !important;
 	height: 26px !important;
 	min-width: 26px !important;
 	max-width: 26px !important;
-	padding: 0;
-	background: none;
-	border: 1px dashed var(--background-modifier-border);
-	color: var(--text-faint);
+	min-height: 26px !important;
+	max-height: 26px !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	background: transparent !important;
+	border: 1px dashed var(--background-modifier-border) !important;
+	color: var(--text-faint) !important;
 	cursor: pointer;
-	border-radius: 13px;
+	border-radius: 13px !important;
 	flex-shrink: 0;
 	box-sizing: border-box;
-	transition: color 0.15s, border-color 0.15s, background 0.15s;
+	box-shadow: none !important;
 }
 
 .ws-studio-edit-file-add:hover {
-	color: var(--text-normal);
-	border-color: var(--text-muted);
-	background: var(--background-modifier-hover);
+	color: var(--text-normal) !important;
+	border-color: var(--text-muted) !important;
+	background: var(--background-modifier-hover) !important;
 }
 
 .ws-studio-edit-file-add svg {
-	width: 14px;
-	height: 14px;
+	width: 14px !important;
+	height: 14px !important;
+	color: inherit;
 }
 
 .ws-studio-edit-actions-list {

@@ -2506,41 +2506,31 @@
 	height: 12px;
 }
 
-.ws-studio-edit-files-header {
-	display: flex;
+.ws-studio-edit-file-add {
+	display: inline-flex;
 	align-items: center;
-	justify-content: space-between;
-	margin-top: 4px;
-}
-
-.ws-studio-edit-files-header .ws-studio-edit-field-label {
-	margin-top: 0;
-}
-
-.ws-studio-edit-add-file-btn {
-	display: flex;
-	align-items: center;
-	gap: 4px;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	padding: 0;
 	background: none;
-	border: 1px solid var(--background-modifier-border);
-	color: var(--text-muted);
+	border: 1px dashed var(--background-modifier-border);
+	color: var(--text-faint);
 	cursor: pointer;
-	padding: 3px 8px;
-	border-radius: 6px;
-	font-size: 11px;
-	font-family: inherit;
+	border-radius: 12px;
+	flex-shrink: 0;
 	transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 
-.ws-studio-edit-add-file-btn:hover {
+.ws-studio-edit-file-add:hover {
 	color: var(--text-normal);
 	border-color: var(--text-muted);
 	background: var(--background-modifier-hover);
 }
 
-.ws-studio-edit-add-file-btn svg {
-	width: 12px;
-	height: 12px;
+.ws-studio-edit-file-add svg {
+	width: 14px;
+	height: 14px;
 }
 
 .ws-studio-edit-actions-list {

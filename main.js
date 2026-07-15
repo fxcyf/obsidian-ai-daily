@@ -4866,25 +4866,12 @@ var EditWorkspaceModal = class extends import_obsidian10.Modal {
       promptArea.addEventListener("input", () => {
         mode.systemPromptAppend = promptArea.value;
       });
-      const filesHeader = card.createDiv({ cls: "ws-studio-edit-files-header" });
-      filesHeader.createEl("span", { cls: "ws-studio-edit-field-label", text: "Files" });
-      const addFileBtn = filesHeader.createEl("button", { cls: "ws-studio-edit-add-file-btn" });
-      (0, import_obsidian10.setIcon)(addFileBtn.createSpan(), "file-plus");
-      addFileBtn.createSpan({ text: "\u6DFB\u52A0" });
-      addFileBtn.addEventListener("click", () => {
-        new FileSuggestModal(this.app, (path) => {
-          if (!mode.files.includes(path)) {
-            mode.files.push(path);
-            renderFilePills();
-          }
-        }).open();
-      });
+      card.createEl("div", { cls: "ws-studio-edit-field-label", text: "Files" });
       const pillsContainer = card.createDiv({ cls: "ws-studio-edit-files-pills" });
       const renderFilePills = () => {
         pillsContainer.empty();
         if (mode.files.length === 0) {
-          pillsContainer.createSpan({ cls: "ws-studio-edit-files-empty", text: "\u70B9\u51FB\u300C\u6DFB\u52A0\u300D\u9009\u62E9\u6587\u4EF6" });
-          return;
+          pillsContainer.createSpan({ cls: "ws-studio-edit-files-empty", text: "\u65E0\u9644\u4EF6" });
         }
         for (let fi = 0; fi < mode.files.length; fi++) {
           const filePath = mode.files[fi];
@@ -4902,6 +4889,16 @@ var EditWorkspaceModal = class extends import_obsidian10.Modal {
             renderFilePills();
           });
         }
+        const addPill = pillsContainer.createEl("button", { cls: "ws-studio-edit-file-add" });
+        (0, import_obsidian10.setIcon)(addPill, "plus");
+        addPill.addEventListener("click", () => {
+          new FileSuggestModal(this.app, (path) => {
+            if (!mode.files.includes(path)) {
+              mode.files.push(path);
+              renderFilePills();
+            }
+          }).open();
+        });
       };
       renderFilePills();
       card.createEl("div", { cls: "ws-studio-edit-field-label", text: "Actions" });

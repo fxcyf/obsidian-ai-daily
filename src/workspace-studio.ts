@@ -548,26 +548,13 @@ class EditWorkspaceModal extends Modal {
 			promptArea.rows = 8;
 			promptArea.addEventListener("input", () => { mode.systemPromptAppend = promptArea.value; });
 
-			const filesHeader = card.createDiv({ cls: "ws-studio-edit-files-header" });
-			filesHeader.createEl("span", { cls: "ws-studio-edit-field-label", text: "Files" });
-			const addFileBtn = filesHeader.createEl("button", { cls: "ws-studio-edit-add-file-btn" });
-			setIcon(addFileBtn.createSpan(), "file-plus");
-			addFileBtn.createSpan({ text: "添加" });
-			addFileBtn.addEventListener("click", () => {
-				new FileSuggestModal(this.app, (path) => {
-					if (!mode.files.includes(path)) {
-						mode.files.push(path);
-						renderFilePills();
-					}
-				}).open();
-			});
+			card.createEl("div", { cls: "ws-studio-edit-field-label", text: "Files" });
 
 			const pillsContainer = card.createDiv({ cls: "ws-studio-edit-files-pills" });
 			const renderFilePills = () => {
 				pillsContainer.empty();
 				if (mode.files.length === 0) {
-					pillsContainer.createSpan({ cls: "ws-studio-edit-files-empty", text: "点击「添加」选择文件" });
-					return;
+					pillsContainer.createSpan({ cls: "ws-studio-edit-files-empty", text: "无附件" });
 				}
 				for (let fi = 0; fi < mode.files.length; fi++) {
 					const filePath = mode.files[fi];
@@ -585,6 +572,16 @@ class EditWorkspaceModal extends Modal {
 						renderFilePills();
 					});
 				}
+				const addPill = pillsContainer.createEl("button", { cls: "ws-studio-edit-file-add" });
+				setIcon(addPill, "plus");
+				addPill.addEventListener("click", () => {
+					new FileSuggestModal(this.app, (path) => {
+						if (!mode.files.includes(path)) {
+							mode.files.push(path);
+							renderFilePills();
+						}
+					}).open();
+				});
 			};
 			renderFilePills();
 

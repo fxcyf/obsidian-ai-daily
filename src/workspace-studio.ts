@@ -612,7 +612,7 @@ class EditWorkspaceModal extends Modal {
 			promptIn.setAttribute("placeholder", "prompt");
 			promptIn.addEventListener("input", () => { action.prompt = promptIn.value; });
 
-			const del = row.createEl("button", { cls: "ws-studio-edit-action-del" });
+			const del = row.createEl("button", { cls: "ws-studio-edit-icon-btn danger" });
 			setIcon(del, "x");
 			del.addEventListener("click", () => {
 				mode.actions.splice(j, 1);

@@ -4831,7 +4831,7 @@ var EditWorkspaceModal = class extends import_obsidian10.Modal {
     for (let i = 0; i < this.modes.length; i++) {
       const mode = this.modes[i];
       const card = listEl.createDiv({ cls: "ws-studio-edit-mode" });
-      new import_obsidian10.Setting(card).setName("Mode").addText((text) => {
+      new import_obsidian10.Setting(card).addText((text) => {
         text.setPlaceholder("\u{1F516}").setValue(mode.emoji).onChange((v) => {
           mode.emoji = v;
         });
@@ -4854,27 +4854,14 @@ var EditWorkspaceModal = class extends import_obsidian10.Modal {
       }).then((s) => {
         s.settingEl.addClass("ws-studio-edit-mode-head");
       });
-      new import_obsidian10.Setting(card).setName("Prompt").addTextArea((ta) => {
-        ta.setValue(mode.systemPromptAppend).onChange((v) => {
-          mode.systemPromptAppend = v;
-        });
-        ta.inputEl.rows = 6;
-        ta.inputEl.addClass("ws-studio-edit-prompt");
-      }).then((s) => {
-        s.settingEl.addClass("ws-studio-edit-prompt-row");
+      const promptArea = card.createEl("textarea", { cls: "ws-studio-edit-prompt" });
+      promptArea.value = mode.systemPromptAppend;
+      promptArea.rows = 8;
+      promptArea.setAttribute("placeholder", "System prompt...");
+      promptArea.addEventListener("input", () => {
+        mode.systemPromptAppend = promptArea.value;
       });
-      const filesSetting = new import_obsidian10.Setting(card).setName("Files");
-      filesSetting.addButton((btn) => {
-        btn.setIcon("plus").setTooltip("\u6DFB\u52A0\u6587\u4EF6").onClick(() => {
-          new FileSuggestModal(this.app, (path) => {
-            if (!mode.files.includes(path)) {
-              mode.files.push(path);
-              renderFilePills();
-            }
-          }).open();
-        });
-      });
-      const pillsContainer = filesSetting.settingEl.createDiv({ cls: "ws-studio-edit-files-pills" });
+      const pillsContainer = card.createDiv({ cls: "ws-studio-edit-files-pills" });
       const renderFilePills = () => {
         pillsContainer.empty();
         if (mode.files.length === 0) {
@@ -4897,15 +4884,19 @@ var EditWorkspaceModal = class extends import_obsidian10.Modal {
             renderFilePills();
           });
         }
+        const addPill = pillsContainer.createDiv({ cls: "ws-studio-edit-file-pill ws-studio-edit-file-add" });
+        (0, import_obsidian10.setIcon)(addPill.createSpan({ cls: "ws-studio-edit-file-pill-icon" }), "plus");
+        addPill.createSpan({ cls: "ws-studio-edit-file-pill-name", text: "\u6DFB\u52A0" });
+        addPill.addEventListener("click", () => {
+          new FileSuggestModal(this.app, (path) => {
+            if (!mode.files.includes(path)) {
+              mode.files.push(path);
+              renderFilePills();
+            }
+          }).open();
+        });
       };
       renderFilePills();
-      const actionsSetting = new import_obsidian10.Setting(card).setName("Actions");
-      actionsSetting.addButton((btn) => {
-        btn.setIcon("plus").setTooltip("\u6DFB\u52A0 Action").onClick(() => {
-          mode.actions.push({ label: "\u65B0 Action", prompt: "" });
-          this.renderActions(actionsContainer, mode);
-        });
-      });
       const actionsContainer = card.createDiv({ cls: "ws-studio-edit-actions-list" });
       this.renderActions(actionsContainer, mode);
     }
@@ -4930,6 +4921,12 @@ var EditWorkspaceModal = class extends import_obsidian10.Modal {
         });
       });
     }
+    new import_obsidian10.Setting(container).addButton((btn) => {
+      btn.setButtonText("+ Action").onClick(() => {
+        mode.actions.push({ label: "\u65B0 Action", prompt: "" });
+        this.renderActions(container, mode);
+      });
+    });
   }
   async save() {
     const modesPath = `${this.plugin.settings.harnessProjectsFolder}/${this.workspaceName}/modes.md`;

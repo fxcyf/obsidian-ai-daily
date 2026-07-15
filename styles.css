@@ -2337,17 +2337,8 @@
 	padding: 4px 0;
 }
 
-.ws-studio-edit-mode .setting-item-info {
-	flex: 0 0 auto;
-	min-width: 0;
-	max-width: 60px;
-}
-
-.ws-studio-edit-mode .setting-item-info .setting-item-name {
-	font-size: 11px;
-	color: var(--text-faint);
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
+.ws-studio-edit-mode-head .setting-item-info {
+	display: none;
 }
 
 .ws-studio-edit-emoji {
@@ -2363,33 +2354,25 @@
 	color: var(--text-muted);
 }
 
-.ws-studio-edit-prompt-row {
-	flex-direction: column !important;
-	align-items: flex-start !important;
-}
-
-.ws-studio-edit-prompt-row .setting-item-info {
-	max-width: none;
-}
-
-.ws-studio-edit-prompt-row .setting-item-control {
-	width: 100%;
-}
-
 .ws-studio-edit-prompt {
-	width: 100% !important;
+	width: 100%;
+	box-sizing: border-box;
 	font-family: monospace;
 	font-size: 12px;
 	line-height: 1.5;
 	resize: vertical;
 	min-height: 120px;
+	padding: 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	color: var(--text-normal);
 }
 
 .ws-studio-edit-files-pills {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 6px;
-	width: 100%;
 	padding: 4px 0;
 }
 
@@ -2453,7 +2436,22 @@
 	padding: 4px 0;
 }
 
+.ws-studio-edit-file-add {
+	cursor: pointer;
+	border-style: dashed;
+	color: var(--text-faint);
+}
+
+.ws-studio-edit-actions-list .setting-item {
+	border-top: none;
+	padding: 2px 0;
+}
+
+.ws-studio-edit-actions-list .setting-item-info {
+	display: none;
+}
+
 .ws-studio-edit-action-label {
-	width: 72px !important;
+	width: 90px !important;
 	flex-shrink: 0;
 }

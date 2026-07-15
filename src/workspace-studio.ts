@@ -520,7 +520,6 @@ class EditWorkspaceModal extends Modal {
 			const card = listEl.createDiv({ cls: "ws-studio-edit-mode" });
 
 			new Setting(card)
-				.setName("Mode")
 				.addText((text) => {
 					text.setPlaceholder("🔖").setValue(mode.emoji)
 						.onChange((v) => { mode.emoji = v; });
@@ -544,28 +543,13 @@ class EditWorkspaceModal extends Modal {
 				})
 				.then((s) => { s.settingEl.addClass("ws-studio-edit-mode-head"); });
 
-			new Setting(card)
-				.setName("Prompt")
-				.addTextArea((ta) => {
-					ta.setValue(mode.systemPromptAppend)
-						.onChange((v) => { mode.systemPromptAppend = v; });
-					ta.inputEl.rows = 6;
-					ta.inputEl.addClass("ws-studio-edit-prompt");
-				})
-				.then((s) => { s.settingEl.addClass("ws-studio-edit-prompt-row"); });
+			const promptArea = card.createEl("textarea", { cls: "ws-studio-edit-prompt" });
+			promptArea.value = mode.systemPromptAppend;
+			promptArea.rows = 8;
+			promptArea.setAttribute("placeholder", "System prompt...");
+			promptArea.addEventListener("input", () => { mode.systemPromptAppend = promptArea.value; });
 
-			const filesSetting = new Setting(card).setName("Files");
-			filesSetting.addButton((btn) => {
-				btn.setIcon("plus").setTooltip("添加文件").onClick(() => {
-					new FileSuggestModal(this.app, (path) => {
-						if (!mode.files.includes(path)) {
-							mode.files.push(path);
-							renderFilePills();
-						}
-					}).open();
-				});
-			});
-			const pillsContainer = filesSetting.settingEl.createDiv({ cls: "ws-studio-edit-files-pills" });
+			const pillsContainer = card.createDiv({ cls: "ws-studio-edit-files-pills" });
 			const renderFilePills = () => {
 				pillsContainer.empty();
 				if (mode.files.length === 0) {
@@ -588,16 +572,20 @@ class EditWorkspaceModal extends Modal {
 						renderFilePills();
 					});
 				}
+				const addPill = pillsContainer.createDiv({ cls: "ws-studio-edit-file-pill ws-studio-edit-file-add" });
+				setIcon(addPill.createSpan({ cls: "ws-studio-edit-file-pill-icon" }), "plus");
+				addPill.createSpan({ cls: "ws-studio-edit-file-pill-name", text: "添加" });
+				addPill.addEventListener("click", () => {
+					new FileSuggestModal(this.app, (path) => {
+						if (!mode.files.includes(path)) {
+							mode.files.push(path);
+							renderFilePills();
+						}
+					}).open();
+				});
 			};
 			renderFilePills();
 
-			const actionsSetting = new Setting(card).setName("Actions");
-			actionsSetting.addButton((btn) => {
-				btn.setIcon("plus").setTooltip("添加 Action").onClick(() => {
-					mode.actions.push({ label: "新 Action", prompt: "" });
-					this.renderActions(actionsContainer, mode);
-				});
-			});
 			const actionsContainer = card.createDiv({ cls: "ws-studio-edit-actions-list" });
 			this.renderActions(actionsContainer, mode);
 		}
@@ -624,6 +612,13 @@ class EditWorkspaceModal extends Modal {
 					});
 				});
 		}
+		new Setting(container)
+			.addButton((btn) => {
+				btn.setButtonText("+ Action").onClick(() => {
+					mode.actions.push({ label: "新 Action", prompt: "" });
+					this.renderActions(container, mode);
+				});
+			});
 	}
 
 	private async save(): Promise<void> {

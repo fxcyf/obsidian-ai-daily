@@ -470,9 +470,9 @@
 	padding: 14px 16px;
 	margin: 8px 0;
 	background: linear-gradient(135deg,
-		rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.18),
-		rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.04));
-	border: 1px solid rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.25);
+		color-mix(in srgb, var(--interactive-accent) 18%, transparent),
+		color-mix(in srgb, var(--interactive-accent) 4%, transparent));
+	border: 1px solid color-mix(in srgb, var(--interactive-accent) 25%, transparent);
 	border-radius: 14px;
 	cursor: pointer;
 	transition: border-color 0.14s, background 0.14s;
@@ -480,7 +480,7 @@
 }
 
 .ai-daily-welcome-hero:hover {
-	border-color: rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.4);
+	border-color: color-mix(in srgb, var(--interactive-accent) 40%, transparent);
 }
 
 .ai-daily-welcome-hero:active {
@@ -496,7 +496,7 @@
 	align-items: center;
 	justify-content: center;
 	flex-shrink: 0;
-	box-shadow: 0 3px 12px rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.3);
+	box-shadow: 0 3px 12px color-mix(in srgb, var(--interactive-accent) 30%, transparent);
 }
 
 .ai-daily-welcome-hero-play svg {
@@ -650,14 +650,14 @@
 }
 
 .ai-daily-welcome-chip--action {
-	background: rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.1);
-	border-color: rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.2);
+	background: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
+	border-color: color-mix(in srgb, var(--interactive-accent) 20%, transparent);
 	color: var(--text-normal);
 }
 
 .ai-daily-welcome-chip--action:hover {
-	border-color: rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.35);
-	background: rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.15);
+	border-color: color-mix(in srgb, var(--interactive-accent) 35%, transparent);
+	background: color-mix(in srgb, var(--interactive-accent) 15%, transparent);
 }
 
 .ai-daily-welcome-chip-bolt {
@@ -1671,13 +1671,13 @@
 .ai-daily-diff-del {
 	display: block;
 	color: var(--text-error);
-	background: rgba(255, 0, 0, 0.06);
+	background: color-mix(in srgb, var(--text-error) 6%, transparent);
 }
 
 .ai-daily-diff-add {
 	display: block;
 	color: var(--interactive-success, #2da44e);
-	background: rgba(0, 180, 0, 0.06);
+	background: color-mix(in srgb, var(--interactive-success, #2da44e) 6%, transparent);
 }
 
 .ai-daily-diff-more {
@@ -1753,7 +1753,7 @@
 }
 
 .ai-daily-harness-project-card-active .ai-daily-harness-picker-dot {
-	background: rgba(255, 255, 255, 0.6) !important;
+	background: color-mix(in srgb, var(--text-on-accent) 60%, transparent) !important;
 }
 
 .ai-daily-harness-project-card-name {
@@ -1873,7 +1873,7 @@
 	width: 30px;
 	height: 30px;
 	border-radius: 8px;
-	background: rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.14);
+	background: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -1971,14 +1971,14 @@
 	padding: 0 5px;
 	border-radius: 9px;
 	background: var(--text-error);
-	color: white;
+	color: var(--text-on-accent);
 	font-size: 11px;
 	font-weight: 600;
 	margin-left: 4px;
 }
 
 .ai-daily-harness-mode-active .ai-daily-harness-badge {
-	background: rgba(255, 255, 255, 0.3);
+	background: color-mix(in srgb, var(--text-on-accent) 30%, transparent);
 }
 
 /* ── Save to Inbox button ─────────────────────────────── */
@@ -2115,8 +2115,8 @@
 	gap: 6px;
 	font-size: 13px;
 	color: var(--interactive-accent);
-	background: rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.1);
-	border: 1px solid rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.2);
+	background: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
+	border: 1px solid color-mix(in srgb, var(--interactive-accent) 20%, transparent);
 	padding: 7px 12px;
 	border-radius: 9px;
 	cursor: pointer;
@@ -2126,7 +2126,7 @@
 }
 
 .ws-studio-head-action:hover {
-	background: rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.15);
+	background: color-mix(in srgb, var(--interactive-accent) 15%, transparent);
 }
 
 .ws-studio-head-action-icon {
@@ -2152,7 +2152,7 @@
 }
 
 .ws-studio-head-save:hover {
-	background: rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.1);
+	background: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
 }
 
 /* Breadcrumb in mode editor header */
@@ -2425,14 +2425,14 @@
 	font-size: 11px;
 	font-family: var(--font-monospace);
 	color: var(--interactive-accent);
-	border: 1px dashed rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.3);
+	border: 1px dashed color-mix(in srgb, var(--interactive-accent) 30%, transparent);
 	padding: 6px 10px;
 	border-radius: 8px;
 	cursor: pointer;
 }
 
 .ws-studio-inject-add:hover {
-	background: rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.08);
+	background: color-mix(in srgb, var(--interactive-accent) 8%, transparent);
 }
 
 .ws-studio-inject-add-icon {
@@ -2485,7 +2485,7 @@
 }
 
 .ws-studio-mode-icon--accent {
-	background: rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.14);
+	background: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
 }
 
 .ws-studio-mode-info {
@@ -2513,7 +2513,7 @@
 	font-size: 11px;
 	font-family: var(--font-monospace);
 	color: var(--interactive-accent);
-	background: rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.1);
+	background: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
 	padding: 4px 8px;
 	border-radius: 7px;
 	flex-shrink: 0;
@@ -2826,8 +2826,8 @@
 }
 
 .ws-studio-editor-action {
-	background: rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.06);
-	border: 1px solid rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.18);
+	background: color-mix(in srgb, var(--interactive-accent) 6%, transparent);
+	border: 1px solid color-mix(in srgb, var(--interactive-accent) 18%, transparent);
 	border-radius: 12px;
 	padding: 10px 13px;
 }
@@ -2895,7 +2895,7 @@
 	align-items: center;
 	justify-content: center;
 	gap: 8px;
-	border: 1px dashed rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.25);
+	border: 1px dashed color-mix(in srgb, var(--interactive-accent) 25%, transparent);
 	border-radius: 12px;
 	padding: 10px;
 	color: var(--interactive-accent);
@@ -2906,7 +2906,7 @@
 }
 
 .ws-studio-editor-action-add:hover {
-	background: rgba(var(--interactive-accent-rgb, 217, 138, 79), 0.06);
+	background: color-mix(in srgb, var(--interactive-accent) 6%, transparent);
 }
 
 .ws-studio-editor-action-add-icon {
@@ -2941,7 +2941,7 @@
 
 .ws-studio-editor-delete-mode:hover {
 	opacity: 1;
-	background: rgba(var(--text-error-rgb, 220, 60, 60), 0.08);
+	background: color-mix(in srgb, var(--text-error) 8%, transparent);
 }
 
 .ws-studio-editor-delete-mode svg {

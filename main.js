@@ -4316,11 +4316,28 @@ async function listChatSessions(vault, folderPath) {
       } catch (e) {
       }
     }
-    out.sort((a, b) => a.updated < b.updated ? 1 : -1);
+    out.sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return a.updated < b.updated ? 1 : -1;
+    });
     return out;
   } catch (e) {
     return [];
   }
+}
+async function togglePinSession(vault, folderPath, id) {
+  const session = await loadChatSession(vault, folderPath, id);
+  if (!session) return false;
+  session.pinned = !session.pinned;
+  await saveChatSession(vault, folderPath, session);
+  return session.pinned;
+}
+async function renameSession(vault, folderPath, id, newTitle) {
+  const session = await loadChatSession(vault, folderPath, id);
+  if (!session) return;
+  session.title = newTitle;
+  await saveChatSession(vault, folderPath, session);
 }
 async function deleteChatSessionFile(vault, folderPath, id) {
   const path = (0, import_obsidian9.normalizePath)(`${folderPath}/${id}.md`);
@@ -6169,6 +6186,51 @@ var ConfirmModal = class extends import_obsidian12.Modal {
     this.contentEl.empty();
   }
 };
+var RenameModal = class extends import_obsidian12.Modal {
+  constructor(app, currentTitle, onRename) {
+    super(app);
+    this.currentTitle = currentTitle;
+    this.onRename = onRename;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.createEl("p", { text: "\u91CD\u547D\u540D\u5BF9\u8BDD" });
+    const input = contentEl.createEl("input", {
+      type: "text",
+      cls: "ai-daily-rename-input",
+      value: this.currentTitle
+    });
+    input.style.width = "100%";
+    input.style.marginBottom = "12px";
+    const btnRow = contentEl.createDiv({ cls: "ai-daily-confirm-btns" });
+    const confirmBtn = btnRow.createEl("button", { text: "\u786E\u8BA4", cls: "mod-cta" });
+    const cancelBtn = btnRow.createEl("button", { text: "\u53D6\u6D88" });
+    confirmBtn.addEventListener("click", () => {
+      const v = input.value.trim();
+      if (v) {
+        this.onRename(v);
+        this.close();
+      }
+    });
+    cancelBtn.addEventListener("click", () => this.close());
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const v = input.value.trim();
+        if (v) {
+          this.onRename(v);
+          this.close();
+        }
+      }
+    });
+    setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 50);
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
 var _ChatView = class _ChatView extends import_obsidian12.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
@@ -6200,6 +6262,7 @@ var _ChatView = class _ChatView extends import_obsidian12.ItemView {
     this.claudeCodeAbort = null;
     this.claudeCodeUndoHistory = [];
     this.claudeCodeUndoCounter = 0;
+    this.workspaceColorMap = /* @__PURE__ */ new Map();
     this.plugin = plugin;
   }
   getViewType() {
@@ -6275,12 +6338,21 @@ var _ChatView = class _ChatView extends import_obsidian12.ItemView {
     (0, import_obsidian12.setIcon)(moreBtn, "more-vertical");
     moreBtn.addEventListener("click", (e) => {
       const menu = new import_obsidian12.Menu();
+      const hasSession = !!this.sessionId;
       menu.addItem(
-        (item) => item.setTitle("\u751F\u6210 Feed").setIcon("rss").onClick(() => this.plugin.generateFeed())
+        (item) => item.setTitle("\u4FDD\u5B58\u4E3A\u7B14\u8BB0").setIcon("file-down").setDisabled(!hasSession).onClick(() => this.saveSessionAsNote())
       );
       menu.addItem(
-        (item) => item.setTitle("\u751F\u6210\u64AD\u5BA2 Feed").setIcon("mic").onClick(() => this.plugin.generatePodcastFeed())
+        (item) => item.setTitle("\u590D\u5236\u5168\u6587").setIcon("copy").setDisabled(!hasSession).onClick(() => this.copySessionText())
       );
+      menu.addSeparator();
+      menu.addItem(
+        (item) => item.setTitle("\u91CD\u547D\u540D").setIcon("pencil").setDisabled(!hasSession).onClick(() => this.renameCurrentSession())
+      );
+      menu.addItem(
+        (item) => item.setTitle("\u7F6E\u9876\u5BF9\u8BDD").setIcon("pin").setDisabled(!hasSession).onClick(() => this.togglePinCurrentSession())
+      );
+      menu.addSeparator();
       menu.addItem(
         (item) => item.setTitle("\u5386\u53F2").setIcon("history").onClick(() => this.openHistoryPanel())
       );
@@ -6290,8 +6362,9 @@ var _ChatView = class _ChatView extends import_obsidian12.ItemView {
           this.handleSend();
         })
       );
+      menu.addSeparator();
       menu.addItem(
-        (item) => item.setTitle("Wiki \u5065\u5EB7\u68C0\u67E5").setIcon("heart-pulse").onClick(() => this.plugin.runWikiHealthCheck())
+        (item) => item.setTitle("\u5220\u9664\u5BF9\u8BDD").setIcon("trash-2").setDisabled(!hasSession).onClick(() => this.deleteCurrentSession())
       );
       menu.showAtMouseEvent(e);
     });
@@ -7561,7 +7634,8 @@ ${filesList}` : "",
       proxyTaskId: (_c = this.client) == null ? void 0 : _c.getProxyTaskId(),
       harnessContext: (_d = this.harnessContext) != null ? _d : void 0,
       lastMode: (_e = this.lastMode) != null ? _e : void 0,
-      workspace: (_g = (_f = this.harnessContext) == null ? void 0 : _f.workspace) != null ? _g : existing == null ? void 0 : existing.workspace
+      workspace: (_g = (_f = this.harnessContext) == null ? void 0 : _f.workspace) != null ? _g : existing == null ? void 0 : existing.workspace,
+      pinned: existing == null ? void 0 : existing.pinned
     };
     try {
       await saveChatSession(this.app.vault, chatHistoryFolder, file);
@@ -8440,6 +8514,88 @@ ${filesList}` : "",
     const turnsRemoved = Math.floor(removedCount / 2);
     new import_obsidian12.Notice(`\u5DF2\u5206\u53C9\uFF0C\u79FB\u9664 ${turnsRemoved} \u8F6E\u5BF9\u8BDD\uFF0C\u4E0B\u6B21\u53D1\u9001\u5C06\u521B\u5EFA\u65B0\u4F1A\u8BDD`, 3e3);
   }
+  async saveSessionAsNote() {
+    var _a;
+    if (!this.sessionId || this.messages.length === 0) return;
+    const lines = [];
+    for (const m of this.messages) {
+      lines.push(m.role === "user" ? `**User:**
+${m.content}` : `**Assistant:**
+${m.content}`);
+      lines.push("");
+    }
+    const content = lines.join("\n");
+    const title = titleFromMessages(this.messages.map((m) => ({ role: m.role, content: m.content })));
+    const ws = (_a = this.harnessContext) == null ? void 0 : _a.workspace;
+    const folder = ws ? `${this.plugin.settings.harnessProjectsFolder}/${ws}` : this.plugin.settings.knowledgeFolders[0] || "Raw";
+    const fileName = `${folder}/${title}.md`;
+    try {
+      const existing = this.app.vault.getAbstractFileByPath(fileName);
+      if (existing) {
+        new import_obsidian12.Notice(`\u7B14\u8BB0\u5DF2\u5B58\u5728: ${fileName}`, 3e3);
+        return;
+      }
+      await this.app.vault.create(fileName, content);
+      new import_obsidian12.Notice(`\u5DF2\u4FDD\u5B58\u4E3A\u7B14\u8BB0: ${fileName}`, 3e3);
+    } catch (e) {
+      new import_obsidian12.Notice(`\u4FDD\u5B58\u5931\u8D25: ${e instanceof Error ? e.message : String(e)}`, 5e3);
+    }
+  }
+  copySessionText() {
+    if (this.messages.length === 0) return;
+    const lines = [];
+    for (const m of this.messages) {
+      lines.push(m.role === "user" ? `**User:**
+${m.content}` : `**Assistant:**
+${m.content}`);
+      lines.push("");
+    }
+    navigator.clipboard.writeText(lines.join("\n")).then(() => {
+      new import_obsidian12.Notice("\u5DF2\u590D\u5236\u5168\u6587", 2e3);
+    });
+  }
+  renameCurrentSession() {
+    if (!this.sessionId) return;
+    const currentTitle = titleFromMessages(this.messages.map((m) => ({ role: m.role, content: m.content })));
+    const modal = new RenameModal(this.app, currentTitle, async (newTitle) => {
+      if (!this.sessionId) return;
+      await renameSession(
+        this.app.vault,
+        this.plugin.settings.chatHistoryFolder,
+        this.sessionId,
+        newTitle
+      );
+      new import_obsidian12.Notice(`\u5DF2\u91CD\u547D\u540D\u4E3A\u300C${newTitle}\u300D`, 2e3);
+    });
+    modal.open();
+  }
+  async togglePinCurrentSession() {
+    if (!this.sessionId) return;
+    const pinned = await togglePinSession(
+      this.app.vault,
+      this.plugin.settings.chatHistoryFolder,
+      this.sessionId
+    );
+    new import_obsidian12.Notice(pinned ? "\u5DF2\u7F6E\u9876" : "\u5DF2\u53D6\u6D88\u7F6E\u9876", 2e3);
+  }
+  deleteCurrentSession() {
+    if (!this.sessionId) return;
+    const title = titleFromMessages(this.messages.map((m) => ({ role: m.role, content: m.content })));
+    new ConfirmModal(
+      this.app,
+      `\u786E\u5B9A\u5220\u9664\u5BF9\u8BDD\u300C${title}\u300D\uFF1F\u6B64\u64CD\u4F5C\u4E0D\u53EF\u64A4\u9500\u3002`,
+      async () => {
+        if (!this.sessionId) return;
+        await deleteChatSessionFile(
+          this.app.vault,
+          this.plugin.settings.chatHistoryFolder,
+          this.sessionId
+        );
+        this.clearChat();
+        new import_obsidian12.Notice("\u5BF9\u8BDD\u5DF2\u5220\u9664", 2e3);
+      }
+    ).open();
+  }
   clearChat() {
     var _a;
     (_a = this.client) == null ? void 0 : _a.abort();
@@ -8479,6 +8635,51 @@ ${filesList}` : "",
       this.historyOverlayResizeCleanup = null;
     }
   }
+  getWorkspaceColor(ws) {
+    if (this.workspaceColorMap.has(ws)) return this.workspaceColorMap.get(ws);
+    const idx = this.workspaceColorMap.size % _ChatView.WORKSPACE_COLORS.length;
+    const color = _ChatView.WORKSPACE_COLORS[idx];
+    this.workspaceColorMap.set(ws, color);
+    return color;
+  }
+  formatHistoryTime(dateStr) {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
+    const now = /* @__PURE__ */ new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / 6e4);
+    if (diffMins < 60) return `${diffMins} \u5206\u949F\u524D`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24 && d.getDate() === now.getDate()) {
+      const h = d.getHours();
+      const m = d.getMinutes().toString().padStart(2, "0");
+      const period = h >= 12 ? "\u4E0B\u5348" : "\u4E0A\u5348";
+      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+      return `${period} ${h12.toString().padStart(2, "0")}:${m}`;
+    }
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (d.getDate() === yesterday.getDate() && d.getMonth() === yesterday.getMonth() && d.getFullYear() === yesterday.getFullYear()) {
+      return "\u6628\u5929";
+    }
+    const diffDays = Math.floor(diffMs / 864e5);
+    if (diffDays < 7) return `${diffDays} \u5929\u524D`;
+    return `${d.getMonth() + 1}\u6708${d.getDate()}\u65E5`;
+  }
+  getTimeGroup(dateStr) {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "\u66F4\u65E9";
+    const now = /* @__PURE__ */ new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (d >= todayStart) return "\u4ECA\u5929";
+    const yesterdayStart = new Date(todayStart);
+    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+    if (d >= yesterdayStart) return "\u6628\u5929";
+    const weekAgo = new Date(todayStart);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    if (d >= weekAgo) return "\u672C\u5468";
+    return "\u66F4\u65E9";
+  }
   async openHistoryPanel() {
     var _a, _b;
     if (this.historyOverlay) {
@@ -8503,25 +8704,22 @@ ${filesList}` : "",
       (_b2 = window.visualViewport) == null ? void 0 : _b2.removeEventListener("scroll", onViewportResize);
     };
     const head = overlay.createDiv({ cls: "ai-daily-history-head" });
-    head.createEl("span", { text: "\u5386\u53F2\u5BF9\u8BDD", cls: "ai-daily-history-title" });
+    const backBtn = head.createDiv({ cls: "ai-daily-history-back" });
+    (0, import_obsidian12.setIcon)(backBtn, "chevron-left");
+    backBtn.addEventListener("click", () => this.closeHistoryOverlay());
+    head.createEl("span", { text: "\u5386\u53F2", cls: "ai-daily-history-title" });
     const headActions = head.createDiv({ cls: "ai-daily-history-head-actions" });
-    const clearAllBtn = headActions.createSpan({
-      cls: "ai-daily-history-clear-all",
-      text: "\u6E05\u7A7A\u5168\u90E8"
-    });
+    const clearAllBtn = headActions.createSpan({ cls: "ai-daily-history-clear-all" });
+    (0, import_obsidian12.setIcon)(clearAllBtn, "list-filter");
+    clearAllBtn.setAttribute("title", "\u6E05\u7A7A\u5168\u90E8");
     clearAllBtn.addEventListener("click", () => {
       if (sessions.length === 0) return;
       new ConfirmModal(
         this.app,
         `\u786E\u5B9A\u5220\u9664\u5168\u90E8 ${sessions.length} \u6761\u5386\u53F2\u5BF9\u8BDD\uFF1F\u6B64\u64CD\u4F5C\u4E0D\u53EF\u64A4\u9500\u3002`,
         async () => {
-          const { chatHistoryFolder: chatHistoryFolder2 } = this.plugin.settings;
           for (const s of sessions) {
-            await deleteChatSessionFile(
-              this.app.vault,
-              chatHistoryFolder2,
-              s.id
-            );
+            await deleteChatSessionFile(this.app.vault, chatHistoryFolder, s.id);
           }
           if (this.sessionId && sessions.some((s) => s.id === this.sessionId)) {
             this.clearChat();
@@ -8532,116 +8730,85 @@ ${filesList}` : "",
         }
       ).open();
     });
-    const closeBtn = headActions.createSpan({ cls: "ai-daily-history-close", text: "\u2715" });
-    closeBtn.addEventListener("click", () => {
-      this.closeHistoryOverlay();
-    });
-    const search = overlay.createEl("input", {
+    const searchWrap = overlay.createDiv({ cls: "ai-daily-history-search-wrap" });
+    const searchIcon = searchWrap.createSpan({ cls: "ai-daily-history-search-icon" });
+    (0, import_obsidian12.setIcon)(searchIcon, "search");
+    const search = searchWrap.createEl("input", {
       cls: "ai-daily-history-search",
       type: "search",
-      attr: { placeholder: "\u641C\u7D22\u6807\u9898\u2026" }
+      attr: { placeholder: "\u641C\u7D22\u5386\u53F2\u5BF9\u8BDD..." }
     });
     const listEl = overlay.createDiv({ cls: "ai-daily-history-list" });
-    const expandedGroups = /* @__PURE__ */ new Set();
     const renderList = (items) => {
-      var _a2, _b2, _c;
+      var _a2;
       listEl.empty();
       if (items.length === 0) {
-        listEl.createDiv({
-          cls: "ai-daily-history-empty",
-          text: "\u6682\u65E0\u5386\u53F2\u4F1A\u8BDD"
-        });
+        listEl.createDiv({ cls: "ai-daily-history-empty", text: "\u6682\u65E0\u5386\u53F2\u4F1A\u8BDD" });
         return;
       }
-      const groups = /* @__PURE__ */ new Map();
-      for (const s of items) {
-        const key = s.workspace || ((_a2 = s.harnessContext) == null ? void 0 : _a2.workspace) || "\u672A\u5206\u7C7B";
-        const arr = (_b2 = groups.get(key)) != null ? _b2 : [];
+      const pinned = items.filter((s) => s.pinned);
+      const unpinned = items.filter((s) => !s.pinned);
+      const timeGroups = /* @__PURE__ */ new Map();
+      const groupOrder = ["\u4ECA\u5929", "\u6628\u5929", "\u672C\u5468", "\u66F4\u65E9"];
+      for (const s of unpinned) {
+        const g = this.getTimeGroup(s.updated);
+        const arr = (_a2 = timeGroups.get(g)) != null ? _a2 : [];
         arr.push(s);
-        groups.set(key, arr);
+        timeGroups.set(g, arr);
       }
-      const orderedKeys = Array.from(groups.keys()).sort((a, b) => {
-        if (a === "\u672A\u5206\u7C7B") return 1;
-        if (b === "\u672A\u5206\u7C7B") return -1;
-        return a.localeCompare(b);
-      });
-      const renderSession = (s) => {
-        var _a3, _b3, _c2;
-        const row = listEl.createDiv({ cls: "ai-daily-history-row" });
-        const info = row.createDiv({ cls: "ai-daily-history-row-info" });
-        const modeLabel = ((_a3 = s.harnessContext) == null ? void 0 : _a3.mode) ? `${s.harnessContext.mode.emoji} ${s.harnessContext.mode.label} \xB7 ` : "";
-        info.createDiv({
-          cls: "ai-daily-history-row-title",
-          text: `${modeLabel}${s.title || s.id}`
-        });
-        info.createDiv({
-          cls: "ai-daily-history-row-meta",
-          text: `${(_c2 = (_b3 = s.updated) == null ? void 0 : _b3.slice(0, 16)) != null ? _c2 : ""} \xB7 ${s.model}`
-        });
-        info.addEventListener("click", () => {
-          void this.loadSession(s.id);
-          this.closeHistoryOverlay();
-        });
-        const delBtn = row.createSpan({ cls: "ai-daily-history-row-del" });
-        (0, import_obsidian12.setIcon)(delBtn, "trash-2");
-        delBtn.setAttribute("title", "\u5220\u9664");
-        delBtn.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          new ConfirmModal(
-            this.app,
-            `\u786E\u5B9A\u5220\u9664\u5BF9\u8BDD\u300C${s.title || s.id}\u300D\uFF1F\u6B64\u64CD\u4F5C\u4E0D\u53EF\u64A4\u9500\u3002`,
-            async () => {
-              const { chatHistoryFolder: chatHistoryFolder2 } = this.plugin.settings;
-              await deleteChatSessionFile(
-                this.app.vault,
-                chatHistoryFolder2,
-                s.id
-              );
-              if (this.sessionId === s.id) {
-                this.clearChat();
-              }
-              sessions = sessions.filter((x) => x.id !== s.id);
-              renderList(
-                sessions.filter(
-                  (x) => search.value ? matchSession(x, search.value.toLowerCase()) : true
-                )
-              );
-              new import_obsidian12.Notice("\u5BF9\u8BDD\u5DF2\u5220\u9664", 3e3);
-            }
-          ).open();
-        });
-      };
-      const DEFAULT_LIMIT = 3;
-      for (const key of orderedKeys) {
-        const groupSessions = (_c = groups.get(key)) != null ? _c : [];
-        const isExpanded = expandedGroups.has(key) || !!search.value;
-        const groupEl = listEl.createDiv({ cls: "ai-daily-history-group" });
-        const labelEl = groupEl.createDiv({ cls: "ai-daily-history-group-label" });
-        labelEl.createSpan({ text: key });
-        labelEl.createSpan({
-          cls: "ai-daily-history-group-count",
-          text: `${groupSessions.length}`
-        });
-        const shown = isExpanded ? groupSessions : groupSessions.slice(0, DEFAULT_LIMIT);
-        for (const s of shown) renderSession(s);
-        if (!isExpanded && groupSessions.length > DEFAULT_LIMIT) {
-          const more = listEl.createDiv({
-            cls: "ai-daily-history-group-more",
-            text: `\u67E5\u770B\u66F4\u591A (${groupSessions.length - DEFAULT_LIMIT})`
-          });
-          more.addEventListener("click", () => {
-            expandedGroups.add(key);
-            renderList(items);
-          });
-        }
+      if (pinned.length > 0) {
+        renderGroup("\u7F6E\u9876", pinned, true);
+      }
+      for (const g of groupOrder) {
+        const arr = timeGroups.get(g);
+        if (arr && arr.length > 0) renderGroup(g, arr, false);
       }
     };
+    const renderGroup = (label, items, isPinned) => {
+      const groupEl = listEl.createDiv({ cls: "ai-daily-history-group" });
+      groupEl.createDiv({ cls: "ai-daily-history-group-label", text: label });
+      for (const s of items) renderSession(s, groupEl, isPinned);
+    };
+    const renderSession = (s, parent, isPinned) => {
+      var _a2, _b2, _c;
+      const ws = s.workspace || ((_a2 = s.harnessContext) == null ? void 0 : _a2.workspace) || "";
+      const color = ws ? this.getWorkspaceColor(ws) : "var(--text-faint)";
+      const row = parent.createDiv({
+        cls: `ai-daily-history-row${isPinned ? " ai-daily-history-row--pinned" : ""}`
+      });
+      const dot = row.createSpan({ cls: "ai-daily-history-row-dot" });
+      dot.style.background = color;
+      if (isPinned) {
+        dot.style.background = "var(--interactive-accent)";
+        const pinIcon = row.createSpan({ cls: "ai-daily-history-row-pin-icon" });
+        (0, import_obsidian12.setIcon)(pinIcon, "pin");
+      }
+      const info = row.createDiv({ cls: "ai-daily-history-row-info" });
+      info.createDiv({
+        cls: "ai-daily-history-row-title",
+        text: s.title || s.id
+      });
+      const metaParts = [ws, this.formatHistoryTime(s.updated)].filter(Boolean).join(" \xB7 ");
+      info.createDiv({
+        cls: "ai-daily-history-row-meta",
+        text: metaParts
+      });
+      const modeLabel = (_c = (_b2 = s.harnessContext) == null ? void 0 : _b2.mode) == null ? void 0 : _c.label;
+      if (modeLabel) {
+        const chip = row.createSpan({ cls: "ai-daily-history-row-chip" });
+        chip.textContent = modeLabel;
+      }
+      row.addEventListener("click", () => {
+        void this.loadSession(s.id);
+        this.closeHistoryOverlay();
+      });
+    };
     const matchSession = (s, q) => {
-      var _a2;
+      var _a2, _b2;
       if (s.title.toLowerCase().includes(q)) return true;
       if (s.id.toLowerCase().includes(q)) return true;
       if ((s.workspace || "").toLowerCase().includes(q)) return true;
-      if ((((_a2 = s.harnessContext) == null ? void 0 : _a2.mode.label) || "").toLowerCase().includes(q)) return true;
+      if ((((_b2 = (_a2 = s.harnessContext) == null ? void 0 : _a2.mode) == null ? void 0 : _b2.label) || "").toLowerCase().includes(q)) return true;
       return false;
     };
     renderList(sessions);
@@ -8654,9 +8821,7 @@ ${filesList}` : "",
       renderList(sessions.filter((s) => matchSession(s, q)));
     });
     overlay.addEventListener("click", (ev) => {
-      if (ev.target === overlay) {
-        this.closeHistoryOverlay();
-      }
+      if (ev.target === overlay) this.closeHistoryOverlay();
     });
     sessions = await listChatSessions(this.app.vault, chatHistoryFolder);
     renderList(sessions);
@@ -8807,6 +8972,16 @@ ${filesList}` : "",
   }
 };
 _ChatView.MAX_IMAGES_PER_TURN = 5;
+_ChatView.WORKSPACE_COLORS = [
+  "#e07a3a",
+  "#5b9bd5",
+  "#6bc26b",
+  "#c25b8e",
+  "#9b7ed8",
+  "#d4a843",
+  "#4abfbf",
+  "#d45b5b"
+];
 var ChatView = _ChatView;
 
 // src/feed-generator.ts

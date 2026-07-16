@@ -37,6 +37,7 @@ export interface ChatSessionFile {
 	harnessContext?: PersistedHarnessContext;
 	lastMode?: MessageSource;
 	workspace?: string;
+	pinned?: boolean;
 }
 
 export function newSessionId(): string {
@@ -149,11 +150,39 @@ export async function listChatSessions(
 				/* skip corrupt */
 			}
 		}
-		out.sort((a, b) => (a.updated < b.updated ? 1 : -1));
+		out.sort((a, b) => {
+			if (a.pinned && !b.pinned) return -1;
+			if (!a.pinned && b.pinned) return 1;
+			return a.updated < b.updated ? 1 : -1;
+		});
 		return out;
 	} catch {
 		return [];
 	}
+}
+
+export async function togglePinSession(
+	vault: Vault,
+	folderPath: string,
+	id: string
+): Promise<boolean> {
+	const session = await loadChatSession(vault, folderPath, id);
+	if (!session) return false;
+	session.pinned = !session.pinned;
+	await saveChatSession(vault, folderPath, session);
+	return session.pinned;
+}
+
+export async function renameSession(
+	vault: Vault,
+	folderPath: string,
+	id: string,
+	newTitle: string
+): Promise<void> {
+	const session = await loadChatSession(vault, folderPath, id);
+	if (!session) return;
+	session.title = newTitle;
+	await saveChatSession(vault, folderPath, session);
 }
 
 export async function deleteChatSessionFile(

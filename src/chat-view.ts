@@ -36,6 +36,8 @@ import {
 	loadChatSession,
 	listChatSessions,
 	deleteChatSessionFile,
+	togglePinSession,
+	renameSession,
 	pruneOldSessions,
 	type ChatSessionFile,
 	type PersistedMessage,
@@ -186,6 +188,54 @@ class ConfirmModal extends Modal {
 	}
 }
 
+class RenameModal extends Modal {
+	private currentTitle: string;
+	private onRename: (newTitle: string) => void;
+
+	constructor(app: App, currentTitle: string, onRename: (newTitle: string) => void) {
+		super(app);
+		this.currentTitle = currentTitle;
+		this.onRename = onRename;
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		contentEl.createEl("p", { text: "重命名对话" });
+		const input = contentEl.createEl("input", {
+			type: "text",
+			cls: "ai-daily-rename-input",
+			value: this.currentTitle,
+		});
+		input.style.width = "100%";
+		input.style.marginBottom = "12px";
+		const btnRow = contentEl.createDiv({ cls: "ai-daily-confirm-btns" });
+		const confirmBtn = btnRow.createEl("button", { text: "确认", cls: "mod-cta" });
+		const cancelBtn = btnRow.createEl("button", { text: "取消" });
+		confirmBtn.addEventListener("click", () => {
+			const v = input.value.trim();
+			if (v) {
+				this.onRename(v);
+				this.close();
+			}
+		});
+		cancelBtn.addEventListener("click", () => this.close());
+		input.addEventListener("keydown", (e) => {
+			if (e.key === "Enter") {
+				const v = input.value.trim();
+				if (v) {
+					this.onRename(v);
+					this.close();
+				}
+			}
+		});
+		setTimeout(() => { input.focus(); input.select(); }, 50);
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
+}
+
 export class ChatView extends ItemView {
 	plugin: AIDailyChat;
 	private closed = false;
@@ -314,12 +364,27 @@ export class ChatView extends ItemView {
 		setIcon(moreBtn, "more-vertical");
 		moreBtn.addEventListener("click", (e) => {
 			const menu = new Menu();
+			const hasSession = !!this.sessionId;
+
+			// — 对话操作 —
 			menu.addItem((item) =>
-				item.setTitle("生成 Feed").setIcon("rss").onClick(() => this.plugin.generateFeed())
+				item.setTitle("保存为笔记").setIcon("file-down").setDisabled(!hasSession).onClick(() => this.saveSessionAsNote())
 			);
 			menu.addItem((item) =>
-				item.setTitle("生成播客 Feed").setIcon("mic").onClick(() => this.plugin.generatePodcastFeed())
+				item.setTitle("复制全文").setIcon("copy").setDisabled(!hasSession).onClick(() => this.copySessionText())
 			);
+			menu.addSeparator();
+
+			// — 管理 —
+			menu.addItem((item) =>
+				item.setTitle("重命名").setIcon("pencil").setDisabled(!hasSession).onClick(() => this.renameCurrentSession())
+			);
+			menu.addItem((item) =>
+				item.setTitle("置顶对话").setIcon("pin").setDisabled(!hasSession).onClick(() => this.togglePinCurrentSession())
+			);
+			menu.addSeparator();
+
+			// — 全局 —
 			menu.addItem((item) =>
 				item.setTitle("历史").setIcon("history").onClick(() => this.openHistoryPanel())
 			);
@@ -329,9 +394,13 @@ export class ChatView extends ItemView {
 					this.handleSend();
 				})
 			);
+			menu.addSeparator();
+
+			// — 危险 —
 			menu.addItem((item) =>
-				item.setTitle("Wiki 健康检查").setIcon("heart-pulse").onClick(() => this.plugin.runWikiHealthCheck())
+				item.setTitle("删除对话").setIcon("trash-2").setDisabled(!hasSession).onClick(() => this.deleteCurrentSession())
 			);
+
 			menu.showAtMouseEvent(e);
 		});
 	}
@@ -1749,6 +1818,7 @@ export class ChatView extends ItemView {
 			harnessContext: this.harnessContext ?? undefined,
 			lastMode: this.lastMode ?? undefined,
 			workspace: this.harnessContext?.workspace ?? existing?.workspace,
+			pinned: existing?.pinned,
 		};
 		try {
 			await saveChatSession(this.app.vault, chatHistoryFolder, file);
@@ -2705,6 +2775,90 @@ export class ChatView extends ItemView {
 		new Notice(`已分叉，移除 ${turnsRemoved} 轮对话，下次发送将创建新会话`, 3000);
 	}
 
+	private async saveSessionAsNote(): Promise<void> {
+		if (!this.sessionId || this.messages.length === 0) return;
+		const lines: string[] = [];
+		for (const m of this.messages) {
+			lines.push(m.role === "user" ? `**User:**\n${m.content}` : `**Assistant:**\n${m.content}`);
+			lines.push("");
+		}
+		const content = lines.join("\n");
+		const title = titleFromMessages(this.messages.map((m) => ({ role: m.role, content: m.content })));
+		const ws = this.harnessContext?.workspace;
+		const folder = ws
+			? `${this.plugin.settings.harnessProjectsFolder}/${ws}`
+			: this.plugin.settings.knowledgeFolders[0] || "Raw";
+		const fileName = `${folder}/${title}.md`;
+		try {
+			const existing = this.app.vault.getAbstractFileByPath(fileName);
+			if (existing) {
+				new Notice(`笔记已存在: ${fileName}`, 3000);
+				return;
+			}
+			await this.app.vault.create(fileName, content);
+			new Notice(`已保存为笔记: ${fileName}`, 3000);
+		} catch (e) {
+			new Notice(`保存失败: ${e instanceof Error ? e.message : String(e)}`, 5000);
+		}
+	}
+
+	private copySessionText(): void {
+		if (this.messages.length === 0) return;
+		const lines: string[] = [];
+		for (const m of this.messages) {
+			lines.push(m.role === "user" ? `**User:**\n${m.content}` : `**Assistant:**\n${m.content}`);
+			lines.push("");
+		}
+		navigator.clipboard.writeText(lines.join("\n")).then(() => {
+			new Notice("已复制全文", 2000);
+		});
+	}
+
+	private renameCurrentSession(): void {
+		if (!this.sessionId) return;
+		const currentTitle = titleFromMessages(this.messages.map((m) => ({ role: m.role, content: m.content })));
+		const modal = new RenameModal(this.app, currentTitle, async (newTitle) => {
+			if (!this.sessionId) return;
+			await renameSession(
+				this.app.vault,
+				this.plugin.settings.chatHistoryFolder,
+				this.sessionId,
+				newTitle
+			);
+			new Notice(`已重命名为「${newTitle}」`, 2000);
+		});
+		modal.open();
+	}
+
+	private async togglePinCurrentSession(): Promise<void> {
+		if (!this.sessionId) return;
+		const pinned = await togglePinSession(
+			this.app.vault,
+			this.plugin.settings.chatHistoryFolder,
+			this.sessionId
+		);
+		new Notice(pinned ? "已置顶" : "已取消置顶", 2000);
+	}
+
+	private deleteCurrentSession(): void {
+		if (!this.sessionId) return;
+		const title = titleFromMessages(this.messages.map((m) => ({ role: m.role, content: m.content })));
+		new ConfirmModal(
+			this.app,
+			`确定删除对话「${title}」？此操作不可撤销。`,
+			async () => {
+				if (!this.sessionId) return;
+				await deleteChatSessionFile(
+					this.app.vault,
+					this.plugin.settings.chatHistoryFolder,
+					this.sessionId
+				);
+				this.clearChat();
+				new Notice("对话已删除", 2000);
+			}
+		).open();
+	}
+
 	private clearChat(): void {
 		this.client?.abort();
 		this.sessionId = null;
@@ -2746,6 +2900,61 @@ export class ChatView extends ItemView {
 		}
 	}
 
+	private static WORKSPACE_COLORS = [
+		"#e07a3a", "#5b9bd5", "#6bc26b", "#c25b8e",
+		"#9b7ed8", "#d4a843", "#4abfbf", "#d45b5b",
+	];
+
+	private workspaceColorMap = new Map<string, string>();
+
+	private getWorkspaceColor(ws: string): string {
+		if (this.workspaceColorMap.has(ws)) return this.workspaceColorMap.get(ws)!;
+		const idx = this.workspaceColorMap.size % ChatView.WORKSPACE_COLORS.length;
+		const color = ChatView.WORKSPACE_COLORS[idx];
+		this.workspaceColorMap.set(ws, color);
+		return color;
+	}
+
+	private formatHistoryTime(dateStr: string): string {
+		const d = new Date(dateStr);
+		if (isNaN(d.getTime())) return "";
+		const now = new Date();
+		const diffMs = now.getTime() - d.getTime();
+		const diffMins = Math.floor(diffMs / 60000);
+		if (diffMins < 60) return `${diffMins} 分钟前`;
+		const diffHours = Math.floor(diffMins / 60);
+		if (diffHours < 24 && d.getDate() === now.getDate()) {
+			const h = d.getHours();
+			const m = d.getMinutes().toString().padStart(2, "0");
+			const period = h >= 12 ? "下午" : "上午";
+			const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+			return `${period} ${h12.toString().padStart(2, "0")}:${m}`;
+		}
+		const yesterday = new Date(now);
+		yesterday.setDate(yesterday.getDate() - 1);
+		if (d.getDate() === yesterday.getDate() && d.getMonth() === yesterday.getMonth() && d.getFullYear() === yesterday.getFullYear()) {
+			return "昨天";
+		}
+		const diffDays = Math.floor(diffMs / 86400000);
+		if (diffDays < 7) return `${diffDays} 天前`;
+		return `${d.getMonth() + 1}月${d.getDate()}日`;
+	}
+
+	private getTimeGroup(dateStr: string): string {
+		const d = new Date(dateStr);
+		if (isNaN(d.getTime())) return "更早";
+		const now = new Date();
+		const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+		if (d >= todayStart) return "今天";
+		const yesterdayStart = new Date(todayStart);
+		yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+		if (d >= yesterdayStart) return "昨天";
+		const weekAgo = new Date(todayStart);
+		weekAgo.setDate(weekAgo.getDate() - 7);
+		if (d >= weekAgo) return "本周";
+		return "更早";
+	}
+
 	private async openHistoryPanel(): Promise<void> {
 		if (this.historyOverlay) { this.closeHistoryOverlay(); return; }
 		const { chatHistoryFolder } = this.plugin.settings;
@@ -2766,27 +2975,24 @@ export class ChatView extends ItemView {
 			window.visualViewport?.removeEventListener("scroll", onViewportResize);
 		};
 
+		// Header: back + title + filter
 		const head = overlay.createDiv({ cls: "ai-daily-history-head" });
-		head.createEl("span", { text: "历史对话", cls: "ai-daily-history-title" });
-
+		const backBtn = head.createDiv({ cls: "ai-daily-history-back" });
+		setIcon(backBtn, "chevron-left");
+		backBtn.addEventListener("click", () => this.closeHistoryOverlay());
+		head.createEl("span", { text: "历史", cls: "ai-daily-history-title" });
 		const headActions = head.createDiv({ cls: "ai-daily-history-head-actions" });
-		const clearAllBtn = headActions.createSpan({
-			cls: "ai-daily-history-clear-all",
-			text: "清空全部",
-		});
+		const clearAllBtn = headActions.createSpan({ cls: "ai-daily-history-clear-all" });
+		setIcon(clearAllBtn, "list-filter");
+		clearAllBtn.setAttribute("title", "清空全部");
 		clearAllBtn.addEventListener("click", () => {
 			if (sessions.length === 0) return;
 			new ConfirmModal(
 				this.app,
 				`确定删除全部 ${sessions.length} 条历史对话？此操作不可撤销。`,
 				async () => {
-					const { chatHistoryFolder } = this.plugin.settings;
 					for (const s of sessions) {
-						await deleteChatSessionFile(
-							this.app.vault,
-							chatHistoryFolder,
-							s.id
-						);
+						await deleteChatSessionFile(this.app.vault, chatHistoryFolder, s.id);
 					}
 					if (this.sessionId && sessions.some((s) => s.id === this.sessionId)) {
 						this.clearChat();
@@ -2798,132 +3004,100 @@ export class ChatView extends ItemView {
 			).open();
 		});
 
-		const closeBtn = headActions.createSpan({ cls: "ai-daily-history-close", text: "✕" });
-		closeBtn.addEventListener("click", () => {
-			this.closeHistoryOverlay();
-		});
-
-		const search = overlay.createEl("input", {
+		// Search
+		const searchWrap = overlay.createDiv({ cls: "ai-daily-history-search-wrap" });
+		const searchIcon = searchWrap.createSpan({ cls: "ai-daily-history-search-icon" });
+		setIcon(searchIcon, "search");
+		const search = searchWrap.createEl("input", {
 			cls: "ai-daily-history-search",
 			type: "search",
-			attr: { placeholder: "搜索标题…" },
+			attr: { placeholder: "搜索历史对话..." },
 		});
 
 		const listEl = overlay.createDiv({ cls: "ai-daily-history-list" });
-
-		const expandedGroups = new Set<string>();
 
 		const renderList = (items: ChatSessionFile[]) => {
 			listEl.empty();
 
 			if (items.length === 0) {
-				listEl.createDiv({
-					cls: "ai-daily-history-empty",
-					text: "暂无历史会话",
-				});
+				listEl.createDiv({ cls: "ai-daily-history-empty", text: "暂无历史会话" });
 				return;
 			}
 
-			const groups = new Map<string, ChatSessionFile[]>();
-			for (const s of items) {
-				const key = s.workspace || s.harnessContext?.workspace || "未分类";
-				const arr = groups.get(key) ?? [];
+			// Group by time: pinned first, then 今天/昨天/本周/更早
+			const pinned = items.filter((s) => s.pinned);
+			const unpinned = items.filter((s) => !s.pinned);
+
+			const timeGroups = new Map<string, ChatSessionFile[]>();
+			const groupOrder = ["今天", "昨天", "本周", "更早"];
+			for (const s of unpinned) {
+				const g = this.getTimeGroup(s.updated);
+				const arr = timeGroups.get(g) ?? [];
 				arr.push(s);
-				groups.set(key, arr);
+				timeGroups.set(g, arr);
 			}
 
-			const orderedKeys = Array.from(groups.keys()).sort((a, b) => {
-				if (a === "未分类") return 1;
-				if (b === "未分类") return -1;
-				return a.localeCompare(b);
+			if (pinned.length > 0) {
+				renderGroup("置顶", pinned, true);
+			}
+			for (const g of groupOrder) {
+				const arr = timeGroups.get(g);
+				if (arr && arr.length > 0) renderGroup(g, arr, false);
+			}
+		};
+
+		const renderGroup = (label: string, items: ChatSessionFile[], isPinned: boolean) => {
+			const groupEl = listEl.createDiv({ cls: "ai-daily-history-group" });
+			groupEl.createDiv({ cls: "ai-daily-history-group-label", text: label });
+			for (const s of items) renderSession(s, groupEl, isPinned);
+		};
+
+		const renderSession = (s: ChatSessionFile, parent: HTMLElement, isPinned: boolean) => {
+			const ws = s.workspace || s.harnessContext?.workspace || "";
+			const color = ws ? this.getWorkspaceColor(ws) : "var(--text-faint)";
+			const row = parent.createDiv({
+				cls: `ai-daily-history-row${isPinned ? " ai-daily-history-row--pinned" : ""}`,
 			});
 
-			const renderSession = (s: ChatSessionFile) => {
-				const row = listEl.createDiv({ cls: "ai-daily-history-row" });
-				const info = row.createDiv({ cls: "ai-daily-history-row-info" });
-				const modeLabel = s.harnessContext?.mode
-					? `${s.harnessContext.mode.emoji} ${s.harnessContext.mode.label} · `
-					: "";
-				info.createDiv({
-					cls: "ai-daily-history-row-title",
-					text: `${modeLabel}${s.title || s.id}`,
-				});
-				info.createDiv({
-					cls: "ai-daily-history-row-meta",
-					text: `${s.updated?.slice(0, 16) ?? ""} · ${s.model}`,
-				});
-				info.addEventListener("click", () => {
-					void this.loadSession(s.id);
-					this.closeHistoryOverlay();
-				});
-
-				const delBtn = row.createSpan({ cls: "ai-daily-history-row-del" });
-				setIcon(delBtn, "trash-2");
-				delBtn.setAttribute("title", "删除");
-				delBtn.addEventListener("click", (ev) => {
-					ev.stopPropagation();
-					new ConfirmModal(
-						this.app,
-						`确定删除对话「${s.title || s.id}」？此操作不可撤销。`,
-						async () => {
-							const { chatHistoryFolder } = this.plugin.settings;
-							await deleteChatSessionFile(
-								this.app.vault,
-								chatHistoryFolder,
-								s.id
-							);
-							if (this.sessionId === s.id) {
-								this.clearChat();
-							}
-							sessions = sessions.filter((x) => x.id !== s.id);
-							renderList(
-								sessions.filter((x) =>
-									search.value
-										? matchSession(x, search.value.toLowerCase())
-										: true
-								)
-							);
-							new Notice("对话已删除", 3000);
-						}
-					).open();
-				});
-			};
-
-			const DEFAULT_LIMIT = 3;
-
-			for (const key of orderedKeys) {
-				const groupSessions = groups.get(key) ?? [];
-				const isExpanded = expandedGroups.has(key) || !!search.value;
-
-				const groupEl = listEl.createDiv({ cls: "ai-daily-history-group" });
-				const labelEl = groupEl.createDiv({ cls: "ai-daily-history-group-label" });
-				labelEl.createSpan({ text: key });
-				labelEl.createSpan({
-					cls: "ai-daily-history-group-count",
-					text: `${groupSessions.length}`,
-				});
-
-				const shown = isExpanded ? groupSessions : groupSessions.slice(0, DEFAULT_LIMIT);
-				for (const s of shown) renderSession(s);
-
-				if (!isExpanded && groupSessions.length > DEFAULT_LIMIT) {
-					const more = listEl.createDiv({
-						cls: "ai-daily-history-group-more",
-						text: `查看更多 (${groupSessions.length - DEFAULT_LIMIT})`,
-					});
-					more.addEventListener("click", () => {
-						expandedGroups.add(key);
-						renderList(items);
-					});
-				}
+			// Left color indicator
+			const dot = row.createSpan({ cls: "ai-daily-history-row-dot" });
+			dot.style.background = color;
+			if (isPinned) {
+				dot.style.background = "var(--interactive-accent)";
+				const pinIcon = row.createSpan({ cls: "ai-daily-history-row-pin-icon" });
+				setIcon(pinIcon, "pin");
 			}
+
+			// Info
+			const info = row.createDiv({ cls: "ai-daily-history-row-info" });
+			info.createDiv({
+				cls: "ai-daily-history-row-title",
+				text: s.title || s.id,
+			});
+			const metaParts = [ws, this.formatHistoryTime(s.updated)].filter(Boolean).join(" · ");
+			info.createDiv({
+				cls: "ai-daily-history-row-meta",
+				text: metaParts,
+			});
+
+			// Mode chip
+			const modeLabel = s.harnessContext?.mode?.label;
+			if (modeLabel) {
+				const chip = row.createSpan({ cls: "ai-daily-history-row-chip" });
+				chip.textContent = modeLabel;
+			}
+
+			row.addEventListener("click", () => {
+				void this.loadSession(s.id);
+				this.closeHistoryOverlay();
+			});
 		};
 
 		const matchSession = (s: ChatSessionFile, q: string): boolean => {
 			if (s.title.toLowerCase().includes(q)) return true;
 			if (s.id.toLowerCase().includes(q)) return true;
 			if ((s.workspace || "").toLowerCase().includes(q)) return true;
-			if ((s.harnessContext?.mode.label || "").toLowerCase().includes(q)) return true;
+			if ((s.harnessContext?.mode?.label || "").toLowerCase().includes(q)) return true;
 			return false;
 		};
 
@@ -2939,9 +3113,7 @@ export class ChatView extends ItemView {
 		});
 
 		overlay.addEventListener("click", (ev) => {
-			if (ev.target === overlay) {
-				this.closeHistoryOverlay();
-			}
+			if (ev.target === overlay) this.closeHistoryOverlay();
 		});
 
 		sessions = await listChatSessions(this.app.vault, chatHistoryFolder);

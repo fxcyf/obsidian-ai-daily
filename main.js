@@ -6257,6 +6257,7 @@ var _ChatView = class _ChatView extends import_obsidian12.ItemView {
     this.mentionStartPos = null;
     this.mentionCursorPos = null;
     this.studioEl = null;
+    this.moreBtnEl = null;
     this.studio = null;
     this.readImageCount = 0;
     this.claudeCodeAbort = null;
@@ -6331,12 +6332,13 @@ var _ChatView = class _ChatView extends import_obsidian12.ItemView {
     });
     (0, import_obsidian12.setIcon)(newChatBtn, "plus");
     newChatBtn.addEventListener("click", () => this.clearChat());
-    const moreBtn = this.headerEl.createDiv({
+    this.moreBtnEl = this.headerEl.createDiv({
       cls: "ai-daily-header-btn",
       attr: { "aria-label": "\u66F4\u591A", title: "\u66F4\u591A" }
     });
-    (0, import_obsidian12.setIcon)(moreBtn, "more-vertical");
-    moreBtn.addEventListener("click", (e) => {
+    this.moreBtnEl.style.display = "none";
+    (0, import_obsidian12.setIcon)(this.moreBtnEl, "more-vertical");
+    this.moreBtnEl.addEventListener("click", (e) => {
       const menu = new import_obsidian12.Menu();
       const hasSession = !!this.sessionId;
       menu.addItem(
@@ -7654,7 +7656,10 @@ ${filesList}` : "",
   }
   addMessage(role, content, source) {
     const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
-    if (welcome) welcome.remove();
+    if (welcome) {
+      welcome.remove();
+      if (this.moreBtnEl) this.moreBtnEl.style.display = "";
+    }
     this.messages.push({ role, content, source });
     this.cachedTokenCount += estimateTextTokens(content);
     const msgEl = this.messagesEl.createDiv({
@@ -8614,6 +8619,7 @@ ${m.content}`);
     this.renderAttachBar();
     this.messagesEl.empty();
     this.showWelcome();
+    if (this.moreBtnEl) this.moreBtnEl.style.display = "none";
   }
   updateHistoryOverlayInset() {
     var _a, _b, _c, _d, _e, _f;
@@ -8854,6 +8860,7 @@ ${m.content}`);
     this.messagesEl.empty();
     const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
     if (welcome) welcome.remove();
+    if (this.moreBtnEl) this.moreBtnEl.style.display = "";
     if (this.harnessContext) {
       const ctx = this.harnessContext;
       const banner = this.messagesEl.createDiv({ cls: "ai-daily-ctx-header" });

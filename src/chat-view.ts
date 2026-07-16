@@ -269,6 +269,7 @@ export class ChatView extends ItemView {
 	private mentionStartPos: number | null = null;
 	private mentionCursorPos: number | null = null;
 	private studioEl: HTMLElement | null = null;
+	private moreBtnEl: HTMLElement | null = null;
 	private studio: WorkspaceStudio | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AIDailyChat) {
@@ -357,12 +358,13 @@ export class ChatView extends ItemView {
 		setIcon(newChatBtn, "plus");
 		newChatBtn.addEventListener("click", () => this.clearChat());
 
-		const moreBtn = this.headerEl.createDiv({
+		this.moreBtnEl = this.headerEl.createDiv({
 			cls: "ai-daily-header-btn",
 			attr: { "aria-label": "更多", title: "更多" },
 		});
-		setIcon(moreBtn, "more-vertical");
-		moreBtn.addEventListener("click", (e) => {
+		this.moreBtnEl.style.display = "none";
+		setIcon(this.moreBtnEl, "more-vertical");
+		this.moreBtnEl.addEventListener("click", (e) => {
 			const menu = new Menu();
 			const hasSession = !!this.sessionId;
 
@@ -1839,7 +1841,10 @@ export class ChatView extends ItemView {
 
 	private addMessage(role: "user" | "assistant", content: string, source?: MessageSource): void {
 		const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
-		if (welcome) welcome.remove();
+		if (welcome) {
+			welcome.remove();
+			if (this.moreBtnEl) this.moreBtnEl.style.display = "";
+		}
 
 		this.messages.push({ role, content, source });
 		this.cachedTokenCount += estimateTextTokens(content);
@@ -2876,6 +2881,7 @@ export class ChatView extends ItemView {
 		this.renderAttachBar();
 		this.messagesEl.empty();
 		this.showWelcome();
+		if (this.moreBtnEl) this.moreBtnEl.style.display = "none";
 	}
 
 	private updateHistoryOverlayInset(): void {
@@ -3148,6 +3154,7 @@ export class ChatView extends ItemView {
 		this.messagesEl.empty();
 		const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
 		if (welcome) welcome.remove();
+		if (this.moreBtnEl) this.moreBtnEl.style.display = "";
 
 		if (this.harnessContext) {
 			const ctx = this.harnessContext;

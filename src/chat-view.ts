@@ -973,16 +973,6 @@ export class ChatView extends ItemView {
 		// Resume hero card — shows last session
 		this.buildResumeHero(welcomeEl);
 
-		// Ask bar
-		const askBar = welcomeEl.createDiv({ cls: "ai-daily-welcome-ask" });
-		const askIcon = askBar.createSpan({ cls: "ai-daily-welcome-ask-icon" });
-		setIcon(askIcon, "message-circle");
-		askBar.createSpan({ cls: "ai-daily-welcome-ask-text", text: "直接提问探索知识库…" });
-		askBar.createSpan({ cls: "ai-daily-welcome-ask-hint", text: "@ · /" });
-		askBar.addEventListener("click", () => {
-			this.inputEl.focus();
-		});
-
 		// Workspace section header
 		this.buildWelcomeHarness(welcomeEl);
 
@@ -1039,9 +1029,8 @@ export class ChatView extends ItemView {
 				void this.loadSession(last.id);
 			});
 
-			// Insert hero before the ask bar
-			const askBar = welcomeEl.querySelector(".ai-daily-welcome-ask");
-			if (askBar) welcomeEl.insertBefore(hero, askBar);
+			const harness = welcomeEl.querySelector(".ai-daily-welcome-harness");
+			if (harness) welcomeEl.insertBefore(hero, harness);
 		});
 	}
 

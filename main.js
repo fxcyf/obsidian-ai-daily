@@ -6878,14 +6878,6 @@ ${entry}
     titleRow.createSpan({ text: "Cortex" });
     titleRow.createSpan({ cls: "ai-daily-welcome-ver", text: `v${this.plugin.manifest.version}` });
     this.buildResumeHero(welcomeEl);
-    const askBar = welcomeEl.createDiv({ cls: "ai-daily-welcome-ask" });
-    const askIcon = askBar.createSpan({ cls: "ai-daily-welcome-ask-icon" });
-    (0, import_obsidian12.setIcon)(askIcon, "message-circle");
-    askBar.createSpan({ cls: "ai-daily-welcome-ask-text", text: "\u76F4\u63A5\u63D0\u95EE\u63A2\u7D22\u77E5\u8BC6\u5E93\u2026" });
-    askBar.createSpan({ cls: "ai-daily-welcome-ask-hint", text: "@ \xB7 /" });
-    askBar.addEventListener("click", () => {
-      this.inputEl.focus();
-    });
     this.buildWelcomeHarness(welcomeEl);
     const tools = [
       { icon: "layout-grid", label: "Studio", action: () => void this.openStudio() },
@@ -6930,8 +6922,8 @@ ${entry}
       hero.addEventListener("click", () => {
         void this.loadSession(last.id);
       });
-      const askBar = welcomeEl.querySelector(".ai-daily-welcome-ask");
-      if (askBar) welcomeEl.insertBefore(hero, askBar);
+      const harness = welcomeEl.querySelector(".ai-daily-welcome-harness");
+      if (harness) welcomeEl.insertBefore(hero, harness);
     });
   }
   formatRelativeTime(dateStr) {

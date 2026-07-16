@@ -789,6 +789,9 @@
 	flex-direction: column;
 	background: var(--background-secondary);
 	border: none;
+	padding: 0 6px;
+	border-radius: 12px;
+	overflow: hidden;
 }
 
 .ai-daily-history-head {
@@ -987,6 +990,72 @@
 	font-weight: 600;
 	letter-spacing: 0.04em;
 	color: var(--text-faint);
+}
+
+/* Group toggle (时间 / 模式) */
+.ai-daily-history-toggle-wrap {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 12px 2px;
+}
+
+.ai-daily-history-toggle-label {
+	font-size: 12px;
+	color: var(--text-faint);
+}
+
+.ai-daily-history-toggle-group {
+	display: flex;
+	gap: 2px;
+	background: rgba(var(--mono-rgb-100), 0.06);
+	border-radius: 6px;
+	padding: 2px;
+}
+
+.ai-daily-history-toggle-btn {
+	font-size: 12px;
+	padding: 3px 10px;
+	border-radius: 5px;
+	cursor: pointer;
+	color: var(--text-muted);
+	user-select: none;
+	transition: background 0.15s, color 0.15s;
+}
+
+.ai-daily-history-toggle-btn:hover {
+	color: var(--text-normal);
+}
+
+.ai-daily-history-toggle-btn.is-active {
+	background: rgba(var(--mono-rgb-100), 0.12);
+	color: var(--text-normal);
+	font-weight: 500;
+}
+
+/* Mode group header */
+.ai-daily-history-mode-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 12px 4px 6px;
+}
+
+.ai-daily-history-mode-emoji {
+	font-size: 14px;
+}
+
+.ai-daily-history-mode-label {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--text-normal);
+	flex: 1;
+}
+
+.ai-daily-history-mode-count {
+	font-size: 11px;
+	color: var(--text-faint);
+	font-family: var(--font-monospace);
 }
 
 .ai-daily-msg-streaming {

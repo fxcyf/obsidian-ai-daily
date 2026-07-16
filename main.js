@@ -8744,9 +8744,25 @@ ${m.content}`);
       type: "search",
       attr: { placeholder: "\u641C\u7D22\u5386\u53F2\u5BF9\u8BDD..." }
     });
+    let groupByMode = false;
+    const toggleWrap = overlay.createDiv({ cls: "ai-daily-history-toggle-wrap" });
+    toggleWrap.createSpan({ cls: "ai-daily-history-toggle-label", text: "\u5206\u7EC4" });
+    const toggleGroup = toggleWrap.createDiv({ cls: "ai-daily-history-toggle-group" });
+    const btnTime = toggleGroup.createSpan({ cls: "ai-daily-history-toggle-btn is-active", text: "\u65F6\u95F4" });
+    const btnMode = toggleGroup.createSpan({ cls: "ai-daily-history-toggle-btn", text: "\u6A21\u5F0F" });
+    const setGroupMode = (byMode) => {
+      groupByMode = byMode;
+      btnTime.toggleClass("is-active", !byMode);
+      btnMode.toggleClass("is-active", byMode);
+      const q = search.value.trim().toLowerCase();
+      const filtered = q ? sessions.filter((s) => matchSession(s, q)) : sessions;
+      renderList(filtered);
+    };
+    btnTime.addEventListener("click", () => setGroupMode(false));
+    btnMode.addEventListener("click", () => setGroupMode(true));
     const listEl = overlay.createDiv({ cls: "ai-daily-history-list" });
     const renderList = (items) => {
-      var _a2;
+      var _a2, _b2, _c, _d, _e;
       listEl.empty();
       if (items.length === 0) {
         listEl.createDiv({ cls: "ai-daily-history-empty", text: "\u6682\u65E0\u5386\u53F2\u4F1A\u8BDD" });
@@ -8754,26 +8770,55 @@ ${m.content}`);
       }
       const pinned = items.filter((s) => s.pinned);
       const unpinned = items.filter((s) => !s.pinned);
-      const timeGroups = /* @__PURE__ */ new Map();
-      const groupOrder = ["\u4ECA\u5929", "\u6628\u5929", "\u672C\u5468", "\u66F4\u65E9"];
-      for (const s of unpinned) {
-        const g = this.getTimeGroup(s.updated);
-        const arr = (_a2 = timeGroups.get(g)) != null ? _a2 : [];
-        arr.push(s);
-        timeGroups.set(g, arr);
-      }
       if (pinned.length > 0) {
         renderGroup("\u7F6E\u9876", pinned, true);
       }
-      for (const g of groupOrder) {
-        const arr = timeGroups.get(g);
-        if (arr && arr.length > 0) renderGroup(g, arr, false);
+      if (groupByMode) {
+        const modeGroups = /* @__PURE__ */ new Map();
+        for (const s of unpinned) {
+          const mode = (_a2 = s.harnessContext) == null ? void 0 : _a2.mode;
+          const key = (_b2 = mode == null ? void 0 : mode.id) != null ? _b2 : "__free__";
+          const existing = modeGroups.get(key);
+          if (existing) {
+            existing.items.push(s);
+          } else {
+            modeGroups.set(key, {
+              emoji: (_c = mode == null ? void 0 : mode.emoji) != null ? _c : "\u{1F4AC}",
+              label: (_d = mode == null ? void 0 : mode.label) != null ? _d : "\u81EA\u7531\u5BF9\u8BDD",
+              items: [s]
+            });
+          }
+        }
+        for (const [, group] of modeGroups) {
+          renderModeGroup(group.emoji, group.label, group.items);
+        }
+      } else {
+        const timeGroups = /* @__PURE__ */ new Map();
+        const groupOrder = ["\u4ECA\u5929", "\u6628\u5929", "\u672C\u5468", "\u66F4\u65E9"];
+        for (const s of unpinned) {
+          const g = this.getTimeGroup(s.updated);
+          const arr = (_e = timeGroups.get(g)) != null ? _e : [];
+          arr.push(s);
+          timeGroups.set(g, arr);
+        }
+        for (const g of groupOrder) {
+          const arr = timeGroups.get(g);
+          if (arr && arr.length > 0) renderGroup(g, arr, false);
+        }
       }
     };
     const renderGroup = (label, items, isPinned) => {
       const groupEl = listEl.createDiv({ cls: "ai-daily-history-group" });
       groupEl.createDiv({ cls: "ai-daily-history-group-label", text: label });
       for (const s of items) renderSession(s, groupEl, isPinned);
+    };
+    const renderModeGroup = (emoji, label, items) => {
+      const groupEl = listEl.createDiv({ cls: "ai-daily-history-group" });
+      const header = groupEl.createDiv({ cls: "ai-daily-history-mode-header" });
+      header.createSpan({ cls: "ai-daily-history-mode-emoji", text: emoji });
+      header.createSpan({ cls: "ai-daily-history-mode-label", text: label });
+      header.createSpan({ cls: "ai-daily-history-mode-count", text: String(items.length) });
+      for (const s of items) renderSession(s, groupEl, false);
     };
     const renderSession = (s, parent, isPinned) => {
       var _a2, _b2, _c;

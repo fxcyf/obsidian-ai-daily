@@ -3020,6 +3020,24 @@ export class ChatView extends ItemView {
 			attr: { placeholder: "搜索历史对话..." },
 		});
 
+		// Group toggle: 时间 / 模式
+		let groupByMode = false;
+		const toggleWrap = overlay.createDiv({ cls: "ai-daily-history-toggle-wrap" });
+		toggleWrap.createSpan({ cls: "ai-daily-history-toggle-label", text: "分组" });
+		const toggleGroup = toggleWrap.createDiv({ cls: "ai-daily-history-toggle-group" });
+		const btnTime = toggleGroup.createSpan({ cls: "ai-daily-history-toggle-btn is-active", text: "时间" });
+		const btnMode = toggleGroup.createSpan({ cls: "ai-daily-history-toggle-btn", text: "模式" });
+		const setGroupMode = (byMode: boolean) => {
+			groupByMode = byMode;
+			btnTime.toggleClass("is-active", !byMode);
+			btnMode.toggleClass("is-active", byMode);
+			const q = search.value.trim().toLowerCase();
+			const filtered = q ? sessions.filter((s) => matchSession(s, q)) : sessions;
+			renderList(filtered);
+		};
+		btnTime.addEventListener("click", () => setGroupMode(false));
+		btnMode.addEventListener("click", () => setGroupMode(true));
+
 		const listEl = overlay.createDiv({ cls: "ai-daily-history-list" });
 
 		const renderList = (items: ChatSessionFile[]) => {
@@ -3030,25 +3048,45 @@ export class ChatView extends ItemView {
 				return;
 			}
 
-			// Group by time: pinned first, then 今天/昨天/本周/更早
 			const pinned = items.filter((s) => s.pinned);
 			const unpinned = items.filter((s) => !s.pinned);
-
-			const timeGroups = new Map<string, ChatSessionFile[]>();
-			const groupOrder = ["今天", "昨天", "本周", "更早"];
-			for (const s of unpinned) {
-				const g = this.getTimeGroup(s.updated);
-				const arr = timeGroups.get(g) ?? [];
-				arr.push(s);
-				timeGroups.set(g, arr);
-			}
 
 			if (pinned.length > 0) {
 				renderGroup("置顶", pinned, true);
 			}
-			for (const g of groupOrder) {
-				const arr = timeGroups.get(g);
-				if (arr && arr.length > 0) renderGroup(g, arr, false);
+
+			if (groupByMode) {
+				const modeGroups = new Map<string, { emoji: string; label: string; items: ChatSessionFile[] }>();
+				for (const s of unpinned) {
+					const mode = s.harnessContext?.mode;
+					const key = mode?.id ?? "__free__";
+					const existing = modeGroups.get(key);
+					if (existing) {
+						existing.items.push(s);
+					} else {
+						modeGroups.set(key, {
+							emoji: mode?.emoji ?? "💬",
+							label: mode?.label ?? "自由对话",
+							items: [s],
+						});
+					}
+				}
+				for (const [, group] of modeGroups) {
+					renderModeGroup(group.emoji, group.label, group.items);
+				}
+			} else {
+				const timeGroups = new Map<string, ChatSessionFile[]>();
+				const groupOrder = ["今天", "昨天", "本周", "更早"];
+				for (const s of unpinned) {
+					const g = this.getTimeGroup(s.updated);
+					const arr = timeGroups.get(g) ?? [];
+					arr.push(s);
+					timeGroups.set(g, arr);
+				}
+				for (const g of groupOrder) {
+					const arr = timeGroups.get(g);
+					if (arr && arr.length > 0) renderGroup(g, arr, false);
+				}
 			}
 		};
 
@@ -3056,6 +3094,15 @@ export class ChatView extends ItemView {
 			const groupEl = listEl.createDiv({ cls: "ai-daily-history-group" });
 			groupEl.createDiv({ cls: "ai-daily-history-group-label", text: label });
 			for (const s of items) renderSession(s, groupEl, isPinned);
+		};
+
+		const renderModeGroup = (emoji: string, label: string, items: ChatSessionFile[]) => {
+			const groupEl = listEl.createDiv({ cls: "ai-daily-history-group" });
+			const header = groupEl.createDiv({ cls: "ai-daily-history-mode-header" });
+			header.createSpan({ cls: "ai-daily-history-mode-emoji", text: emoji });
+			header.createSpan({ cls: "ai-daily-history-mode-label", text: label });
+			header.createSpan({ cls: "ai-daily-history-mode-count", text: String(items.length) });
+			for (const s of items) renderSession(s, groupEl, false);
 		};
 
 		const renderSession = (s: ChatSessionFile, parent: HTMLElement, isPinned: boolean) => {

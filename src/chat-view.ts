@@ -2978,12 +2978,42 @@ export class ChatView extends ItemView {
 		if (welcome) welcome.remove();
 
 		if (this.harnessContext) {
-			const modeLabel = `${this.harnessContext.mode.emoji} ${this.harnessContext.mode.label}`;
-			const harnessEl = this.messagesEl.createDiv({ cls: "ai-daily-harness-banner" });
-			harnessEl.createDiv({
-				cls: "ai-daily-harness-banner-mode",
-				text: `模式：${modeLabel}`,
-			});
+			const ctx = this.harnessContext;
+			const banner = this.messagesEl.createDiv({ cls: "ai-daily-ctx-header" });
+			const row = banner.createDiv({ cls: "ai-daily-ctx-row" });
+			const modeIcon = row.createDiv({ cls: "ai-daily-ctx-icon" });
+			modeIcon.textContent = ctx.mode.emoji;
+			const info = row.createDiv({ cls: "ai-daily-ctx-info" });
+			info.createDiv({ cls: "ai-daily-ctx-mode", text: ctx.mode.label });
+			if (ctx.workspace) {
+				info.createDiv({ cls: "ai-daily-ctx-ws", text: ctx.workspace });
+			}
+			if (ctx.injectedFiles.length > 0) {
+				let expanded = false;
+				const toggle = row.createSpan({
+					cls: "ai-daily-ctx-toggle",
+					text: `${ctx.injectedFiles.length} files ⌄`,
+				});
+				toggle.addEventListener("click", (ev) => {
+					ev.stopPropagation();
+					expanded = !expanded;
+					banner.toggleClass("ai-daily-ctx-expanded", expanded);
+					toggle.textContent = expanded
+						? `${ctx.injectedFiles.length} files ⌃`
+						: `${ctx.injectedFiles.length} files ⌄`;
+				});
+				const detail = banner.createDiv({ cls: "ai-daily-ctx-detail" });
+				detail.createDiv({ cls: "ai-daily-ctx-detail-label", text: `已注入 ${ctx.injectedFiles.length} 个文件` });
+				const pills = detail.createDiv({ cls: "ai-daily-ctx-pills" });
+				for (const f of ctx.injectedFiles) {
+					const pill = pills.createSpan({ cls: "ai-daily-ctx-pill" });
+					const fIcon = pill.createSpan({ cls: "ai-daily-ctx-pill-icon" });
+					setIcon(fIcon, "file-text");
+					const displayName = f.path.replace(/^.*\//, "").replace(/\.md$/, "");
+					pill.createSpan({ text: displayName });
+					pill.setAttribute("title", f.path);
+				}
+			}
 		}
 
 		for (const m of this.messages) {

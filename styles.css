@@ -719,6 +719,52 @@
 	height: 15px;
 }
 
+/* ── Settings: tab bar ──────────────────────────────────── */
+
+.ai-daily-settings {
+	--tab-radius: 6px;
+}
+
+.ai-daily-tab-bar {
+	display: flex;
+	gap: 4px;
+	padding: 0 0 12px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	margin-bottom: 12px;
+	flex-wrap: wrap;
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	background: var(--background-secondary);
+}
+
+.ai-daily-tab-btn {
+	padding: 6px 14px;
+	border: 1px solid transparent;
+	border-radius: var(--tab-radius);
+	background: transparent;
+	color: var(--text-muted);
+	font-size: 13px;
+	cursor: pointer;
+	transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.ai-daily-tab-btn:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+}
+
+.ai-daily-tab-btn.is-active {
+	color: var(--text-normal);
+	background: var(--background-primary);
+	border-color: var(--background-modifier-border);
+	font-weight: 500;
+}
+
+.ai-daily-tab-pane > h3:first-child {
+	margin-top: 0;
+}
+
 /* ── Settings: full-width layout for textareas ────────── */
 
 .ai-daily-setting-full .setting-item-info {

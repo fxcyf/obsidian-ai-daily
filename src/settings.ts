@@ -112,23 +112,68 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	proxyFallbackToApi: true,
 };
 
+const SETTINGS_TABS = [
+	{ id: "general", label: "常规" },
+	{ id: "chat", label: "聊天" },
+	{ id: "knowledge", label: "知识库" },
+	{ id: "feeds", label: "订阅与服务" },
+	{ id: "advanced", label: "高级" },
+];
+
 export class AIDailyChatSettingTab extends PluginSettingTab {
 	plugin: AIDailyChat;
+	private activeTab = "general";
 
 	constructor(app: App, plugin: AIDailyChat) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
 
+	private switchTab(tabId: string): void {
+		this.activeTab = tabId;
+		const container = this.containerEl;
+		for (const tab of SETTINGS_TABS) {
+			const btn = container.querySelector(`.ai-daily-tab-btn[data-tab="${tab.id}"]`);
+			const pane = container.querySelector(`.ai-daily-tab-pane[data-tab="${tab.id}"]`) as HTMLElement | null;
+			if (btn) btn.toggleClass("is-active", tab.id === tabId);
+			if (pane) pane.style.display = tab.id === tabId ? "" : "none";
+		}
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
+		containerEl.addClass("ai-daily-settings");
 
-		// ── 1. API 与模型 ──────────────────────────────────────
+		const tabBar = containerEl.createDiv({ cls: "ai-daily-tab-bar" });
+		for (const tab of SETTINGS_TABS) {
+			const btn = tabBar.createEl("button", {
+				text: tab.label,
+				cls: `ai-daily-tab-btn${tab.id === this.activeTab ? " is-active" : ""}`,
+			});
+			btn.dataset.tab = tab.id;
+			btn.addEventListener("click", () => this.switchTab(tab.id));
+		}
 
-		containerEl.createEl("h3", { text: "API 与模型" });
+		const panes: Record<string, HTMLElement> = {};
+		for (const tab of SETTINGS_TABS) {
+			const pane = containerEl.createDiv({ cls: "ai-daily-tab-pane" });
+			pane.dataset.tab = tab.id;
+			pane.style.display = tab.id === this.activeTab ? "" : "none";
+			panes[tab.id] = pane;
+		}
 
-		new Setting(containerEl)
+		this.renderGeneralTab(panes["general"]);
+		this.renderChatTab(panes["chat"]);
+		this.renderKnowledgeTab(panes["knowledge"]);
+		this.renderFeedsTab(panes["feeds"]);
+		this.renderAdvancedTab(panes["advanced"]);
+	}
+
+	private renderGeneralTab(el: HTMLElement): void {
+		el.createEl("h3", { text: "API 与模型" });
+
+		new Setting(el)
 			.setName("Anthropic API Key")
 			.setDesc("用于调用 Claude API")
 			.addText((text) => {
@@ -153,7 +198,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 				});
 			});
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("启用 API 调用")
 			.setDesc(
 				"关闭后所有使用 Anthropic API 的功能将停用（聊天、自动标注、Feed 生成等），代理模式和 Claude Code 不受影响"
@@ -167,7 +212,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("模型")
 			.setDesc("Claude 模型")
 			.addDropdown((dropdown) =>
@@ -182,7 +227,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("CLI 后端")
 			.setDesc("桌面端和代理模式使用的 Agent CLI 工具")
 			.addDropdown((dropdown) =>
@@ -198,7 +243,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 			);
 
 		if (this.plugin.settings.cliBackend === "codex") {
-			new Setting(containerEl)
+			new Setting(el)
 				.setName("Codex 模型")
 				.setDesc("Codex CLI 使用的模型")
 				.addDropdown((dropdown) =>
@@ -215,7 +260,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 						})
 				);
 
-			new Setting(containerEl)
+			new Setting(el)
 				.setName("Codex 权限")
 				.setDesc("无需交互审批；Shell 始终只读，Vault 写入仅通过 MCP 白名单")
 				.addDropdown((dropdown) =>
@@ -230,11 +275,9 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 				);
 		}
 
-		// ── 2. 对话与历史 ──────────────────────────────────────
+		el.createEl("h3", { text: "对话与历史" });
 
-		containerEl.createEl("h3", { text: "对话与历史" });
-
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("对话存档目录")
 			.setDesc("会话 JSON 保存在该文件夹（可与笔记一并同步）")
 			.addText((text) =>
@@ -247,7 +290,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("历史保留天数")
 			.setDesc("超过该天数未更新的会话文件会被自动删除；0 表示不自动清理")
 			.addSlider((slider) =>
@@ -261,7 +304,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("流式输出模式")
 			.setDesc(
 				"auto: 桌面用真流(fetch+SSE)，失败时移动端自动降级为打字机。real: 仅真流(调试用)。typewriter: 整段返回+客户端打字机。off: 一次性整段。"
@@ -280,7 +323,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("自动摘要阈值（估算 tokens）")
 			.setDesc(
 				"当估算上下文超过该值时，自动用一次 API 调用压缩更早的对话；0 关闭"
@@ -298,7 +341,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("上下文预算（展示用）")
 			.setDesc("底部用量条的总参考值，与模型实际上下文窗口大致对应")
 			.addText((text) =>
@@ -313,12 +356,12 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+	}
 
-		// ── 3. 聊天功能 ───────────────────────────────────────
+	private renderChatTab(el: HTMLElement): void {
+		el.createEl("h3", { text: "聊天功能" });
 
-		containerEl.createEl("h3", { text: "聊天功能" });
-
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("联网搜索")
 			.setDesc(
 				"启用后 Claude 可以搜索互联网并抓取网页内容（使用 Anthropic 内置 web_search + web_fetch 工具）"
@@ -332,7 +375,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("启用本地图片识别")
 			.setDesc(
 				"开启后，笔记中引用的本地图片（![[img.png]]）会自动发送给 Claude 进行多模态对话"
@@ -346,7 +389,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("单次最大图片数")
 			.setDesc("每条消息最多附带的图片数量")
 			.addSlider((slider) =>
@@ -360,7 +403,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("单图最大体积 (MB)")
 			.setDesc("超过该体积的图片将被跳过")
 			.addSlider((slider) =>
@@ -376,7 +419,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("启用播客工具")
 			.setDesc(
 				"启用后 Claude 可以搜索播客、获取剧集列表、提取文字稿并翻译总结"
@@ -390,13 +433,13 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		this.renderPromptTemplates(containerEl);
+		this.renderPromptTemplates(el);
+	}
 
-		// ── 4. 知识库 ─────────────────────────────────────────
+	private renderKnowledgeTab(el: HTMLElement): void {
+		el.createEl("h3", { text: "知识库" });
 
-		containerEl.createEl("h3", { text: "知识库" });
-
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("知识库文件夹")
 			.setDesc("用逗号分隔多个文件夹路径，如 Raw,Wiki")
 			.addText((text) =>
@@ -412,7 +455,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("蒸馏目标文件夹")
 			.setDesc("对话蒸馏和知识整理的输出目标文件夹")
 			.addText((text) =>
@@ -425,7 +468,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("启用自动标注")
 			.setDesc(
 				"新建或修改笔记时，自动调用 Claude 生成 tags 和 summary 写入 frontmatter"
@@ -439,7 +482,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("自动标注监控文件夹")
 			.setDesc("仅对这些文件夹中的笔记自动标注，用逗号分隔")
 			.addText((text) =>
@@ -455,7 +498,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		const autoTagPromptSetting = new Setting(containerEl)
+		const autoTagPromptSetting = new Setting(el)
 			.setName("自定义标注 Prompt")
 			.setDesc("留空使用默认 prompt")
 			.addTextArea((text) =>
@@ -473,11 +516,9 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 			autoTagTextarea.rows = 3;
 		}
 
-		// ── 5. Harness ────────────────────────────────────────
+		el.createEl("h3", { text: "Harness" });
 
-		containerEl.createEl("h3", { text: "Harness" });
-
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("项目文件夹")
 			.setDesc(
 				"Harness 从此文件夹读取 _INDEX.md 和各项目的 modes.md"
@@ -493,7 +534,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("Inbox 文件")
 			.setDesc(
 				"Harness 状态栏中显示待办计数的文件路径"
@@ -508,12 +549,12 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+	}
 
-		// ── 6. 外部服务 ───────────────────────────────────────
+	private renderFeedsTab(el: HTMLElement): void {
+		el.createEl("h3", { text: "外部服务" });
 
-		containerEl.createEl("h3", { text: "外部服务" });
-
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("启用微信读书")
 			.setDesc(
 				"启用后 Claude 可以访问你的微信读书数据（书架、笔记、划线、阅读统计等）"
@@ -527,7 +568,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("WeRead API Key")
 			.setDesc("微信读书 API Key，格式 wrk-xxxxxxxx，在微信读书官网获取")
 			.addText((text) => {
@@ -552,17 +593,15 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 				});
 			});
 
-		// ── 7. Feed 订阅源 ─────────────────────────────────────
+		el.createEl("h3", { text: "Feed 订阅源" });
 
-		containerEl.createEl("h3", { text: "Feed 订阅源" });
+		this.renderFeedSourceList(el);
+	}
 
-		this.renderFeedSourceList(containerEl);
+	private renderAdvancedTab(el: HTMLElement): void {
+		el.createEl("h3", { text: "代理模式（移动端）" });
 
-		// ── 8. 代理模式（移动端）────────────────────────────────
-
-		containerEl.createEl("h3", { text: "代理模式（移动端）" });
-
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("启用代理模式")
 			.setDesc(
 				"通过桌面端 proxy-server 发送请求（使用 Claude 订阅额度，不消耗 API 费用）"
@@ -576,7 +615,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("Proxy URL")
 			.setDesc("桌面端代理服务器地址，如 https://claude.yourdomain.com")
 			.addText((text) =>
@@ -589,7 +628,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("Proxy Token")
 			.setDesc("代理服务器认证令牌")
 			.addText((text) => {
@@ -614,7 +653,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 				});
 			});
 
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("代理不可用时回退本地 API")
 			.setDesc("当桌面端不可达时，自动使用 Anthropic API Key 调用")
 			.addToggle((toggle) =>
@@ -626,11 +665,9 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		// ── 9. 工具 ───────────────────────────────────────────
+		el.createEl("h3", { text: "工具" });
 
-		containerEl.createEl("h3", { text: "工具" });
-
-		new Setting(containerEl)
+		new Setting(el)
 			.setName("生成 Vault 参考模板")
 			.setDesc(
 				"根据当前设置生成 _cortex-guide/ 文件夹，包含文件夹结构模板、modes 配置示例和 CLAUDE.md。修改设置后可重新生成。"

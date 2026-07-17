@@ -1,5 +1,12 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-07-17 — Codex Proxy 未真正启动 (`3ed9114`)
+
+- **问题**：Codex 子进程 stdin pipe 始终未关闭，CLI 等待 EOF，因而没有产生 `thread.started`；关闭 stdin 后又发现硬编码的 `o4-mini` 不支持 ChatGPT Codex 账户。
+- **解决**：Codex stdin 改为 `ignore`，默认使用账户当前支持的模型，仅在配置 `CODEX_MODEL` 时覆盖，并记录失败 stderr。
+- **验证**：同机 CLI 在 stdin EOF 且不指定模型时完整输出 `thread.started`、`agent_message: OK` 和 `turn.completed`。
+- **教训**：CLI 集成必须用真实账户做最小端到端冒烟测试；“进程存活”不代表模型请求已经开始。
+
 ## 2026-07-17 — Codex Proxy 长任务无反馈 (`594e56c`)
 
 - **问题**：请求已到 Proxy，但 Codex 的 reasoning、`item.started` 和存活状态没有转发，前端只能长期显示“思考中”。

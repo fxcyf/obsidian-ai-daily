@@ -1,5 +1,11 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-07-17 — Claude/Codex Proxy session 污染 (`2f17932`)
+
+- **问题**：两个 backend 共用 `proxySessionId`，切到 Codex 时会拿 Claude session 执行 resume，报 `no rollout found`；本次重试又恰逢另一条部署重启而中断。
+- **解决**：session 持久化 backend 类型；backend 切换或旧存档缺少类型时清理不兼容 session/task，再用现有聊天历史创建新 thread。
+- **教训**：不同 CLI 的 session ID 即使同为 UUID 也不可互换；持久化外部句柄必须同时保存其 provider/backend。
+
 ## 2026-07-17 — Agent 工具策略单一来源 (`01cae33`)
 
 - **重构**：新增 `agent-tool-policy.json`，统一维护 Claude Code 桌面/Proxy 内置工具与 Codex MCP 只读、可写、永久禁用分组。

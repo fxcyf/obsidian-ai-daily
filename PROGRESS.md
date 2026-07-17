@@ -1,5 +1,12 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-07-17 — Codex Proxy 缺少 Obsidian MCP (`1c53621`)
+
+- **问题**：`MCP_CONFIG` 只传给 Claude Code；Codex 进程未加载 `obsidian-vault`，system prompt 虽描述了工具但运行时没有工具定义。
+- **解决**：Proxy 将现有 MCP JSON 转换为 Codex 单进程 `-c mcp_servers.*` 覆盖；同时兼容 Codex 0.144 MCP 事件的 `server/tool` 字段。
+- **验证**：GPT-5.6 Sol 成功发现 `obsidian_vault`，调用 `list_notes` 并读出 vault 实际文件，最终回复“调用成功”。
+- **教训**：prompt 中声明能力不等于运行时注册能力；Agent 工具必须从 CLI 启动配置到事件解析做端到端验证。
+
 ## 2026-07-17 — Codex 续问失败与历史丢失 (`abb1610`)
 
 - **问题**：`codex exec resume` 不支持 `--sandbox`，第二轮直接 code 2；Codex 分支又跳过了 Proxy 收到的 `history` 与 `systemPrompt`。

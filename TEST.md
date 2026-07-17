@@ -41,6 +41,8 @@ npm test          # 单次运行
 npm run test:watch # 监听模式
 ```
 
+工具权限策略由 `agent-tool-policy.json` 统一维护；`src/tool-policy.test.ts` 会验证工具名存在、破坏性工具未进入白名单，以及 Claude Code 未开放 Bash/Write/Edit。
+
 ## 测试文件
 
 | 文件 | 覆盖范围 |

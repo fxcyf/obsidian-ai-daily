@@ -94,6 +94,7 @@ rebase 发生冲突时：
 - `src/main.ts` — 插件入口，注册视图、命令、设置；桌面端启动 Plugin API Server
 - `src/plugin-api-server.ts` — 桌面端 localhost HTTP API（127.0.0.1:27080），桥接 MCP Server → Obsidian API
 - `src/tool-definitions.ts` — 工具 schema 单一来源（TOOL_DEFS/PODCAST_TOOL_DEFS 等），含 Anthropic API 格式和 Claude Code 文本描述转换器
+- `agent-tool-policy.json` — Agent 工具权限策略单一来源（Claude Code 内置工具、Codex MCP 只读/可写白名单）；桌面端与 Proxy 共同读取
 - `src/system-prompt.ts` — 统一 system prompt 构建（API/Claude Code/Proxy 三模式共享，含 harness 注入）
 - `src/chat-view.ts` — 聊天侧边栏 UI
 - `src/claude.ts` — Claude API client，支持 tool_use agentic loop、real/typewriter/off 流式调度、proxy 模式（含重试）

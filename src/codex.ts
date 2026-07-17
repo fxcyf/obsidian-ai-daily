@@ -2,13 +2,7 @@ import { Platform } from "obsidian";
 import { ChildProcess } from "child_process";
 import { getMcpServerPath } from "./claude-code";
 import type { ClaudeCodeStreamCallbacks, ClaudeCodeOptions } from "./claude-code";
-
-const CODEX_READ_TOOLS = ["read_note", "search_vault", "list_notes", "get_links", "read_image"];
-const CODEX_EXTERNAL_READ_TOOLS = [
-	"podcast_search", "podcast_episodes", "podcast_transcript",
-	"fetch_feeds", "fetch_rss", "weread_api",
-];
-const CODEX_WRITE_TOOLS = ["create_note", "append_to_note", "edit_note", "update_frontmatter"];
+import toolPolicy from "../agent-tool-policy.json";
 
 let cachedCodexPath: string | false | null = null;
 
@@ -162,8 +156,8 @@ export function spawnCodex(
 		];
 	}
 	const enabledTools = codexPermissionMode === "vault-write"
-		? [...CODEX_READ_TOOLS, ...CODEX_EXTERNAL_READ_TOOLS, ...CODEX_WRITE_TOOLS]
-		: [...CODEX_READ_TOOLS, ...CODEX_EXTERNAL_READ_TOOLS];
+		? [...toolPolicy.codex.readOnlyMcp, ...toolPolicy.codex.vaultWriteMcp]
+		: toolPolicy.codex.readOnlyMcp;
 	args.push(
 		"-c", 'approval_policy="never"',
 		"-c", 'sandbox_mode="read-only"',

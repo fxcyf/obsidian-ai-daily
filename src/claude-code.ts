@@ -1,4 +1,5 @@
 import { Platform } from "obsidian";
+import toolPolicy from "../agent-tool-policy.json";
 import { ChildProcess } from "child_process";
 
 declare const __MCP_SERVER_CODE__: string | undefined;
@@ -385,7 +386,7 @@ export function spawnClaudeCode(
 		"--verbose",
 		"--include-partial-messages",
 		"--permission-mode", "bypassPermissions",
-		"--tools", "Read,Grep,Glob,WebSearch,WebFetch,TodoWrite",
+		"--tools", toolPolicy.claudeCode.desktopBuiltins.join(","),
 		"--mcp-config", mcpConfigPath,
 	];
 	if (model) {

@@ -1,5 +1,11 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-07-17 — Codex 读取型 MCP 白名单补全 (`4346273`)
+
+- **修正**：Feed、RSS、播客和微信读书均属于读取型能力，应在只读与 Vault 可写档位中保持开放，与 Claude Code 能力一致。
+- **边界**：继续禁用 delete_note、rename_note 与 Shell 写入；Vault 写入档位只增加创建、追加、编辑和 frontmatter。
+- **教训**：工具风险应按副作用分类，不能把“需要网络”简单等同于“具有破坏性”。
+
 ## 2026-07-17 — Codex 非交互安全边界 (`d14f561`)
 
 - **问题**：桌面端和 Proxy Codex 使用 bypass + danger-full-access；即使限制 MCP，通用 Shell 仍可绕过工具层访问宿主机。

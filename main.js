@@ -5564,6 +5564,33 @@ async function getWikiStructureSummary(app, targetFolder) {
 
 // src/claude-code.ts
 var import_obsidian11 = require("obsidian");
+
+// agent-tool-policy.json
+var agent_tool_policy_default = {
+  claudeCode: {
+    desktopBuiltins: ["Read", "Grep", "Glob", "WebSearch", "WebFetch", "TodoWrite"],
+    proxyBuiltins: ["WebSearch", "WebFetch", "TodoWrite"]
+  },
+  codex: {
+    readOnlyMcp: [
+      "read_note",
+      "search_vault",
+      "list_notes",
+      "get_links",
+      "read_image",
+      "podcast_search",
+      "podcast_episodes",
+      "podcast_transcript",
+      "fetch_feeds",
+      "fetch_rss",
+      "weread_api"
+    ],
+    vaultWriteMcp: ["create_note", "append_to_note", "edit_note", "update_frontmatter"],
+    alwaysDisabledMcp: ["delete_note", "rename_note"]
+  }
+};
+
+// src/claude-code.ts
 var cachedClaudePath = null;
 var cachedNodePath = null;
 var cachedMcpServerPath = null;
@@ -5847,7 +5874,7 @@ function spawnClaudeCode(prompt, options, callbacks) {
     "--permission-mode",
     "bypassPermissions",
     "--tools",
-    "Read,Grep,Glob,WebSearch,WebFetch,TodoWrite",
+    agent_tool_policy_default.claudeCode.desktopBuiltins.join(","),
     "--mcp-config",
     mcpConfigPath
   ];
@@ -6102,16 +6129,6 @@ async function seedClaudeCodeSession(history, cwd, model) {
 
 // src/codex.ts
 var import_obsidian12 = require("obsidian");
-var CODEX_READ_TOOLS = ["read_note", "search_vault", "list_notes", "get_links", "read_image"];
-var CODEX_EXTERNAL_READ_TOOLS = [
-  "podcast_search",
-  "podcast_episodes",
-  "podcast_transcript",
-  "fetch_feeds",
-  "fetch_rss",
-  "weread_api"
-];
-var CODEX_WRITE_TOOLS = ["create_note", "append_to_note", "edit_note", "update_frontmatter"];
 var cachedCodexPath = null;
 function getCodexSearchPaths(home) {
   return [
@@ -6234,7 +6251,7 @@ function spawnCodex(prompt, options, callbacks) {
       "--skip-git-repo-check"
     ];
   }
-  const enabledTools = codexPermissionMode === "vault-write" ? [...CODEX_READ_TOOLS, ...CODEX_EXTERNAL_READ_TOOLS, ...CODEX_WRITE_TOOLS] : [...CODEX_READ_TOOLS, ...CODEX_EXTERNAL_READ_TOOLS];
+  const enabledTools = codexPermissionMode === "vault-write" ? [...agent_tool_policy_default.codex.readOnlyMcp, ...agent_tool_policy_default.codex.vaultWriteMcp] : agent_tool_policy_default.codex.readOnlyMcp;
   args.push(
     "-c",
     'approval_policy="never"',

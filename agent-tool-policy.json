@@ -1,0 +1,15 @@
+{
+	"claudeCode": {
+		"desktopBuiltins": ["Read", "Grep", "Glob", "WebSearch", "WebFetch", "TodoWrite"],
+		"proxyBuiltins": ["WebSearch", "WebFetch", "TodoWrite"]
+	},
+	"codex": {
+		"readOnlyMcp": [
+			"read_note", "search_vault", "list_notes", "get_links", "read_image",
+			"podcast_search", "podcast_episodes", "podcast_transcript",
+			"fetch_feeds", "fetch_rss", "weread_api"
+		],
+		"vaultWriteMcp": ["create_note", "append_to_note", "edit_note", "update_frontmatter"],
+		"alwaysDisabledMcp": ["delete_note", "rename_note"]
+	}
+}

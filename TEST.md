@@ -15,6 +15,12 @@
 2. 分别选择账户默认和一个 GPT-5.6 模型发送新消息。
 3. 在 Proxy 日志确认 task 的 `model=` 与选择一致，并确认回复完成。
 
+## Codex Proxy 历史与续问
+
+1. 在 Claude 或本地会话中先完成至少一轮对话，再切换到远端 Codex Proxy。
+2. 发送一个依赖前文的问题，确认 Codex 能引用切换前的历史。
+3. 紧接着发送第二条消息，确认 `codex exec resume` 成功且日志出现 `thread.started`，不能出现 `unexpected argument '--sandbox'`。
+
 ## 运行测试
 
 ```bash

@@ -804,20 +804,36 @@ function buildCodexArgs(body: ChatRequest): string[] {
 			"exec", "resume", body.sessionId, body.message,
 			"--json",
 			"--dangerously-bypass-approvals-and-sandbox",
-			"--sandbox", "danger-full-access",
 		];
 		if (model) args.push("-m", model);
 		return args;
 	}
 
+	const prompt = buildCodexInitialPrompt(body);
 	const args = [
-		"exec", body.message,
+		"exec", prompt,
 		"--json",
 		"--dangerously-bypass-approvals-and-sandbox",
 		"--sandbox", "danger-full-access",
 	];
 	if (model) args.push("-m", model);
 	return args;
+}
+
+function buildCodexInitialPrompt(body: ChatRequest): string {
+	const sections: string[] = [];
+	if (body.systemPrompt) {
+		sections.push(`[System instructions]\n${body.systemPrompt}`);
+	}
+	if (body.history?.length) {
+		const transcript = body.history.map((message) => {
+			const role = message.role === "assistant" ? "Assistant" : "User";
+			return `${role}:\n${message.content}`;
+		}).join("\n\n");
+		sections.push(`[Conversation history]\n${transcript}`);
+	}
+	sections.push(`[Current user message]\n${body.message}`);
+	return sections.join("\n\n---\n\n");
 }
 
 // ── Helpers ────────────────────────────────────────────────────────

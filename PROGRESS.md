@@ -1,5 +1,11 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-07-17 — Agent 工具策略单一来源 (`01cae33`)
+
+- **重构**：新增 `agent-tool-policy.json`，统一维护 Claude Code 桌面/Proxy 内置工具与 Codex MCP 只读、可写、永久禁用分组。
+- **消费方**：桌面插件构建时打包该策略；Proxy 启动时读取同一文件，systemd 显式配置路径。
+- **防漂移**：新增策略测试，验证工具名均有定义、破坏性工具不进入白名单、Claude Code 不开放 Bash/Write/Edit。
+
 ## 2026-07-17 — Codex 读取型 MCP 白名单补全 (`4346273`)
 
 - **修正**：Feed、RSS、播客和微信读书均属于读取型能力，应在只读与 Vault 可写档位中保持开放，与 Claude Code 能力一致。

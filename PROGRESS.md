@@ -1,5 +1,12 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-07-17 — MCP 逻辑知识库根路径 (`cdc951a`)
+
+- **问题**：物理 vault 根为 `All in One`，单一知识库根配置为 `KB`；Agent 使用逻辑路径 `Wiki/foo.md` 时，MCP 按物理 vault 路径查找而返回不存在，只有 `KB/Wiki/foo.md` 能工作。
+- **解决**：MCP 边界统一将单一 knowledge folder 下的逻辑相对路径补全为物理 vault 路径，同时保留已带 `KB/` 的完整路径；多个根目录不自动猜测。
+- **验证**：真实 Vault 中同一笔记用 `Wiki/...` 与 `KB/Wiki/...` 均读取成功；新增 4 个路径映射测试，文件系统与 API 后端共享同一规范化入口。
+- **教训**：工具的“相对路径”必须明确相对于物理 vault 还是逻辑知识库根，并在后端边界统一，而不是让 Agent 从错误中猜前缀。
+
 ## 2026-07-17 — 微信读书 Skill 与运行时工具注册 (`5b71e65`)
 
 - **问题**：只有微信读书 prompt 和条件注册的 MCP 工具，没有可发现的 `SKILL.md`；Proxy 静态 MCP 配置又没有 Key，导致 Codex 既看不到 skill，也可能看不到 `weread_api`。

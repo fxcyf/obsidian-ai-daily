@@ -571,7 +571,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 	};
 
 	sendEvent({ type: "task_id", taskId });
-	console.log(`[Proxy] Task ${taskId} starting backend=${useCodex ? "codex" : "claude"} model=${body.model || (useCodex ? CODEX_MODEL || "account-default" : CLAUDE_MODEL)} session=${body.sessionId || "new"}`);
+	console.log(`[Proxy] Task ${taskId} starting backend=${useCodex ? "codex" : "claude"} model=${body.model || (useCodex ? CODEX_MODEL || "account-default" : CLAUDE_MODEL)} session=${body.sessionId || "new"}${useCodex ? ` permission=${body.codexPermissionMode || "vault-write"}` : ""}`);
 
 	const cliPath = useCodex ? CODEX_PATH : CLAUDE_PATH;
 	const args = useCodex ? buildCodexAppServerArgs(body) : buildClaudeArgs(body);
@@ -869,7 +869,7 @@ function buildClaudeArgs(body: ChatRequest): string[] {
 }
 
 function buildCodexAppServerArgs(body: ChatRequest): string[] {
-	const mcpArgs = buildCodexMcpArgs(body.codexPermissionMode || "read-only");
+	const mcpArgs = buildCodexMcpArgs(body.codexPermissionMode || "vault-write");
 	return [
 		"app-server", "--stdio",
 		"-c", 'approval_policy="never"',

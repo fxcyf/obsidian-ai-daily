@@ -130,7 +130,7 @@ export function spawnCodex(
 	callbacks: ClaudeCodeStreamCallbacks
 ): { abort: () => void } {
 	const { spawn } = require("child_process") as typeof import("child_process");
-	const { mcpConfig, sessionId, model, codexPermissionMode = "read-only" } = options;
+	const { mcpConfig, sessionId, model, codexPermissionMode = "vault-write" } = options;
 
 	const nodeBin = findNodeBin();
 	ensureCodexMcp({

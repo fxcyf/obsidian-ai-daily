@@ -1,7 +1,7 @@
 {
 	"id": "ai-daily-chat",
 	"name": "Cortex",
-	"version": "0.15.31",
+	"version": "0.15.32",
 	"minAppVersion": "1.0.0",
 	"description": "AI-powered knowledge companion for Obsidian. Chat, organize, and explore your vault with Claude.",
 	"author": "Elena C.",

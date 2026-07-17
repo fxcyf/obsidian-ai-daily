@@ -31,10 +31,11 @@
 
 ## Codex 非交互安全边界
 
-1. 在“只读”权限下要求 Codex 用 Shell 创建临时文件，确认返回只读文件系统错误且不会等待审批。
-2. 确认只读模式暴露 Vault 查询工具，以及 podcast_*、fetch_feeds、fetch_rss、weread_api 等读取型工具。
-3. 切换“Vault 可写”，确认额外暴露 create_note、append_to_note、edit_note、update_frontmatter。
-4. 两种模式均不得暴露 delete_note、rename_note；Feed、播客和微信读书应保持可用。
+1. 从没有 `codexPermissionMode` 字段的旧版 `data.json` 升级，确认设置自动迁移为“Vault 可写”。
+2. 在“只读”权限下要求 Codex 用 Shell 创建临时文件，确认返回只读文件系统错误且不会等待审批。
+3. 确认只读模式暴露 Vault 查询工具，以及 podcast_*、fetch_feeds、fetch_rss、weread_api 等读取型工具。
+4. 切换“Vault 可写”，确认额外暴露 create_note、append_to_note、edit_note、update_frontmatter。
+5. 两种模式均不得暴露 delete_note、rename_note；Feed、播客和微信读书应保持可用。
 
 ## 运行测试
 

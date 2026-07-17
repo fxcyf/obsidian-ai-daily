@@ -1257,7 +1257,7 @@ var DEFAULT_SETTINGS = {
   model: "claude-haiku-4-5",
   cliBackend: "claude-code",
   codexModel: "",
-  codexPermissionMode: "read-only",
+  codexPermissionMode: "vault-write",
   chatHistoryFolder: ".ai-chat",
   chatHistoryRetentionDays: 30,
   chatStreamMode: "auto",
@@ -1380,7 +1380,7 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
         })
       );
       new import_obsidian3.Setting(el).setName("Codex \u6743\u9650").setDesc("\u65E0\u9700\u4EA4\u4E92\u5BA1\u6279\uFF1BShell \u59CB\u7EC8\u53EA\u8BFB\uFF0CVault \u5199\u5165\u4EC5\u901A\u8FC7 MCP \u767D\u540D\u5355").addDropdown(
-        (dropdown) => dropdown.addOption("read-only", "\u53EA\u8BFB\uFF08\u63A8\u8350\uFF09").addOption("vault-write", "Vault \u53EF\u5199\uFF08\u65E0\u5220\u9664/\u91CD\u547D\u540D\uFF09").setValue(this.plugin.settings.codexPermissionMode).onChange(async (value) => {
+        (dropdown) => dropdown.addOption("vault-write", "Vault \u53EF\u5199\uFF08\u63A8\u8350\uFF0C\u65E0\u5220\u9664/\u91CD\u547D\u540D\uFF09").addOption("read-only", "\u53EA\u8BFB").setValue(this.plugin.settings.codexPermissionMode).onChange(async (value) => {
           this.plugin.settings.codexPermissionMode = value;
           await this.plugin.saveSettings();
         })
@@ -6284,7 +6284,7 @@ function findNodeBin() {
 function spawnCodex(prompt, options, callbacks) {
   var _a, _b;
   const { spawn } = require("child_process");
-  const { mcpConfig, sessionId, model, codexPermissionMode = "read-only" } = options;
+  const { mcpConfig, sessionId, model, codexPermissionMode = "vault-write" } = options;
   const nodeBin = findNodeBin();
   ensureCodexMcp({
     mcpServerPath: mcpConfig.mcpServerPath,
@@ -10805,7 +10805,10 @@ var AIDailyChat = class extends import_obsidian16.Plugin {
       delete raw.chatStreaming;
     }
     if (raw.codexModel === "o4-mini") raw.codexModel = "";
+    const migratedCodexPermissionMode = !("codexPermissionMode" in raw);
+    if (migratedCodexPermissionMode) raw.codexPermissionMode = "vault-write";
     this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
+    if (migratedCodexPermissionMode) await this.saveData(this.settings);
     if (Array.isArray(raw.feedSources)) {
       const existingNames = new Set(
         this.settings.feedSources.map((s) => s.name)

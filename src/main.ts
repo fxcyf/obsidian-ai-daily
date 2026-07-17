@@ -418,7 +418,13 @@ export default class AIDailyChat extends Plugin {
 		}
 		// o4-mini is no longer accepted by Codex with ChatGPT accounts.
 		if (raw.codexModel === "o4-mini") raw.codexModel = "";
+		// Older installs predate the explicit Codex permission setting. Preserve
+		// the intended non-interactive behavior: Vault writes are available only
+		// through the centralized MCP whitelist; Shell remains read-only.
+		const migratedCodexPermissionMode = !("codexPermissionMode" in raw);
+		if (migratedCodexPermissionMode) raw.codexPermissionMode = "vault-write";
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
+		if (migratedCodexPermissionMode) await this.saveData(this.settings);
 
 		if (Array.isArray(raw.feedSources)) {
 			const existingNames = new Set(

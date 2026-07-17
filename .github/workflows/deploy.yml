@@ -39,13 +39,15 @@ jobs:
           cp -r dist/* "$PLUGIN_DIR/"
           echo "Deployed plugin to $PLUGIN_DIR"
 
-      - name: Deploy MCP server to persistent repo
+      - name: Deploy backend services to persistent repo
         run: |
           MCP_REPO="$HOME/MyFiles/random/obsidian-ai-daily"
           cd "$MCP_REPO"
           git pull origin main
           cd mcp-server && npm install && npm run build
           echo "MCP server rebuilt at $MCP_REPO/mcp-server/dist"
+          cd ../proxy-server && npm install && npm run build
+          echo "Proxy server rebuilt at $MCP_REPO/proxy-server/dist"
 
       - name: Update and restart proxy server
         run: |

@@ -1,5 +1,12 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-07-17 — 微信读书 Skill 与运行时工具注册 (`5b71e65`)
+
+- **问题**：只有微信读书 prompt 和条件注册的 MCP 工具，没有可发现的 `SKILL.md`；Proxy 静态 MCP 配置又没有 Key，导致 Codex 既看不到 skill，也可能看不到 `weread_api`。
+- **解决**：新增 `.agents/skills/weread-library` 并部署到 Vault 的 Codex/Claude Code skill 目录；Proxy 从插件配置安全注入 Key；MCP 始终注册 `weread_api`，缺 Key 时返回配置提示而非从 inventory 消失。
+- **验证**：Codex app-server `skills/list` 返回 enabled 的 `weread-library` 及 `obsidian_vault` 依赖；无 Key 的 MCP `tools/list` 仍返回 `weread_api`；skill-creator validator 通过。
+- **教训**：skill、工具定义、凭据注入和部署发现目录必须一起做端到端验证；仅在 prompt 中描述能力不等于注册能力。
+
 ## 2026-07-17 — Codex Vault MCP 编辑工具未开放 (`32904e5`)
 
 - **问题**：旧版 `data.json` 没有 `codexPermissionMode`，合并默认设置后静默落到 `read-only`，导致 Codex 看到的 `obsidian_vault` inventory 只有读取工具。

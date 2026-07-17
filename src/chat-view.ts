@@ -3390,12 +3390,11 @@ export class ChatView extends ItemView {
 				chip.textContent = modeLabel;
 			}
 
-			// Delete button
+			// Delete button (visible on desktop hover, mobile long-press)
 			const delBtn = row.createSpan({ cls: "ai-daily-history-row-delete" });
 			setIcon(delBtn, "x");
 			delBtn.setAttribute("title", "删除此对话");
-			delBtn.addEventListener("click", (ev) => {
-				ev.stopPropagation();
+			const confirmDelete = () => {
 				new ConfirmModal(
 					this.app,
 					`确定删除对话「${s.title || s.id}」？此操作不可撤销。`,
@@ -3408,9 +3407,39 @@ export class ChatView extends ItemView {
 						new Notice("已删除对话", 2000);
 					}
 				).open();
+			};
+			delBtn.addEventListener("click", (ev) => {
+				ev.stopPropagation();
+				confirmDelete();
+			});
+
+			// Long-press to reveal delete button (mobile)
+			let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+			let longPressed = false;
+			row.addEventListener("touchstart", (ev) => {
+				longPressed = false;
+				longPressTimer = setTimeout(() => {
+					longPressed = true;
+					row.addClass("ai-daily-history-row--show-delete");
+					// dismiss on next tap anywhere
+					const dismiss = (e: Event) => {
+						if (!row.contains(e.target as Node) || e.target === row || info.contains(e.target as Node)) {
+							row.removeClass("ai-daily-history-row--show-delete");
+						}
+						document.removeEventListener("touchstart", dismiss, true);
+					};
+					setTimeout(() => document.addEventListener("touchstart", dismiss, true), 50);
+				}, 500);
+			}, { passive: true });
+			row.addEventListener("touchend", () => {
+				if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+			});
+			row.addEventListener("touchmove", () => {
+				if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
 			});
 
 			row.addEventListener("click", () => {
+				if (longPressed) { longPressed = false; return; }
 				void this.loadSession(s.id);
 				this.closeHistoryOverlay();
 			});

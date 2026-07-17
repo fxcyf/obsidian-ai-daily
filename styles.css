@@ -985,7 +985,8 @@
 	opacity: 0;
 	transition: opacity 0.15s, color 0.15s, background 0.15s;
 }
-.ai-daily-history-row:hover .ai-daily-history-row-delete {
+.ai-daily-history-row:hover .ai-daily-history-row-delete,
+.ai-daily-history-row--show-delete .ai-daily-history-row-delete {
 	opacity: 1;
 }
 .ai-daily-history-row-delete:hover {

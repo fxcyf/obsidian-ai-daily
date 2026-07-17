@@ -9386,8 +9386,7 @@ ${m.content}`);
       const delBtn = row.createSpan({ cls: "ai-daily-history-row-delete" });
       (0, import_obsidian13.setIcon)(delBtn, "x");
       delBtn.setAttribute("title", "\u5220\u9664\u6B64\u5BF9\u8BDD");
-      delBtn.addEventListener("click", (ev) => {
-        ev.stopPropagation();
+      const confirmDelete = () => {
         new ConfirmModal(
           this.app,
           `\u786E\u5B9A\u5220\u9664\u5BF9\u8BDD\u300C${s.title || s.id}\u300D\uFF1F\u6B64\u64CD\u4F5C\u4E0D\u53EF\u64A4\u9500\u3002`,
@@ -9400,8 +9399,44 @@ ${m.content}`);
             new import_obsidian13.Notice("\u5DF2\u5220\u9664\u5BF9\u8BDD", 2e3);
           }
         ).open();
+      };
+      delBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        confirmDelete();
+      });
+      let longPressTimer = null;
+      let longPressed = false;
+      row.addEventListener("touchstart", (ev) => {
+        longPressed = false;
+        longPressTimer = setTimeout(() => {
+          longPressed = true;
+          row.addClass("ai-daily-history-row--show-delete");
+          const dismiss = (e) => {
+            if (!row.contains(e.target) || e.target === row || info.contains(e.target)) {
+              row.removeClass("ai-daily-history-row--show-delete");
+            }
+            document.removeEventListener("touchstart", dismiss, true);
+          };
+          setTimeout(() => document.addEventListener("touchstart", dismiss, true), 50);
+        }, 500);
+      }, { passive: true });
+      row.addEventListener("touchend", () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      });
+      row.addEventListener("touchmove", () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
       });
       row.addEventListener("click", () => {
+        if (longPressed) {
+          longPressed = false;
+          return;
+        }
         void this.loadSession(s.id);
         this.closeHistoryOverlay();
       });

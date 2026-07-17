@@ -4,6 +4,7 @@ import { createInterface } from "readline";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { readFile, writeFile, mkdir } from "fs/promises";
+import { readFileSync } from "fs";
 import { randomUUID } from "crypto";
 
 // ── Config ─────────────────────────────────────────────────────────
@@ -627,7 +628,12 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 				if (item.type === "command_execution") {
 					sendEvent({ type: "tool_use", name: "shell", input: { command: item.command }, status: "start" });
 				} else if (item.type === "mcp_tool_call") {
-					sendEvent({ type: "tool_use", name: item.name, input: item.arguments || {}, status: "start" });
+					sendEvent({
+						type: "tool_use",
+						name: item.name || item.tool || "mcp_tool",
+						input: item.arguments || {},
+						status: "start",
+					});
 				} else if (item.type === "reasoning") {
 					sendEvent({ type: "status", message: "Codex 正在推理" });
 				}
@@ -651,9 +657,9 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 				} else if (item.type === "mcp_tool_call") {
 					sendEvent({
 						type: "tool_use",
-						name: item.name,
+						name: item.name || item.tool || "mcp_tool",
 						input: item.arguments || {},
-						status: item.status === "failed" ? "error" : "done",
+						status: item.status === "failed" || item.error ? "error" : "done",
 					});
 				} else if (item.type === "reasoning") {
 					sendEvent({ type: "status", message: "Codex 正在组织回复" });
@@ -799,11 +805,13 @@ function buildClaudeArgs(body: ChatRequest): string[] {
 
 function buildCodexArgs(body: ChatRequest): string[] {
 	const model = body.model || CODEX_MODEL;
+	const mcpArgs = buildCodexMcpArgs();
 	if (body.sessionId) {
 		const args = [
 			"exec", "resume", body.sessionId, body.message,
 			"--json",
 			"--dangerously-bypass-approvals-and-sandbox",
+			...mcpArgs,
 		];
 		if (model) args.push("-m", model);
 		return args;
@@ -815,9 +823,36 @@ function buildCodexArgs(body: ChatRequest): string[] {
 		"--json",
 		"--dangerously-bypass-approvals-and-sandbox",
 		"--sandbox", "danger-full-access",
+		...mcpArgs,
 	];
 	if (model) args.push("-m", model);
 	return args;
+}
+
+function buildCodexMcpArgs(): string[] {
+	try {
+		const config = JSON.parse(readFileSync(MCP_CONFIG, "utf-8")) as {
+			mcpServers?: Record<string, { command?: string; args?: string[]; env?: Record<string, string> }>;
+		};
+		const server = config.mcpServers?.["obsidian-vault"];
+		if (!server?.command) return [];
+
+		const prefix = "mcp_servers.obsidian_vault";
+		const overrides = [
+			`${prefix}.command=${JSON.stringify(server.command)}`,
+			`${prefix}.args=${JSON.stringify(server.args || [])}`,
+		];
+		if (server.env && Object.keys(server.env).length > 0) {
+			const envTable = Object.entries(server.env)
+				.map(([key, value]) => `${JSON.stringify(key)} = ${JSON.stringify(value)}`)
+				.join(", ");
+			overrides.push(`${prefix}.env={ ${envTable} }`);
+		}
+		return overrides.flatMap((override) => ["-c", override]);
+	} catch (error) {
+		console.error(`[Proxy] Failed to load Codex MCP config: ${error}`);
+		return [];
+	}
 }
 
 function buildCodexInitialPrompt(body: ChatRequest): string {

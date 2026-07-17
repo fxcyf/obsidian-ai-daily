@@ -257,7 +257,7 @@ function handleCodexStreamEvent(
 				callbacks.onToolCall?.(id, "shell", { command: cmd }, "running");
 			} else if (item.type === "mcp_tool_call") {
 				const id = (item.id as string) || `tool-${Date.now()}`;
-				const name = (item.name as string) || "mcp_tool";
+				const name = (item.name as string) || (item.tool as string) || "mcp_tool";
 				const input = (item.arguments as Record<string, unknown>) || {};
 				callbacks.onToolCall?.(id, name, input, "running");
 			}
@@ -277,7 +277,7 @@ function handleCodexStreamEvent(
 				const id = (item.id as string) || "";
 				const output = (item.output as string) || JSON.stringify(item.result ?? "");
 				const isError = item.status === "failed";
-				const name = (item.name as string) || "mcp_tool";
+				const name = (item.name as string) || (item.tool as string) || "mcp_tool";
 				callbacks.onToolCall?.(id, name, {}, isError ? "error" : "done");
 				if (output) callbacks.onToolResult?.(id, output, isError);
 			} else if (item.type === "agent_message") {

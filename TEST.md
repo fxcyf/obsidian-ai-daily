@@ -21,6 +21,12 @@
 2. 发送一个依赖前文的问题，确认 Codex 能引用切换前的历史。
 3. 紧接着发送第二条消息，确认 `codex exec resume` 成功且日志出现 `thread.started`，不能出现 `unexpected argument '--sandbox'`。
 
+## Codex Proxy Obsidian MCP
+
+1. 通过远端 Codex Proxy 发送“调用 list_notes 列出 vault 根目录文件（folder 传空字符串）”。
+2. 确认流中出现 `mcp_tool_call`，服务名为 `obsidian_vault`、工具名为 `list_notes`，且 Codex 不再声称没有 Obsidian 工具。
+3. 确认工具能通过插件 API 或文件系统回退读取 vault，并返回实际文件列表。
+
 ## 运行测试
 
 ```bash

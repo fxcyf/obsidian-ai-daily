@@ -8,6 +8,7 @@ import { VaultOpsApi } from "./vault-ops-api.js";
 import { FeedTools } from "./feed-tools.js";
 import { PodcastTools } from "./podcast-tools.js";
 import { DEFAULT_FEEDS, type FeedSource } from "./feeds.js";
+import { resolveKnowledgePath } from "./knowledge-path.js";
 
 // ── Backend selection ──────────────────────────────────────────────
 // Prefer Obsidian plugin HTTP API; fall back to filesystem if unavailable.
@@ -85,12 +86,12 @@ function textResult(text: string) {
 
 server.tool(
 	"read_note",
-	"读取 vault 中指定路径的笔记全文。可用于读取日报、采集的文章（Raw/）、整理的知识条目（Wiki/）等。",
-	{ path: z.string().describe("笔记路径，如 Raw/some-article.md 或 Wiki/concept.md") },
+	"读取知识库中指定路径的笔记全文。路径可相对配置的单一知识库根目录，也可包含完整 vault 前缀。",
+	{ path: z.string().describe("知识库相对路径，如 Wiki/concept.md；也接受 KB/Wiki/concept.md") },
 	async ({ path }) => {
 		const err = pathGuard(path);
 		if (err) return textResult(err);
-		return textResult(await vault.readNote(path));
+		return textResult(await vault.readNote(resolveKnowledgePath(path, knowledgeFolders)));
 	}
 );
 
@@ -104,7 +105,7 @@ server.tool(
 	},
 	async ({ query, folder, tag }) => {
 		if (!query) return textResult("Error: query is required");
-		return textResult(await vault.searchVault(query, folder, tag));
+		return textResult(await vault.searchVault(query, folder ? resolveKnowledgePath(folder, knowledgeFolders) : undefined, tag));
 	}
 );
 
@@ -118,7 +119,7 @@ server.tool(
 	async ({ path, content }) => {
 		const err = pathGuard(path);
 		if (err) return textResult(err);
-		return textResult(await vault.appendToNote(path, content));
+		return textResult(await vault.appendToNote(resolveKnowledgePath(path, knowledgeFolders), content));
 	}
 );
 
@@ -129,7 +130,7 @@ server.tool(
 		folder: z.string().optional().describe("文件夹路径，如 Raw、Wiki"),
 		limit: z.number().optional().default(20).describe("返回最近几篇（默认 20）"),
 	},
-	async ({ folder, limit }) => textResult(await vault.listNotes(folder, limit))
+	async ({ folder, limit }) => textResult(await vault.listNotes(folder ? resolveKnowledgePath(folder, knowledgeFolders) : undefined, limit))
 );
 
 server.tool(
@@ -143,7 +144,7 @@ server.tool(
 	async ({ path, content, frontmatter }) => {
 		const err = pathGuard(path);
 		if (err) return textResult(err);
-		return textResult(await vault.createNote(path, content, frontmatter));
+		return textResult(await vault.createNote(resolveKnowledgePath(path, knowledgeFolders), content, frontmatter));
 	}
 );
 
@@ -159,7 +160,7 @@ server.tool(
 	async ({ path, mode, target, replacement }) => {
 		const err = pathGuard(path);
 		if (err) return textResult(err);
-		return textResult(await vault.editNote(path, mode, target, replacement));
+		return textResult(await vault.editNote(resolveKnowledgePath(path, knowledgeFolders), mode, target, replacement));
 	}
 );
 
@@ -175,7 +176,10 @@ server.tool(
 		if (err) return textResult(err);
 		const err2 = pathGuard(new_path);
 		if (err2) return textResult(err2);
-		return textResult(await vault.renameNote(path, new_path));
+		return textResult(await vault.renameNote(
+			resolveKnowledgePath(path, knowledgeFolders),
+			resolveKnowledgePath(new_path, knowledgeFolders),
+		));
 	}
 );
 
@@ -189,7 +193,7 @@ server.tool(
 	async ({ path, confirmed }) => {
 		const err = pathGuard(path);
 		if (err) return textResult(err);
-		return textResult(await vault.deleteNote(path, confirmed));
+		return textResult(await vault.deleteNote(resolveKnowledgePath(path, knowledgeFolders), confirmed));
 	}
 );
 
@@ -200,7 +204,7 @@ server.tool(
 	async ({ path }) => {
 		const err = pathGuard(path);
 		if (err) return textResult(err);
-		return textResult(await vault.getLinks(path));
+		return textResult(await vault.getLinks(resolveKnowledgePath(path, knowledgeFolders)));
 	}
 );
 
@@ -216,7 +220,7 @@ server.tool(
 		const err = pathGuard(path);
 		if (err) return textResult(err);
 		if (!set && !del) return textResult("Error: at least one of set or delete is required");
-		return textResult(await vault.updateFrontmatter(path, set, del));
+		return textResult(await vault.updateFrontmatter(resolveKnowledgePath(path, knowledgeFolders), set, del));
 	}
 );
 

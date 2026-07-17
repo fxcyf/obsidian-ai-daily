@@ -135,6 +135,8 @@ Claude 可以自主调用以下工具：
 | `web_search` | 搜索互联网（Anthropic 内置，需开启联网搜索） |
 | `web_fetch` | 抓取指定 URL 的网页内容 |
 
+Vault MCP 路径支持逻辑知识库根：当只配置一个知识库文件夹（例如 `KB`）时，`Wiki/topic.md` 与 `KB/Wiki/topic.md` 等价；配置多个根目录时需显式写出根目录前缀。
+
 ## 内容采集建议
 
 - **PC 端**：使用 [Obsidian Web Clipper](https://obsidian.md/clipper) 或 MarkDownload 浏览器插件

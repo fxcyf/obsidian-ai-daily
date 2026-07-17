@@ -155,6 +155,7 @@ date: ${today}                    # 类型：字符串 YYYY-MM-DD
 ## 可用工具
 
 ### Vault 操作
+${knowledgeFolders.length === 1 ? `路径默认相对知识库根目录 \`${knowledgeFolders[0]}/\`，例如 \`Wiki/topic.md\`；也兼容完整路径 \`${knowledgeFolders[0]}/Wiki/topic.md\`。\n` : "路径使用 vault 相对路径；配置了多个知识库文件夹时请显式包含对应文件夹前缀。\n"}
 | 工具 | 功能 |
 |------|------|
 | \`read_note\` | 读取指定路径的笔记全文 |

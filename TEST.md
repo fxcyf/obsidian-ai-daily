@@ -28,6 +28,7 @@
 1. 通过远端 Codex Proxy 发送“调用 list_notes 列出 vault 根目录文件（folder 传空字符串）”。
 2. 确认流中出现 `mcp_tool_call`，服务名为 `obsidian_vault`、工具名为 `list_notes`，且 Codex 不再声称没有 Obsidian 工具。
 3. 确认工具能通过插件 API 或文件系统回退读取 vault，并返回实际文件列表。
+4. 当知识库文件夹仅配置为 `KB` 时，分别用 `Wiki/topic.md` 与 `KB/Wiki/topic.md` 调用 `read_note`，确认两者读取同一文件；API 后端与文件系统回退结果应一致。
 
 ## 微信读书 Skill
 
@@ -62,6 +63,7 @@ npm run test:watch # 监听模式
 | `src/feeds.test.ts` | timeDecay, socialBoost, detectBursts, scoreRelevance |
 | `src/chat-session.test.ts` | newSessionId, titleFromMessages, isValidChatSession, shouldPruneToday |
 | `src/vault-tools.test.ts` | parseFrontmatter, serializeFrontmatter, findHeadingRange |
+| `mcp-server/src/knowledge-path.test.ts` | 单一逻辑知识库根路径映射、完整路径兼容与多根目录防歧义 |
 | `src/image-tools.test.ts` | extractLocalImageRefs（wikilink/markdown 图片解析、去重、过滤） |
 | `src/auto-tagger.test.ts` | parseTaggingResponse（JSON 解析、容错、字段过滤） |
 

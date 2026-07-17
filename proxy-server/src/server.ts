@@ -13,7 +13,9 @@ const AUTH_TOKEN = process.env.AUTH_TOKEN || "";
 const MCP_CONFIG = process.env.MCP_CONFIG || resolve(dirname(fileURLToPath(import.meta.url)), "../mcp-config.json");
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "sonnet";
 const CLAUDE_PATH = process.env.CLAUDE_PATH || "claude";
-const CODEX_MODEL = process.env.CODEX_MODEL || "o4-mini";
+// Leave empty by default so Codex can select the current model supported by
+// the signed-in ChatGPT account. CODEX_MODEL remains an explicit override.
+const CODEX_MODEL = process.env.CODEX_MODEL || "";
 const CODEX_PATH = process.env.CODEX_PATH || "codex";
 const VAULT_PATH = process.env.VAULT_PATH || "";
 const UNDO_STACK_FILE = VAULT_PATH
@@ -566,7 +568,9 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 	let proc: ChildProcess;
 	try {
 		proc = spawn(cliPath, args, {
-			stdio: ["pipe", "pipe", "pipe"],
+			// Codex appends piped stdin to an argument prompt and waits for EOF before
+			// starting the turn. Do not leave an unused writable pipe open.
+			stdio: [useCodex ? "ignore" : "pipe", "pipe", "pipe"],
 			env: { ...process.env, FORCE_COLOR: "0" },
 			cwd: VAULT_PATH || process.env.HOME || undefined,
 		});
@@ -745,6 +749,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 			task.error = `${backendName} exited with code ${code}: ${stderrOutput.slice(0, 500)}`;
 		}
 		if (code !== 0) {
+			console.error(`[Proxy] Task ${taskId} ${backendName} stderr=${stderrOutput.slice(0, 1000).replace(/\s+/g, " ").trim()}`);
 			sendEvent({
 				type: "error",
 				message: `${backendName} exited with code ${code}: ${stderrOutput.slice(0, 500)}`,
@@ -798,8 +803,8 @@ function buildCodexArgs(body: ChatRequest): string[] {
 			"--json",
 			"--dangerously-bypass-approvals-and-sandbox",
 			"--sandbox", "danger-full-access",
-			"-m", CODEX_MODEL,
 		];
+		if (CODEX_MODEL) args.push("-m", CODEX_MODEL);
 		return args;
 	}
 
@@ -808,8 +813,8 @@ function buildCodexArgs(body: ChatRequest): string[] {
 		"--json",
 		"--dangerously-bypass-approvals-and-sandbox",
 		"--sandbox", "danger-full-access",
-		"-m", CODEX_MODEL,
 	];
+	if (CODEX_MODEL) args.push("-m", CODEX_MODEL);
 	return args;
 }
 
@@ -836,6 +841,6 @@ function readBody<T>(req: IncomingMessage): Promise<T> {
 server.listen(PORT, "0.0.0.0", () => {
 	console.log(`[Proxy] Listening on 0.0.0.0:${PORT}`);
 	console.log(`[Proxy] Claude model: ${CLAUDE_MODEL}`);
-	console.log(`[Proxy] Codex model: ${CODEX_MODEL}`);
+	console.log(`[Proxy] Codex model: ${CODEX_MODEL || "account default"}`);
 	console.log(`[Proxy] MCP config: ${MCP_CONFIG}`);
 });

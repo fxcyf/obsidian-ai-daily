@@ -1,5 +1,12 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-07-17 — Codex Vault MCP 编辑工具未开放 (`32904e5`)
+
+- **问题**：旧版 `data.json` 没有 `codexPermissionMode`，合并默认设置后静默落到 `read-only`，导致 Codex 看到的 `obsidian_vault` inventory 只有读取工具。
+- **解决**：缺失字段迁移并持久化为 `vault-write`；新安装默认同样开放白名单内的 create/append/edit/update_frontmatter，Shell 仍只读，delete/rename 仍禁用；Proxy 日志新增实际权限档位。
+- **验证**：直接查询 Codex app-server 的 `mcpServerStatus/list`，确认 `obsidian_vault` 在 vault-write 档位注册四个编辑工具。
+- **教训**：权限策略不仅要验证静态白名单，还必须验证旧配置迁移和运行时 MCP inventory。
+
 ## 2026-07-17 — Codex 原生 thread 历史恢复 (`c1c6a61`)
 
 - **问题**：把跨后端历史拼进 Codex 首轮 prompt 会丢失真实 user/assistant 角色语义，也不等同于恢复原生会话。

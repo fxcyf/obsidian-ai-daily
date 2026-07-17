@@ -72,7 +72,7 @@ Obsidian → 设置 → 第三方插件 → 启用 Cortex。
 | 日报文件夹 | 每日笔记所在目录 | `AI-Daily` |
 | 知识库文件夹 | 逗号分隔的文件夹列表 | `Raw,Wiki` |
 | 上下文天数 | 自动加载最近几天的日报 | 7 |
-| 模型 | Haiku (快) / Sonnet (均衡) / Opus (强) | Haiku 4.5 |
+| 模型 | Claude Haiku/Sonnet/Opus；Codex 账户默认、GPT-5.6 Sol/Terra/Luna、GPT-5.3 Codex | Haiku 4.5 |
 | 对话存档目录 | 会话 JSON 保存路径 | `.ai-chat` |
 | 历史保留天数 | 超过天数未更新的会话会被自动删除；`0` 表示不清理 | `30` |
 | 流式输出模式 | `auto` / `real` / `typewriter` / `off`，详见下文 | `auto` |

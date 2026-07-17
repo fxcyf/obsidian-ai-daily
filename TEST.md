@@ -9,6 +9,12 @@
 5. 在服务端日志确认同一 task ID 包含 backend、Codex 事件类型和最终退出状态。
 6. 确认新任务在数秒内出现 `thread.started`，避免 Codex 因等待未关闭的 stdin 而停在启动阶段。
 
+## Codex 模型选择
+
+1. 将 CLI 后端设为 Codex，确认模型列表包含账户默认、GPT-5.6 Sol/Terra/Luna 和 GPT-5.3 Codex。
+2. 分别选择账户默认和一个 GPT-5.6 模型发送新消息。
+3. 在 Proxy 日志确认 task 的 `model=` 与选择一致，并确认回复完成。
+
 ## 运行测试
 
 ```bash

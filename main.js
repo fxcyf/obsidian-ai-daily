@@ -1256,7 +1256,7 @@ var DEFAULT_SETTINGS = {
   knowledgeFolders: ["Raw", "Wiki"],
   model: "claude-haiku-4-5",
   cliBackend: "claude-code",
-  codexModel: "o4-mini",
+  codexModel: "",
   chatHistoryFolder: ".ai-chat",
   chatHistoryRetentionDays: 30,
   chatStreamMode: "auto",
@@ -1343,7 +1343,7 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
     );
     if (this.plugin.settings.cliBackend === "codex") {
       new import_obsidian3.Setting(containerEl).setName("Codex \u6A21\u578B").setDesc("Codex CLI \u4F7F\u7528\u7684\u6A21\u578B").addDropdown(
-        (dropdown) => dropdown.addOption("o4-mini", "o4-mini (\u5FEB\u901F)").addOption("o3", "o3 (\u5747\u8861)").addOption("gpt-5.5", "GPT-5.5 (\u6700\u5F3A)").setValue(this.plugin.settings.codexModel).onChange(async (value) => {
+        (dropdown) => dropdown.addOption("", "\u8D26\u6237\u9ED8\u8BA4\uFF08\u63A8\u8350\uFF09").addOption("gpt-5.6-sol", "GPT-5.6 Sol\uFF08\u6700\u5F3A\uFF09").addOption("gpt-5.6-terra", "GPT-5.6 Terra\uFF08\u5747\u8861\uFF09").addOption("gpt-5.6-luna", "GPT-5.6 Luna\uFF08\u7ECF\u6D4E\uFF09").addOption("gpt-5.3-codex", "GPT-5.3 Codex\uFF08Agent \u7F16\u7801\uFF09").setValue(this.plugin.settings.codexModel).onChange(async (value) => {
           this.plugin.settings.codexModel = value;
           await this.plugin.saveSettings();
         })
@@ -2523,7 +2523,7 @@ var ClaudeClient = class {
     }
     return collectedText.join("");
   }
-  async proxyChat(userMessage, onAssistantDelta, onToolCall, seedHistory, proxyBackend, onStatus) {
+  async proxyChat(userMessage, onAssistantDelta, onToolCall, seedHistory, proxyBackend, proxyModel, onStatus) {
     var _a;
     if (!this.proxyUrl || !this.proxyToken) {
       throw new Error("Proxy mode not configured");
@@ -2535,6 +2535,9 @@ var ClaudeClient = class {
       const body = { message: userMessage };
       if (proxyBackend) {
         body.backend = proxyBackend;
+      }
+      if (proxyModel) {
+        body.model = proxyModel;
       }
       if (this.proxySessionId) {
         body.sessionId = this.proxySessionId;
@@ -7747,6 +7750,7 @@ ${filesList}` : "",
             onToolCall,
             seedHistory,
             this.plugin.settings.cliBackend,
+            this.plugin.settings.cliBackend === "codex" ? this.plugin.settings.codexModel : void 0,
             (message) => loadingTextEl.setText(message)
           );
           actualSource = "proxy";
@@ -10614,6 +10618,7 @@ var AIDailyChat = class extends import_obsidian16.Plugin {
       raw.chatStreamMode = raw.chatStreaming === false ? "off" : "auto";
       delete raw.chatStreaming;
     }
+    if (raw.codexModel === "o4-mini") raw.codexModel = "";
     this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
     if (Array.isArray(raw.feedSources)) {
       const existingNames = new Set(

@@ -35,6 +35,7 @@ interface ChatRequest {
 	systemPrompt?: string;
 	history?: { role: string; content: string }[];
 	backend?: "claude-code" | "codex";
+	model?: string;
 }
 
 interface ClaudeStreamEvent {
@@ -559,7 +560,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 	};
 
 	sendEvent({ type: "task_id", taskId });
-	console.log(`[Proxy] Task ${taskId} starting backend=${useCodex ? "codex" : "claude"} session=${body.sessionId || "new"}`);
+	console.log(`[Proxy] Task ${taskId} starting backend=${useCodex ? "codex" : "claude"} model=${body.model || (useCodex ? CODEX_MODEL || "account-default" : CLAUDE_MODEL)} session=${body.sessionId || "new"}`);
 
 	const cliPath = useCodex ? CODEX_PATH : CLAUDE_PATH;
 	const args = useCodex ? buildCodexArgs(body) : buildClaudeArgs(body);
@@ -797,6 +798,7 @@ function buildClaudeArgs(body: ChatRequest): string[] {
 }
 
 function buildCodexArgs(body: ChatRequest): string[] {
+	const model = body.model || CODEX_MODEL;
 	if (body.sessionId) {
 		const args = [
 			"exec", "resume", body.sessionId, body.message,
@@ -804,7 +806,7 @@ function buildCodexArgs(body: ChatRequest): string[] {
 			"--dangerously-bypass-approvals-and-sandbox",
 			"--sandbox", "danger-full-access",
 		];
-		if (CODEX_MODEL) args.push("-m", CODEX_MODEL);
+		if (model) args.push("-m", model);
 		return args;
 	}
 
@@ -814,7 +816,7 @@ function buildCodexArgs(body: ChatRequest): string[] {
 		"--dangerously-bypass-approvals-and-sandbox",
 		"--sandbox", "danger-full-access",
 	];
-	if (CODEX_MODEL) args.push("-m", CODEX_MODEL);
+	if (model) args.push("-m", model);
 	return args;
 }
 

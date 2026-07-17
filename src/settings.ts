@@ -82,7 +82,7 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	knowledgeFolders: ["Raw", "Wiki"],
 	model: "claude-haiku-4-5",
 	cliBackend: "claude-code",
-	codexModel: "o4-mini",
+	codexModel: "",
 	chatHistoryFolder: ".ai-chat",
 	chatHistoryRetentionDays: 30,
 	chatStreamMode: "auto",
@@ -223,9 +223,11 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 				.setDesc("Codex CLI 使用的模型")
 				.addDropdown((dropdown) =>
 					dropdown
-						.addOption("o4-mini", "o4-mini (快速)")
-						.addOption("o3", "o3 (均衡)")
-						.addOption("gpt-5.5", "GPT-5.5 (最强)")
+						.addOption("", "账户默认（推荐）")
+						.addOption("gpt-5.6-sol", "GPT-5.6 Sol（最强）")
+						.addOption("gpt-5.6-terra", "GPT-5.6 Terra（均衡）")
+						.addOption("gpt-5.6-luna", "GPT-5.6 Luna（经济）")
+						.addOption("gpt-5.3-codex", "GPT-5.3 Codex（Agent 编码）")
 						.setValue(this.plugin.settings.codexModel)
 						.onChange(async (value) => {
 							this.plugin.settings.codexModel = value;

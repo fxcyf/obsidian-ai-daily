@@ -514,6 +514,7 @@ export class ClaudeClient {
 		onToolCall?: (name: string, input: Record<string, unknown>, status: "start" | "done" | "error") => void,
 		seedHistory?: { role: string; content: string }[],
 		proxyBackend?: "claude-code" | "codex",
+		proxyModel?: string,
 		onStatus?: (message: string) => void,
 	): Promise<string> {
 		if (!this.proxyUrl || !this.proxyToken) {
@@ -528,6 +529,9 @@ export class ClaudeClient {
 			const body: Record<string, unknown> = { message: userMessage };
 			if (proxyBackend) {
 				body.backend = proxyBackend;
+			}
+			if (proxyModel) {
+				body.model = proxyModel;
 			}
 			if (this.proxySessionId) {
 				body.sessionId = this.proxySessionId;

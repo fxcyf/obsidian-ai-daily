@@ -416,6 +416,8 @@ export default class AIDailyChat extends Plugin {
 			raw.chatStreamMode = raw.chatStreaming === false ? "off" : "auto";
 			delete raw.chatStreaming;
 		}
+		// o4-mini is no longer accepted by Codex with ChatGPT accounts.
+		if (raw.codexModel === "o4-mini") raw.codexModel = "";
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
 
 		if (Array.isArray(raw.feedSources)) {

@@ -722,37 +722,34 @@
 /* ── Settings: tab bar ──────────────────────────────────── */
 
 .ai-daily-tab-bar {
-	display: flex;
+	display: inline-flex;
 	gap: 2px;
-	padding: 4px 0 8px;
-	border-bottom: 1px solid var(--background-modifier-border);
-	margin-bottom: 12px;
-	flex-wrap: wrap;
-	position: sticky;
-	top: 0;
-	z-index: 10;
-	background: var(--background-secondary);
+	padding: 2px;
+	margin-bottom: 16px;
+	background: rgba(var(--mono-rgb-100), 0.06);
+	border-radius: 6px;
 }
 
 .ai-daily-tab-btn {
-	padding: 4px 10px;
+	font-size: 12px;
+	padding: 3px 10px;
 	border: none;
-	border-radius: var(--radius-s, 4px);
+	border-radius: 5px;
 	background: transparent;
 	color: var(--text-muted);
-	font-size: var(--font-ui-small);
 	cursor: pointer;
+	user-select: none;
 	-webkit-tap-highlight-color: transparent;
 }
 
 .ai-daily-tab-btn:hover {
 	color: var(--text-normal);
-	background: var(--background-modifier-hover);
 }
 
 .ai-daily-tab-btn.is-active {
-	color: var(--text-accent);
-	background: var(--background-modifier-hover);
+	background: rgba(var(--mono-rgb-100), 0.12);
+	color: var(--text-normal);
+	font-weight: 500;
 }
 
 .ai-daily-tab-pane > h3:first-child {

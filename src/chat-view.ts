@@ -1398,7 +1398,7 @@ export class ChatView extends ItemView {
 		const loadingEl = this.messagesEl.createDiv({
 			cls: "ai-daily-loading",
 		});
-		loadingEl.createSpan({ text: "思考中" });
+		const loadingTextEl = loadingEl.createSpan({ text: "思考中" });
 		const dotsEl = loadingEl.createSpan({ cls: "ai-daily-loading-dots" });
 		dotsEl.createEl("span");
 		dotsEl.createEl("span");
@@ -1606,7 +1606,14 @@ export class ChatView extends ItemView {
 					proxyMessage = harnessBlock + proxyMessage;
 				}
 				try {
-					reply = await this.client!.proxyChat(proxyMessage, streamCb, onToolCall, seedHistory, this.plugin.settings.cliBackend);
+					reply = await this.client!.proxyChat(
+						proxyMessage,
+						streamCb,
+						onToolCall,
+						seedHistory,
+						this.plugin.settings.cliBackend,
+						(message) => loadingTextEl.setText(message),
+					);
 					actualSource = "proxy";
 				} catch (proxyErr) {
 					if (this.plugin.settings.proxyFallbackToApi && this.plugin.getEffectiveApiKey()) {

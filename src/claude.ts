@@ -514,6 +514,7 @@ export class ClaudeClient {
 		onToolCall?: (name: string, input: Record<string, unknown>, status: "start" | "done" | "error") => void,
 		seedHistory?: { role: string; content: string }[],
 		proxyBackend?: "claude-code" | "codex",
+		onStatus?: (message: string) => void,
 	): Promise<string> {
 		if (!this.proxyUrl || !this.proxyToken) {
 			throw new Error("Proxy mode not configured");
@@ -594,7 +595,7 @@ export class ClaudeClient {
 					const jsonStr = line.slice(6).trim();
 					if (!jsonStr) continue;
 
-					let event: { type: string; content?: string; name?: string; input?: Record<string, unknown>; sessionId?: string; result?: string; message?: string };
+					let event: { type: string; content?: string; name?: string; input?: Record<string, unknown>; status?: "start" | "done" | "error"; sessionId?: string; result?: string; message?: string };
 					try {
 						event = JSON.parse(jsonStr);
 					} catch {
@@ -607,8 +608,14 @@ export class ClaudeClient {
 						accumulated += event.content;
 						onAssistantDelta?.(event.content, accumulated);
 					} else if (event.type === "tool_use" && event.name) {
-						onToolCall?.(event.name, event.input || {}, "start");
-						onToolCall?.(event.name, event.input || {}, "done");
+						if (event.status) {
+							onToolCall?.(event.name, event.input || {}, event.status);
+						} else {
+							onToolCall?.(event.name, event.input || {}, "start");
+							onToolCall?.(event.name, event.input || {}, "done");
+						}
+					} else if (event.type === "status" && event.message) {
+						onStatus?.(event.message);
 					} else if (event.type === "done") {
 						receivedDone = true;
 						if (event.sessionId) {

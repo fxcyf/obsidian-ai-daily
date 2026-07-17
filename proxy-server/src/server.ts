@@ -557,6 +557,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 	};
 
 	sendEvent({ type: "task_id", taskId });
+	console.log(`[Proxy] Task ${taskId} starting backend=${useCodex ? "codex" : "claude"} session=${body.sessionId || "new"}`);
 
 	const cliPath = useCodex ? CODEX_PATH : CLAUDE_PATH;
 	const args = useCodex ? buildCodexArgs(body) : buildClaudeArgs(body);
@@ -585,6 +586,12 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 			task.error = "Task timed out";
 		}
 	}, TASK_TIMEOUT_MS);
+	const heartbeat = setInterval(() => {
+		if (task.status === "running") {
+			sendEvent({ type: "status", message: `${backendName} 仍在处理中` });
+			console.log(`[Proxy] Task ${taskId} still running backend=${backendName}`);
+		}
+	}, 15_000);
 
 	let lastText = "";
 	let sessionId = body.sessionId || "";
@@ -592,6 +599,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 	const rl = createInterface({ input: proc.stdout! });
 
 	if (useCodex) {
+		sendEvent({ type: "status", message: "Codex 已接收请求" });
 		rl.on("line", (line: string) => {
 			if (!line.trim()) return;
 
@@ -603,9 +611,21 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 			}
 
 			const type = event.type as string | undefined;
+			console.log(`[Proxy] Task ${taskId} codex event=${type || "unknown"}`);
 
 			if (type === "thread.started") {
 				sessionId = (event.thread_id as string) || sessionId;
+				sendEvent({ type: "status", message: "Codex 正在思考" });
+			} else if (type === "item.started") {
+				const item = event.item as Record<string, unknown> | undefined;
+				if (!item) return;
+				if (item.type === "command_execution") {
+					sendEvent({ type: "tool_use", name: "shell", input: { command: item.command }, status: "start" });
+				} else if (item.type === "mcp_tool_call") {
+					sendEvent({ type: "tool_use", name: item.name, input: item.arguments || {}, status: "start" });
+				} else if (item.type === "reasoning") {
+					sendEvent({ type: "status", message: "Codex 正在推理" });
+				}
 			} else if (type === "item.completed") {
 				const item = event.item as Record<string, unknown> | undefined;
 				if (!item) return;
@@ -621,13 +641,17 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 						type: "tool_use",
 						name: "shell",
 						input: { command: item.command },
+						status: "done",
 					});
 				} else if (item.type === "mcp_tool_call") {
 					sendEvent({
 						type: "tool_use",
 						name: item.name,
 						input: item.arguments || {},
+						status: item.status === "failed" ? "error" : "done",
 					});
+				} else if (item.type === "reasoning") {
+					sendEvent({ type: "status", message: "Codex 正在组织回复" });
 				}
 			} else if (type === "turn.completed") {
 				task.status = "done";
@@ -715,6 +739,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 
 	proc.on("close", (code) => {
 		clearTimeout(timeout);
+		clearInterval(heartbeat);
 		if (task.status === "running") {
 			task.status = "error";
 			task.error = `${backendName} exited with code ${code}: ${stderrOutput.slice(0, 500)}`;
@@ -725,6 +750,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 				message: `${backendName} exited with code ${code}: ${stderrOutput.slice(0, 500)}`,
 			});
 		}
+		console.log(`[Proxy] Task ${taskId} closed backend=${backendName} code=${code} status=${task.status}`);
 		if (!res.writableEnded) {
 			res.end();
 		}
@@ -732,6 +758,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 
 	proc.on("error", (err) => {
 		clearTimeout(timeout);
+		clearInterval(heartbeat);
 		task.status = "error";
 		task.error = `spawn error: ${err.message}`;
 		sendEvent({ type: "error", message: task.error });

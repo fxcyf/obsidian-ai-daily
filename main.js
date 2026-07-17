@@ -2523,7 +2523,7 @@ var ClaudeClient = class {
     }
     return collectedText.join("");
   }
-  async proxyChat(userMessage, onAssistantDelta, onToolCall, seedHistory, proxyBackend) {
+  async proxyChat(userMessage, onAssistantDelta, onToolCall, seedHistory, proxyBackend, onStatus) {
     var _a;
     if (!this.proxyUrl || !this.proxyToken) {
       throw new Error("Proxy mode not configured");
@@ -2605,8 +2605,14 @@ var ClaudeClient = class {
             accumulated += event.content;
             onAssistantDelta == null ? void 0 : onAssistantDelta(event.content, accumulated);
           } else if (event.type === "tool_use" && event.name) {
-            onToolCall == null ? void 0 : onToolCall(event.name, event.input || {}, "start");
-            onToolCall == null ? void 0 : onToolCall(event.name, event.input || {}, "done");
+            if (event.status) {
+              onToolCall == null ? void 0 : onToolCall(event.name, event.input || {}, event.status);
+            } else {
+              onToolCall == null ? void 0 : onToolCall(event.name, event.input || {}, "start");
+              onToolCall == null ? void 0 : onToolCall(event.name, event.input || {}, "done");
+            }
+          } else if (event.type === "status" && event.message) {
+            onStatus == null ? void 0 : onStatus(event.message);
           } else if (event.type === "done") {
             receivedDone = true;
             if (event.sessionId) {
@@ -7538,7 +7544,7 @@ ${entry}
     const loadingEl = this.messagesEl.createDiv({
       cls: "ai-daily-loading"
     });
-    loadingEl.createSpan({ text: "\u601D\u8003\u4E2D" });
+    const loadingTextEl = loadingEl.createSpan({ text: "\u601D\u8003\u4E2D" });
     const dotsEl = loadingEl.createSpan({ cls: "ai-daily-loading-dots" });
     dotsEl.createEl("span");
     dotsEl.createEl("span");
@@ -7735,7 +7741,14 @@ ${filesList}` : "",
           proxyMessage = harnessBlock + proxyMessage;
         }
         try {
-          reply = await this.client.proxyChat(proxyMessage, streamCb, onToolCall, seedHistory, this.plugin.settings.cliBackend);
+          reply = await this.client.proxyChat(
+            proxyMessage,
+            streamCb,
+            onToolCall,
+            seedHistory,
+            this.plugin.settings.cliBackend,
+            (message) => loadingTextEl.setText(message)
+          );
           actualSource = "proxy";
         } catch (proxyErr) {
           if (this.plugin.settings.proxyFallbackToApi && this.plugin.getEffectiveApiKey()) {

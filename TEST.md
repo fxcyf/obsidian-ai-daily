@@ -20,6 +20,7 @@
 1. 在 Claude 或本地会话中先完成至少一轮对话，再切换到远端 Codex Proxy。
 2. 发送一个依赖前文的问题，确认 Codex 能引用切换前的历史。
 3. 紧接着发送第二条消息，确认 `codex exec resume` 成功且日志出现 `thread.started`，不能出现 `unexpected argument '--sandbox'`。
+4. 在同一聊天中从 Claude Proxy 切换到 Codex，确认不会把 Claude session ID 传给 `codex exec resume`，且历史仍通过首轮 prompt 注入。
 
 ## Codex Proxy Obsidian MCP
 

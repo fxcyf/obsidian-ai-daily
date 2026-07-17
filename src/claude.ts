@@ -293,6 +293,7 @@ export class ClaudeClient {
 	private proxyToken?: string;
 	private proxySessionId?: string;
 	private proxyTaskId?: string;
+	private proxySessionBackend?: "claude-code" | "codex";
 
 	constructor(
 		apiKey: string,
@@ -325,12 +326,19 @@ export class ClaudeClient {
 		return this.proxySessionId;
 	}
 
-	setProxySessionId(id: string): void {
+	getProxySessionBackend(): "claude-code" | "codex" | undefined {
+		return this.proxySessionBackend;
+	}
+
+	setProxySessionId(id: string, backend?: "claude-code" | "codex"): void {
 		this.proxySessionId = id;
+		this.proxySessionBackend = backend;
 	}
 
 	clearProxySessionId(): void {
 		this.proxySessionId = undefined;
+		this.proxyTaskId = undefined;
+		this.proxySessionBackend = undefined;
 	}
 
 	getProxyTaskId(): string | undefined {
@@ -523,6 +531,9 @@ export class ClaudeClient {
 		}
 
 		this.messages.push({ role: "user", content: userMessage });
+		if (this.proxySessionId && (!this.proxySessionBackend || (proxyBackend && this.proxySessionBackend !== proxyBackend))) {
+			this.clearProxySessionId();
+		}
 		this.abortController = new AbortController();
 		const signal = this.abortController.signal;
 
@@ -628,6 +639,7 @@ export class ClaudeClient {
 						receivedDone = true;
 						if (event.sessionId) {
 							this.proxySessionId = event.sessionId;
+							this.proxySessionBackend = proxyBackend;
 						}
 						if (event.result) {
 							accumulated = event.result;

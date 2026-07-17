@@ -1386,8 +1386,9 @@ export class ChatView extends ItemView {
 		if (!this.client || proxySettingsChanged) {
 			await this.initClient();
 			if (this.restoredProxySessionId) {
-				this.client!.setProxySessionId(this.restoredProxySessionId);
+				this.client!.setProxySessionId(this.restoredProxySessionId, this.restoredProxySessionBackend);
 				this.restoredProxySessionId = undefined;
+				this.restoredProxySessionBackend = undefined;
 			}
 			if (this.restoredProxyTaskId) {
 				this.client!.setProxyTaskId(this.restoredProxyTaskId);
@@ -1882,6 +1883,7 @@ export class ChatView extends ItemView {
 			codexSessionId: this.codexSessionId,
 			proxySessionId: this.client?.getProxySessionId(),
 			proxyTaskId: this.client?.getProxyTaskId(),
+			proxySessionBackend: this.client?.getProxySessionBackend(),
 			harnessContext: this.harnessContext ?? undefined,
 			lastMode: this.lastMode ?? undefined,
 			workspace: this.harnessContext?.workspace ?? existing?.workspace,
@@ -2583,6 +2585,7 @@ export class ChatView extends ItemView {
 	private codexSessionId: string | undefined;
 	private restoredProxySessionId: string | undefined;
 	private restoredProxyTaskId: string | undefined;
+	private restoredProxySessionBackend: "claude-code" | "codex" | undefined;
 	private claudeCodeUndoHistory: { id: number; data: UndoData; description: string }[] = [];
 	private claudeCodeUndoCounter = 0;
 
@@ -3132,6 +3135,7 @@ export class ChatView extends ItemView {
 		this.claudeCodeUndoHistory = [];
 		this.restoredProxySessionId = undefined;
 		this.restoredProxyTaskId = undefined;
+		this.restoredProxySessionBackend = undefined;
 		this.lastMode = null;
 		this.attachedFiles = [];
 		this.renderAttachBar();
@@ -3490,6 +3494,7 @@ export class ChatView extends ItemView {
 		this.codexSessionId = data.codexSessionId;
 		this.restoredProxySessionId = data.proxySessionId;
 		this.restoredProxyTaskId = data.proxyTaskId;
+		this.restoredProxySessionBackend = data.proxySessionBackend;
 		this.harnessContext = data.harnessContext
 			? { ...data.harnessContext, mode: { ...data.harnessContext.mode, actions: data.harnessContext.mode.actions ?? [] } }
 			: null;
@@ -3567,7 +3572,7 @@ export class ChatView extends ItemView {
 		}
 		await this.initClient();
 		if (this.restoredProxySessionId) {
-			this.client!.setProxySessionId(this.restoredProxySessionId);
+			this.client!.setProxySessionId(this.restoredProxySessionId, this.restoredProxySessionBackend);
 		}
 		this.client!.setHistoryFromStrings(
 			this.messages.map((m) => ({

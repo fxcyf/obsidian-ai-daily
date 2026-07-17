@@ -2384,11 +2384,17 @@ var ClaudeClient = class {
   getProxySessionId() {
     return this.proxySessionId;
   }
-  setProxySessionId(id) {
+  getProxySessionBackend() {
+    return this.proxySessionBackend;
+  }
+  setProxySessionId(id, backend) {
     this.proxySessionId = id;
+    this.proxySessionBackend = backend;
   }
   clearProxySessionId() {
     this.proxySessionId = void 0;
+    this.proxyTaskId = void 0;
+    this.proxySessionBackend = void 0;
   }
   getProxyTaskId() {
     return this.proxyTaskId;
@@ -2536,6 +2542,9 @@ var ClaudeClient = class {
       throw new Error("Proxy mode not configured");
     }
     this.messages.push({ role: "user", content: userMessage });
+    if (this.proxySessionId && (!this.proxySessionBackend || proxyBackend && this.proxySessionBackend !== proxyBackend)) {
+      this.clearProxySessionId();
+    }
     this.abortController = new AbortController();
     const signal = this.abortController.signal;
     try {
@@ -2630,6 +2639,7 @@ var ClaudeClient = class {
             receivedDone = true;
             if (event.sessionId) {
               this.proxySessionId = event.sessionId;
+              this.proxySessionBackend = proxyBackend;
             }
             if (event.result) {
               accumulated = event.result;
@@ -7580,8 +7590,9 @@ ${entry}
     if (!this.client || proxySettingsChanged) {
       await this.initClient();
       if (this.restoredProxySessionId) {
-        this.client.setProxySessionId(this.restoredProxySessionId);
+        this.client.setProxySessionId(this.restoredProxySessionId, this.restoredProxySessionBackend);
         this.restoredProxySessionId = void 0;
+        this.restoredProxySessionBackend = void 0;
       }
       if (this.restoredProxyTaskId) {
         this.client.setProxyTaskId(this.restoredProxyTaskId);
@@ -8006,7 +8017,7 @@ ${filesList}` : "",
     });
   }
   async persistSession() {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     if (!this.sessionId) return;
     const { chatHistoryFolder, model } = this.plugin.settings;
     const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -8031,9 +8042,10 @@ ${filesList}` : "",
       codexSessionId: this.codexSessionId,
       proxySessionId: (_b = this.client) == null ? void 0 : _b.getProxySessionId(),
       proxyTaskId: (_c = this.client) == null ? void 0 : _c.getProxyTaskId(),
-      harnessContext: (_d = this.harnessContext) != null ? _d : void 0,
-      lastMode: (_e = this.lastMode) != null ? _e : void 0,
-      workspace: (_g = (_f = this.harnessContext) == null ? void 0 : _f.workspace) != null ? _g : existing == null ? void 0 : existing.workspace,
+      proxySessionBackend: (_d = this.client) == null ? void 0 : _d.getProxySessionBackend(),
+      harnessContext: (_e = this.harnessContext) != null ? _e : void 0,
+      lastMode: (_f = this.lastMode) != null ? _f : void 0,
+      workspace: (_h = (_g = this.harnessContext) == null ? void 0 : _g.workspace) != null ? _h : existing == null ? void 0 : existing.workspace,
       pinned: existing == null ? void 0 : existing.pinned
     };
     try {
@@ -9198,6 +9210,7 @@ ${m.content}`);
     this.claudeCodeUndoHistory = [];
     this.restoredProxySessionId = void 0;
     this.restoredProxyTaskId = void 0;
+    this.restoredProxySessionBackend = void 0;
     this.lastMode = null;
     this.attachedFiles = [];
     this.renderAttachBar();
@@ -9527,6 +9540,7 @@ ${m.content}`);
     this.codexSessionId = data.codexSessionId;
     this.restoredProxySessionId = data.proxySessionId;
     this.restoredProxyTaskId = data.proxyTaskId;
+    this.restoredProxySessionBackend = data.proxySessionBackend;
     this.harnessContext = data.harnessContext ? { ...data.harnessContext, mode: { ...data.harnessContext.mode, actions: (_b = data.harnessContext.mode.actions) != null ? _b : [] } } : null;
     this.lastMode = (_c = data.lastMode) != null ? _c : null;
     this.messages = data.messages.map((m) => ({
@@ -9599,7 +9613,7 @@ ${m.content}`);
     }
     await this.initClient();
     if (this.restoredProxySessionId) {
-      this.client.setProxySessionId(this.restoredProxySessionId);
+      this.client.setProxySessionId(this.restoredProxySessionId, this.restoredProxySessionBackend);
     }
     this.client.setHistoryFromStrings(
       this.messages.map((m) => ({

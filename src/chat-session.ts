@@ -35,6 +35,7 @@ export interface ChatSessionFile {
 	codexSessionId?: string;
 	proxySessionId?: string;
 	proxyTaskId?: string;
+	proxySessionBackend?: "claude-code" | "codex";
 	harnessContext?: PersistedHarnessContext;
 	lastMode?: MessageSource;
 	workspace?: string;

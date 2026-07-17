@@ -1,5 +1,12 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-07-17 — Codex 续问失败与历史丢失 (`abb1610`)
+
+- **问题**：`codex exec resume` 不支持 `--sandbox`，第二轮直接 code 2；Codex 分支又跳过了 Proxy 收到的 `history` 与 `systemPrompt`。
+- **解决**：resume 移除非法参数；新 Codex 会话首轮将 system instructions、user/assistant 历史和当前消息分区注入 prompt。
+- **验证**：使用真实 GPT-5.6 Sol thread ID 续问，完整返回 `thread.started`、`RESUMED` 与 `turn.completed`。
+- **教训**：同一 CLI 的初始命令与 resume 子命令参数集合可能不同；跨后端切换必须显式定义历史迁移语义。
+
 ## 2026-07-17 — GPT-5.6 Codex 模型选择 (`29854ad`)
 
 - **更新**：新增账户默认、GPT-5.6 Sol/Terra/Luna 与 GPT-5.3 Codex；移除过期的 o4-mini/o3/GPT-5.5 下拉项。

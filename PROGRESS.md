@@ -1,5 +1,12 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-07-17 — GPT-5.6 Codex 模型选择 (`29854ad`)
+
+- **更新**：新增账户默认、GPT-5.6 Sol/Terra/Luna 与 GPT-5.3 Codex；移除过期的 o4-mini/o3/GPT-5.5 下拉项。
+- **修复**：移动端 Proxy 现在会传递并实际应用所选 Codex 模型，日志同步记录模型 ID；旧 o4-mini 设置自动迁移到账户默认。
+- **验证**：使用当前 ChatGPT Codex 账户实测 `gpt-5.6-sol`，完整返回 `thread.started`、`agent_message: OK` 与 `turn.completed`。
+- **教训**：模型选择器必须同时验证 UI、传输协议和目标账户 entitlement，不能只更新显示文本。
+
 ## 2026-07-17 — Codex Proxy 未真正启动 (`3ed9114`)
 
 - **问题**：Codex 子进程 stdin pipe 始终未关闭，CLI 等待 EOF，因而没有产生 `thread.started`；关闭 stdin 后又发现硬编码的 `o4-mini` 不支持 ChatGPT Codex 账户。

@@ -9250,7 +9250,7 @@ ${m.content}`);
     head.createEl("span", { text: "\u5386\u53F2", cls: "ai-daily-history-title" });
     const headActions = head.createDiv({ cls: "ai-daily-history-head-actions" });
     const clearAllBtn = headActions.createSpan({ cls: "ai-daily-history-clear-all" });
-    (0, import_obsidian13.setIcon)(clearAllBtn, "list-filter");
+    (0, import_obsidian13.setIcon)(clearAllBtn, "trash-2");
     clearAllBtn.setAttribute("title", "\u6E05\u7A7A\u5168\u90E8");
     clearAllBtn.addEventListener("click", () => {
       if (sessions.length === 0) return;
@@ -9383,6 +9383,24 @@ ${m.content}`);
         const chip = row.createSpan({ cls: "ai-daily-history-row-chip" });
         chip.textContent = modeLabel;
       }
+      const delBtn = row.createSpan({ cls: "ai-daily-history-row-delete" });
+      (0, import_obsidian13.setIcon)(delBtn, "x");
+      delBtn.setAttribute("title", "\u5220\u9664\u6B64\u5BF9\u8BDD");
+      delBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        new ConfirmModal(
+          this.app,
+          `\u786E\u5B9A\u5220\u9664\u5BF9\u8BDD\u300C${s.title || s.id}\u300D\uFF1F\u6B64\u64CD\u4F5C\u4E0D\u53EF\u64A4\u9500\u3002`,
+          async () => {
+            await deleteChatSessionFile(this.app.vault, chatHistoryFolder, s.id);
+            sessions = sessions.filter((x) => x.id !== s.id);
+            if (this.sessionId === s.id) this.clearChat();
+            const q = search.value.trim().toLowerCase();
+            renderList(q ? sessions.filter((x) => matchSession(x, q)) : sessions);
+            new import_obsidian13.Notice("\u5DF2\u5220\u9664\u5BF9\u8BDD", 2e3);
+          }
+        ).open();
+      });
       row.addEventListener("click", () => {
         void this.loadSession(s.id);
         this.closeHistoryOverlay();

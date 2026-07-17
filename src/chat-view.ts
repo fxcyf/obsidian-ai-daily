@@ -3239,7 +3239,7 @@ export class ChatView extends ItemView {
 		head.createEl("span", { text: "历史", cls: "ai-daily-history-title" });
 		const headActions = head.createDiv({ cls: "ai-daily-history-head-actions" });
 		const clearAllBtn = headActions.createSpan({ cls: "ai-daily-history-clear-all" });
-		setIcon(clearAllBtn, "list-filter");
+		setIcon(clearAllBtn, "trash-2");
 		clearAllBtn.setAttribute("title", "清空全部");
 		clearAllBtn.addEventListener("click", () => {
 			if (sessions.length === 0) return;
@@ -3389,6 +3389,26 @@ export class ChatView extends ItemView {
 				const chip = row.createSpan({ cls: "ai-daily-history-row-chip" });
 				chip.textContent = modeLabel;
 			}
+
+			// Delete button
+			const delBtn = row.createSpan({ cls: "ai-daily-history-row-delete" });
+			setIcon(delBtn, "x");
+			delBtn.setAttribute("title", "删除此对话");
+			delBtn.addEventListener("click", (ev) => {
+				ev.stopPropagation();
+				new ConfirmModal(
+					this.app,
+					`确定删除对话「${s.title || s.id}」？此操作不可撤销。`,
+					async () => {
+						await deleteChatSessionFile(this.app.vault, chatHistoryFolder, s.id);
+						sessions = sessions.filter((x) => x.id !== s.id);
+						if (this.sessionId === s.id) this.clearChat();
+						const q = search.value.trim().toLowerCase();
+						renderList(q ? sessions.filter((x) => matchSession(x, q)) : sessions);
+						new Notice("已删除对话", 2000);
+					}
+				).open();
+			});
 
 			row.addEventListener("click", () => {
 				void this.loadSession(s.id);

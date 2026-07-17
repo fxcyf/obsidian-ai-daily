@@ -6215,13 +6215,15 @@ function spawnCodex(prompt, options, callbacks) {
       "resume",
       sessionId,
       prompt,
-      "--json"
+      "--json",
+      "--skip-git-repo-check"
     ];
   } else {
     args = [
       "exec",
       prompt,
-      "--json"
+      "--json",
+      "--skip-git-repo-check"
     ];
   }
   const enabledTools = codexPermissionMode === "vault-write" ? [...CODEX_READ_TOOLS, ...CODEX_WRITE_TOOLS] : CODEX_READ_TOOLS;

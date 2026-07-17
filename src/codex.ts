@@ -148,11 +148,13 @@ export function spawnCodex(
 		args = [
 			"exec", "resume", sessionId, prompt,
 			"--json",
+			"--skip-git-repo-check",
 		];
 	} else {
 		args = [
 			"exec", prompt,
 			"--json",
+			"--skip-git-repo-check",
 		];
 	}
 	const enabledTools = codexPermissionMode === "vault-write"

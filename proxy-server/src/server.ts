@@ -815,6 +815,7 @@ function buildCodexArgs(body: ChatRequest): string[] {
 		const args = [
 			"exec", "resume", body.sessionId, body.message,
 			"--json",
+			"--skip-git-repo-check",
 			...securityArgs,
 			...mcpArgs,
 		];
@@ -826,6 +827,7 @@ function buildCodexArgs(body: ChatRequest): string[] {
 	const args = [
 		"exec", prompt,
 		"--json",
+		"--skip-git-repo-check",
 		...securityArgs,
 		...mcpArgs,
 	];

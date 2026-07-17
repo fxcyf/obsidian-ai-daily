@@ -124,16 +124,9 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		new Setting(containerEl)
-			.setName("生成 Vault 参考模板")
-			.setDesc(
-				"根据当前设置生成 _cortex-guide/ 文件夹，包含文件夹结构模板、modes 配置示例和 CLAUDE.md。修改设置后可重新生成。"
-			)
-			.addButton((btn) =>
-				btn.setButtonText("生成模板").onClick(async () => {
-					await this.generateVaultGuide();
-				})
-			);
+		// ── 1. API 与模型 ──────────────────────────────────────
+
+		containerEl.createEl("h3", { text: "API 与模型" });
 
 		new Setting(containerEl)
 			.setName("Anthropic API Key")
@@ -170,22 +163,6 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.enableApi)
 					.onChange(async (value) => {
 						this.plugin.settings.enableApi = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("知识库文件夹")
-			.setDesc("用逗号分隔多个文件夹路径，如 Raw,Wiki")
-			.addText((text) =>
-				text
-					.setPlaceholder("Raw,Wiki")
-					.setValue(this.plugin.settings.knowledgeFolders.join(","))
-					.onChange(async (value) => {
-						this.plugin.settings.knowledgeFolders = value
-							.split(",")
-							.map((s) => s.trim())
-							.filter(Boolean);
 						await this.plugin.saveSettings();
 					})
 			);
@@ -253,6 +230,8 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 				);
 		}
 
+		// ── 2. 对话与历史 ──────────────────────────────────────
+
 		containerEl.createEl("h3", { text: "对话与历史" });
 
 		new Setting(containerEl)
@@ -302,6 +281,44 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
+			.setName("自动摘要阈值（估算 tokens）")
+			.setDesc(
+				"当估算上下文超过该值时，自动用一次 API 调用压缩更早的对话；0 关闭"
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("90000")
+					.setValue(String(this.plugin.settings.chatCompressThresholdEst))
+					.onChange(async (value) => {
+						const n = parseInt(value.replace(/\s/g, ""), 10);
+						this.plugin.settings.chatCompressThresholdEst = Number.isFinite(n)
+							? Math.max(0, n)
+							: 90_000;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("上下文预算（展示用）")
+			.setDesc("底部用量条的总参考值，与模型实际上下文窗口大致对应")
+			.addText((text) =>
+				text
+					.setPlaceholder("200000")
+					.setValue(String(this.plugin.settings.chatContextBudgetTokens))
+					.onChange(async (value) => {
+						const n = parseInt(value.replace(/\s/g, ""), 10);
+						this.plugin.settings.chatContextBudgetTokens = Number.isFinite(n)
+							? Math.max(1000, n)
+							: 200_000;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		// ── 3. 聊天功能 ───────────────────────────────────────
+
+		containerEl.createEl("h3", { text: "聊天功能" });
+
+		new Setting(containerEl)
 			.setName("联网搜索")
 			.setDesc(
 				"启用后 Claude 可以搜索互联网并抓取网页内容（使用 Anthropic 内置 web_search + web_fetch 工具）"
@@ -315,9 +332,49 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		// ── Podcast settings ───────────────────────────────────
+		new Setting(containerEl)
+			.setName("启用本地图片识别")
+			.setDesc(
+				"开启后，笔记中引用的本地图片（![[img.png]]）会自动发送给 Claude 进行多模态对话"
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enableLocalImages)
+					.onChange(async (value) => {
+						this.plugin.settings.enableLocalImages = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
-		containerEl.createEl("h3", { text: "播客" });
+		new Setting(containerEl)
+			.setName("单次最大图片数")
+			.setDesc("每条消息最多附带的图片数量")
+			.addSlider((slider) =>
+				slider
+					.setLimits(1, 10, 1)
+					.setValue(this.plugin.settings.maxImagesPerMessage)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.maxImagesPerMessage = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("单图最大体积 (MB)")
+			.setDesc("超过该体积的图片将被跳过")
+			.addSlider((slider) =>
+				slider
+					.setLimits(1, 10, 1)
+					.setValue(
+						Math.round(this.plugin.settings.maxImageBytes / 1_048_576)
+					)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.maxImageBytes = value * 1_048_576;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		new Setting(containerEl)
 			.setName("启用播客工具")
@@ -333,9 +390,128 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		// ── WeRead settings ────────────────────────────────────
+		this.renderPromptTemplates(containerEl);
 
-		containerEl.createEl("h3", { text: "微信读书" });
+		// ── 4. 知识库 ─────────────────────────────────────────
+
+		containerEl.createEl("h3", { text: "知识库" });
+
+		new Setting(containerEl)
+			.setName("知识库文件夹")
+			.setDesc("用逗号分隔多个文件夹路径，如 Raw,Wiki")
+			.addText((text) =>
+				text
+					.setPlaceholder("Raw,Wiki")
+					.setValue(this.plugin.settings.knowledgeFolders.join(","))
+					.onChange(async (value) => {
+						this.plugin.settings.knowledgeFolders = value
+							.split(",")
+							.map((s) => s.trim())
+							.filter(Boolean);
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("蒸馏目标文件夹")
+			.setDesc("对话蒸馏和知识整理的输出目标文件夹")
+			.addText((text) =>
+				text
+					.setPlaceholder("Wiki")
+					.setValue(this.plugin.settings.distillTargetFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.distillTargetFolder = value.trim() || "Wiki";
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("启用自动标注")
+			.setDesc(
+				"新建或修改笔记时，自动调用 Claude 生成 tags 和 summary 写入 frontmatter"
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enableAutoTagging)
+					.onChange(async (value) => {
+						this.plugin.settings.enableAutoTagging = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("自动标注监控文件夹")
+			.setDesc("仅对这些文件夹中的笔记自动标注，用逗号分隔")
+			.addText((text) =>
+				text
+					.setPlaceholder("Raw")
+					.setValue(this.plugin.settings.autoTagFolders.join(","))
+					.onChange(async (value) => {
+						this.plugin.settings.autoTagFolders = value
+							.split(",")
+							.map((s) => s.trim())
+							.filter(Boolean);
+						await this.plugin.saveSettings();
+					})
+			);
+
+		const autoTagPromptSetting = new Setting(containerEl)
+			.setName("自定义标注 Prompt")
+			.setDesc("留空使用默认 prompt")
+			.addTextArea((text) =>
+				text
+					.setPlaceholder("你是一个知识库标注助手...")
+					.setValue(this.plugin.settings.autoTagPrompt)
+					.onChange(async (value) => {
+						this.plugin.settings.autoTagPrompt = value;
+						await this.plugin.saveSettings();
+					})
+			);
+		autoTagPromptSetting.settingEl.addClass("ai-daily-setting-full");
+		const autoTagTextarea = autoTagPromptSetting.settingEl.querySelector("textarea");
+		if (autoTagTextarea) {
+			autoTagTextarea.rows = 3;
+		}
+
+		// ── 5. Harness ────────────────────────────────────────
+
+		containerEl.createEl("h3", { text: "Harness" });
+
+		new Setting(containerEl)
+			.setName("项目文件夹")
+			.setDesc(
+				"Harness 从此文件夹读取 _INDEX.md 和各项目的 modes.md"
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("KB/Projects")
+					.setValue(this.plugin.settings.harnessProjectsFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.harnessProjectsFolder =
+							value.trim() || "KB/Projects";
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Inbox 文件")
+			.setDesc(
+				"Harness 状态栏中显示待办计数的文件路径"
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("KB/Inbox/ideas.md")
+					.setValue(this.plugin.settings.harnessInboxFile)
+					.onChange(async (value) => {
+						this.plugin.settings.harnessInboxFile =
+							value.trim() || "KB/Inbox/ideas.md";
+						await this.plugin.saveSettings();
+					})
+			);
+
+		// ── 6. 外部服务 ───────────────────────────────────────
+
+		containerEl.createEl("h3", { text: "外部服务" });
 
 		new Setting(containerEl)
 			.setName("启用微信读书")
@@ -376,77 +552,13 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 				});
 			});
 
-		new Setting(containerEl)
-			.setName("自动摘要阈值（估算 tokens）")
-			.setDesc(
-				"当估算上下文超过该值时，自动用一次 API 调用压缩更早的对话；0 关闭"
-			)
-			.addText((text) =>
-				text
-					.setPlaceholder("90000")
-					.setValue(String(this.plugin.settings.chatCompressThresholdEst))
-					.onChange(async (value) => {
-						const n = parseInt(value.replace(/\s/g, ""), 10);
-						this.plugin.settings.chatCompressThresholdEst = Number.isFinite(n)
-							? Math.max(0, n)
-							: 90_000;
-						await this.plugin.saveSettings();
-					})
-			);
+		// ── 7. Feed 订阅源 ─────────────────────────────────────
 
-		new Setting(containerEl)
-			.setName("上下文预算（展示用）")
-			.setDesc("底部用量条的总参考值，与模型实际上下文窗口大致对应")
-			.addText((text) =>
-				text
-					.setPlaceholder("200000")
-					.setValue(String(this.plugin.settings.chatContextBudgetTokens))
-					.onChange(async (value) => {
-						const n = parseInt(value.replace(/\s/g, ""), 10);
-						this.plugin.settings.chatContextBudgetTokens = Number.isFinite(n)
-							? Math.max(1000, n)
-							: 200_000;
-						await this.plugin.saveSettings();
-					})
-			);
+		containerEl.createEl("h3", { text: "Feed 订阅源" });
 
-		// ── Harness settings ─────────────────────────────────
+		this.renderFeedSourceList(containerEl);
 
-		containerEl.createEl("h3", { text: "Harness" });
-
-		new Setting(containerEl)
-			.setName("项目文件夹")
-			.setDesc(
-				"Harness 从此文件夹读取 _INDEX.md 和各项目的 modes.md"
-			)
-			.addText((text) =>
-				text
-					.setPlaceholder("KB/Projects")
-					.setValue(this.plugin.settings.harnessProjectsFolder)
-					.onChange(async (value) => {
-						this.plugin.settings.harnessProjectsFolder =
-							value.trim() || "KB/Projects";
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("Inbox 文件")
-			.setDesc(
-				"Harness 状态栏中显示待办计数的文件路径"
-			)
-			.addText((text) =>
-				text
-					.setPlaceholder("KB/Inbox/ideas.md")
-					.setValue(this.plugin.settings.harnessInboxFile)
-					.onChange(async (value) => {
-						this.plugin.settings.harnessInboxFile =
-							value.trim() || "KB/Inbox/ideas.md";
-						await this.plugin.saveSettings();
-					})
-			);
-
-		// ── Proxy settings ────────────────────────────────────
+		// ── 8. 代理模式（移动端）────────────────────────────────
 
 		containerEl.createEl("h3", { text: "代理模式（移动端）" });
 
@@ -514,134 +626,20 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		// ── Prompt templates ───────────────────────────────────
+		// ── 9. 工具 ───────────────────────────────────────────
 
-		containerEl.createEl("h3", { text: "Prompt 模板" });
-
-		this.renderPromptTemplates(containerEl);
-
-		// ── Image settings ─────────────────────────────────────
-
-		containerEl.createEl("h3", { text: "本地图片" });
+		containerEl.createEl("h3", { text: "工具" });
 
 		new Setting(containerEl)
-			.setName("启用本地图片识别")
+			.setName("生成 Vault 参考模板")
 			.setDesc(
-				"开启后，笔记中引用的本地图片（![[img.png]]）会自动发送给 Claude 进行多模态对话"
+				"根据当前设置生成 _cortex-guide/ 文件夹，包含文件夹结构模板、modes 配置示例和 CLAUDE.md。修改设置后可重新生成。"
 			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.enableLocalImages)
-					.onChange(async (value) => {
-						this.plugin.settings.enableLocalImages = value;
-						await this.plugin.saveSettings();
-					})
+			.addButton((btn) =>
+				btn.setButtonText("生成模板").onClick(async () => {
+					await this.generateVaultGuide();
+				})
 			);
-
-		new Setting(containerEl)
-			.setName("单次最大图片数")
-			.setDesc("每条消息最多附带的图片数量")
-			.addSlider((slider) =>
-				slider
-					.setLimits(1, 10, 1)
-					.setValue(this.plugin.settings.maxImagesPerMessage)
-					.setDynamicTooltip()
-					.onChange(async (value) => {
-						this.plugin.settings.maxImagesPerMessage = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("单图最大体积 (MB)")
-			.setDesc("超过该体积的图片将被跳过")
-			.addSlider((slider) =>
-				slider
-					.setLimits(1, 10, 1)
-					.setValue(
-						Math.round(this.plugin.settings.maxImageBytes / 1_048_576)
-					)
-					.setDynamicTooltip()
-					.onChange(async (value) => {
-						this.plugin.settings.maxImageBytes = value * 1_048_576;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		// ── Auto-tagging settings ──────────────────────────────
-
-		containerEl.createEl("h3", { text: "自动标注" });
-
-		new Setting(containerEl)
-			.setName("启用自动标注")
-			.setDesc(
-				"新建或修改笔记时，自动调用 Claude 生成 tags 和 summary 写入 frontmatter"
-			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.enableAutoTagging)
-					.onChange(async (value) => {
-						this.plugin.settings.enableAutoTagging = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("监控文件夹")
-			.setDesc("仅对这些文件夹中的笔记自动标注，用逗号分隔")
-			.addText((text) =>
-				text
-					.setPlaceholder("Raw")
-					.setValue(this.plugin.settings.autoTagFolders.join(","))
-					.onChange(async (value) => {
-						this.plugin.settings.autoTagFolders = value
-							.split(",")
-							.map((s) => s.trim())
-							.filter(Boolean);
-						await this.plugin.saveSettings();
-					})
-			);
-
-		const autoTagPromptSetting = new Setting(containerEl)
-			.setName("自定义标注 Prompt")
-			.setDesc("留空使用默认 prompt")
-			.addTextArea((text) =>
-				text
-					.setPlaceholder("你是一个知识库标注助手...")
-					.setValue(this.plugin.settings.autoTagPrompt)
-					.onChange(async (value) => {
-						this.plugin.settings.autoTagPrompt = value;
-						await this.plugin.saveSettings();
-					})
-			);
-		autoTagPromptSetting.settingEl.addClass("ai-daily-setting-full");
-		const autoTagTextarea = autoTagPromptSetting.settingEl.querySelector("textarea");
-		if (autoTagTextarea) {
-			autoTagTextarea.rows = 3;
-		}
-
-		// ── Knowledge organizer settings ───────────────────────
-
-		containerEl.createEl("h3", { text: "知识整理" });
-
-		new Setting(containerEl)
-			.setName("蒸馏目标文件夹")
-			.setDesc("对话蒸馏和知识整理的输出目标文件夹")
-			.addText((text) =>
-				text
-					.setPlaceholder("Wiki")
-					.setValue(this.plugin.settings.distillTargetFolder)
-					.onChange(async (value) => {
-						this.plugin.settings.distillTargetFolder = value.trim() || "Wiki";
-						await this.plugin.saveSettings();
-					})
-			);
-
-		// ── Feed settings ──────────────────────────────────────
-
-		containerEl.createEl("h3", { text: "Feed 订阅源" });
-
-		this.renderFeedSourceList(containerEl);
 	}
 
 	private async generateVaultGuide(): Promise<void> {
@@ -670,7 +668,8 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 		const wrapper = containerEl.createDiv({ cls: "ai-daily-prompt-templates" });
 
 		const desc = new Setting(wrapper)
-			.setName("在输入框中键入 / 可快速选择模板")
+			.setName("Prompt 模板")
+			.setDesc("在输入框中键入 / 可快速选择模板")
 			.addButton((btn) =>
 				btn.setButtonText("添加模板").setCta().onClick(async () => {
 					this.plugin.settings.promptTemplates.push({

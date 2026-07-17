@@ -1291,13 +1291,7 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    new import_obsidian3.Setting(containerEl).setName("\u751F\u6210 Vault \u53C2\u8003\u6A21\u677F").setDesc(
-      "\u6839\u636E\u5F53\u524D\u8BBE\u7F6E\u751F\u6210 _cortex-guide/ \u6587\u4EF6\u5939\uFF0C\u5305\u542B\u6587\u4EF6\u5939\u7ED3\u6784\u6A21\u677F\u3001modes \u914D\u7F6E\u793A\u4F8B\u548C CLAUDE.md\u3002\u4FEE\u6539\u8BBE\u7F6E\u540E\u53EF\u91CD\u65B0\u751F\u6210\u3002"
-    ).addButton(
-      (btn) => btn.setButtonText("\u751F\u6210\u6A21\u677F").onClick(async () => {
-        await this.generateVaultGuide();
-      })
-    );
+    containerEl.createEl("h3", { text: "API \u4E0E\u6A21\u578B" });
     new import_obsidian3.Setting(containerEl).setName("Anthropic API Key").setDesc("\u7528\u4E8E\u8C03\u7528 Claude API").addText((text) => {
       text.setPlaceholder("sk-ant-...").setValue(this.plugin.settings.apiKey).onChange(async (value) => {
         this.plugin.settings.apiKey = value;
@@ -1320,12 +1314,6 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
     ).addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.enableApi).onChange(async (value) => {
         this.plugin.settings.enableApi = value;
-        await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName("\u77E5\u8BC6\u5E93\u6587\u4EF6\u5939").setDesc("\u7528\u9017\u53F7\u5206\u9694\u591A\u4E2A\u6587\u4EF6\u5939\u8DEF\u5F84\uFF0C\u5982 Raw,Wiki").addText(
-      (text) => text.setPlaceholder("Raw,Wiki").setValue(this.plugin.settings.knowledgeFolders.join(",")).onChange(async (value) => {
-        this.plugin.settings.knowledgeFolders = value.split(",").map((s) => s.trim()).filter(Boolean);
         await this.plugin.saveSettings();
       })
     );
@@ -1377,6 +1365,23 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
+    new import_obsidian3.Setting(containerEl).setName("\u81EA\u52A8\u6458\u8981\u9608\u503C\uFF08\u4F30\u7B97 tokens\uFF09").setDesc(
+      "\u5F53\u4F30\u7B97\u4E0A\u4E0B\u6587\u8D85\u8FC7\u8BE5\u503C\u65F6\uFF0C\u81EA\u52A8\u7528\u4E00\u6B21 API \u8C03\u7528\u538B\u7F29\u66F4\u65E9\u7684\u5BF9\u8BDD\uFF1B0 \u5173\u95ED"
+    ).addText(
+      (text) => text.setPlaceholder("90000").setValue(String(this.plugin.settings.chatCompressThresholdEst)).onChange(async (value) => {
+        const n = parseInt(value.replace(/\s/g, ""), 10);
+        this.plugin.settings.chatCompressThresholdEst = Number.isFinite(n) ? Math.max(0, n) : 9e4;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName("\u4E0A\u4E0B\u6587\u9884\u7B97\uFF08\u5C55\u793A\u7528\uFF09").setDesc("\u5E95\u90E8\u7528\u91CF\u6761\u7684\u603B\u53C2\u8003\u503C\uFF0C\u4E0E\u6A21\u578B\u5B9E\u9645\u4E0A\u4E0B\u6587\u7A97\u53E3\u5927\u81F4\u5BF9\u5E94").addText(
+      (text) => text.setPlaceholder("200000").setValue(String(this.plugin.settings.chatContextBudgetTokens)).onChange(async (value) => {
+        const n = parseInt(value.replace(/\s/g, ""), 10);
+        this.plugin.settings.chatContextBudgetTokens = Number.isFinite(n) ? Math.max(1e3, n) : 2e5;
+        await this.plugin.saveSettings();
+      })
+    );
+    containerEl.createEl("h3", { text: "\u804A\u5929\u529F\u80FD" });
     new import_obsidian3.Setting(containerEl).setName("\u8054\u7F51\u641C\u7D22").setDesc(
       "\u542F\u7528\u540E Claude \u53EF\u4EE5\u641C\u7D22\u4E92\u8054\u7F51\u5E76\u6293\u53D6\u7F51\u9875\u5185\u5BB9\uFF08\u4F7F\u7528 Anthropic \u5185\u7F6E web_search + web_fetch \u5DE5\u5177\uFF09"
     ).addToggle(
@@ -1385,7 +1390,28 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    containerEl.createEl("h3", { text: "\u64AD\u5BA2" });
+    new import_obsidian3.Setting(containerEl).setName("\u542F\u7528\u672C\u5730\u56FE\u7247\u8BC6\u522B").setDesc(
+      "\u5F00\u542F\u540E\uFF0C\u7B14\u8BB0\u4E2D\u5F15\u7528\u7684\u672C\u5730\u56FE\u7247\uFF08![[img.png]]\uFF09\u4F1A\u81EA\u52A8\u53D1\u9001\u7ED9 Claude \u8FDB\u884C\u591A\u6A21\u6001\u5BF9\u8BDD"
+    ).addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.enableLocalImages).onChange(async (value) => {
+        this.plugin.settings.enableLocalImages = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName("\u5355\u6B21\u6700\u5927\u56FE\u7247\u6570").setDesc("\u6BCF\u6761\u6D88\u606F\u6700\u591A\u9644\u5E26\u7684\u56FE\u7247\u6570\u91CF").addSlider(
+      (slider) => slider.setLimits(1, 10, 1).setValue(this.plugin.settings.maxImagesPerMessage).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.maxImagesPerMessage = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName("\u5355\u56FE\u6700\u5927\u4F53\u79EF (MB)").setDesc("\u8D85\u8FC7\u8BE5\u4F53\u79EF\u7684\u56FE\u7247\u5C06\u88AB\u8DF3\u8FC7").addSlider(
+      (slider) => slider.setLimits(1, 10, 1).setValue(
+        Math.round(this.plugin.settings.maxImageBytes / 1048576)
+      ).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.maxImageBytes = value * 1048576;
+        await this.plugin.saveSettings();
+      })
+    );
     new import_obsidian3.Setting(containerEl).setName("\u542F\u7528\u64AD\u5BA2\u5DE5\u5177").setDesc(
       "\u542F\u7528\u540E Claude \u53EF\u4EE5\u641C\u7D22\u64AD\u5BA2\u3001\u83B7\u53D6\u5267\u96C6\u5217\u8868\u3001\u63D0\u53D6\u6587\u5B57\u7A3F\u5E76\u7FFB\u8BD1\u603B\u7ED3"
     ).addToggle(
@@ -1394,7 +1420,63 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    containerEl.createEl("h3", { text: "\u5FAE\u4FE1\u8BFB\u4E66" });
+    this.renderPromptTemplates(containerEl);
+    containerEl.createEl("h3", { text: "\u77E5\u8BC6\u5E93" });
+    new import_obsidian3.Setting(containerEl).setName("\u77E5\u8BC6\u5E93\u6587\u4EF6\u5939").setDesc("\u7528\u9017\u53F7\u5206\u9694\u591A\u4E2A\u6587\u4EF6\u5939\u8DEF\u5F84\uFF0C\u5982 Raw,Wiki").addText(
+      (text) => text.setPlaceholder("Raw,Wiki").setValue(this.plugin.settings.knowledgeFolders.join(",")).onChange(async (value) => {
+        this.plugin.settings.knowledgeFolders = value.split(",").map((s) => s.trim()).filter(Boolean);
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName("\u84B8\u998F\u76EE\u6807\u6587\u4EF6\u5939").setDesc("\u5BF9\u8BDD\u84B8\u998F\u548C\u77E5\u8BC6\u6574\u7406\u7684\u8F93\u51FA\u76EE\u6807\u6587\u4EF6\u5939").addText(
+      (text) => text.setPlaceholder("Wiki").setValue(this.plugin.settings.distillTargetFolder).onChange(async (value) => {
+        this.plugin.settings.distillTargetFolder = value.trim() || "Wiki";
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName("\u542F\u7528\u81EA\u52A8\u6807\u6CE8").setDesc(
+      "\u65B0\u5EFA\u6216\u4FEE\u6539\u7B14\u8BB0\u65F6\uFF0C\u81EA\u52A8\u8C03\u7528 Claude \u751F\u6210 tags \u548C summary \u5199\u5165 frontmatter"
+    ).addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.enableAutoTagging).onChange(async (value) => {
+        this.plugin.settings.enableAutoTagging = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName("\u81EA\u52A8\u6807\u6CE8\u76D1\u63A7\u6587\u4EF6\u5939").setDesc("\u4EC5\u5BF9\u8FD9\u4E9B\u6587\u4EF6\u5939\u4E2D\u7684\u7B14\u8BB0\u81EA\u52A8\u6807\u6CE8\uFF0C\u7528\u9017\u53F7\u5206\u9694").addText(
+      (text) => text.setPlaceholder("Raw").setValue(this.plugin.settings.autoTagFolders.join(",")).onChange(async (value) => {
+        this.plugin.settings.autoTagFolders = value.split(",").map((s) => s.trim()).filter(Boolean);
+        await this.plugin.saveSettings();
+      })
+    );
+    const autoTagPromptSetting = new import_obsidian3.Setting(containerEl).setName("\u81EA\u5B9A\u4E49\u6807\u6CE8 Prompt").setDesc("\u7559\u7A7A\u4F7F\u7528\u9ED8\u8BA4 prompt").addTextArea(
+      (text) => text.setPlaceholder("\u4F60\u662F\u4E00\u4E2A\u77E5\u8BC6\u5E93\u6807\u6CE8\u52A9\u624B...").setValue(this.plugin.settings.autoTagPrompt).onChange(async (value) => {
+        this.plugin.settings.autoTagPrompt = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    autoTagPromptSetting.settingEl.addClass("ai-daily-setting-full");
+    const autoTagTextarea = autoTagPromptSetting.settingEl.querySelector("textarea");
+    if (autoTagTextarea) {
+      autoTagTextarea.rows = 3;
+    }
+    containerEl.createEl("h3", { text: "Harness" });
+    new import_obsidian3.Setting(containerEl).setName("\u9879\u76EE\u6587\u4EF6\u5939").setDesc(
+      "Harness \u4ECE\u6B64\u6587\u4EF6\u5939\u8BFB\u53D6 _INDEX.md \u548C\u5404\u9879\u76EE\u7684 modes.md"
+    ).addText(
+      (text) => text.setPlaceholder("KB/Projects").setValue(this.plugin.settings.harnessProjectsFolder).onChange(async (value) => {
+        this.plugin.settings.harnessProjectsFolder = value.trim() || "KB/Projects";
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName("Inbox \u6587\u4EF6").setDesc(
+      "Harness \u72B6\u6001\u680F\u4E2D\u663E\u793A\u5F85\u529E\u8BA1\u6570\u7684\u6587\u4EF6\u8DEF\u5F84"
+    ).addText(
+      (text) => text.setPlaceholder("KB/Inbox/ideas.md").setValue(this.plugin.settings.harnessInboxFile).onChange(async (value) => {
+        this.plugin.settings.harnessInboxFile = value.trim() || "KB/Inbox/ideas.md";
+        await this.plugin.saveSettings();
+      })
+    );
+    containerEl.createEl("h3", { text: "\u5916\u90E8\u670D\u52A1" });
     new import_obsidian3.Setting(containerEl).setName("\u542F\u7528\u5FAE\u4FE1\u8BFB\u4E66").setDesc(
       "\u542F\u7528\u540E Claude \u53EF\u4EE5\u8BBF\u95EE\u4F60\u7684\u5FAE\u4FE1\u8BFB\u4E66\u6570\u636E\uFF08\u4E66\u67B6\u3001\u7B14\u8BB0\u3001\u5212\u7EBF\u3001\u9605\u8BFB\u7EDF\u8BA1\u7B49\uFF09"
     ).addToggle(
@@ -1420,39 +1502,8 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
         btn.setIcon(hidden ? "eye" : "eye-off");
       });
     });
-    new import_obsidian3.Setting(containerEl).setName("\u81EA\u52A8\u6458\u8981\u9608\u503C\uFF08\u4F30\u7B97 tokens\uFF09").setDesc(
-      "\u5F53\u4F30\u7B97\u4E0A\u4E0B\u6587\u8D85\u8FC7\u8BE5\u503C\u65F6\uFF0C\u81EA\u52A8\u7528\u4E00\u6B21 API \u8C03\u7528\u538B\u7F29\u66F4\u65E9\u7684\u5BF9\u8BDD\uFF1B0 \u5173\u95ED"
-    ).addText(
-      (text) => text.setPlaceholder("90000").setValue(String(this.plugin.settings.chatCompressThresholdEst)).onChange(async (value) => {
-        const n = parseInt(value.replace(/\s/g, ""), 10);
-        this.plugin.settings.chatCompressThresholdEst = Number.isFinite(n) ? Math.max(0, n) : 9e4;
-        await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName("\u4E0A\u4E0B\u6587\u9884\u7B97\uFF08\u5C55\u793A\u7528\uFF09").setDesc("\u5E95\u90E8\u7528\u91CF\u6761\u7684\u603B\u53C2\u8003\u503C\uFF0C\u4E0E\u6A21\u578B\u5B9E\u9645\u4E0A\u4E0B\u6587\u7A97\u53E3\u5927\u81F4\u5BF9\u5E94").addText(
-      (text) => text.setPlaceholder("200000").setValue(String(this.plugin.settings.chatContextBudgetTokens)).onChange(async (value) => {
-        const n = parseInt(value.replace(/\s/g, ""), 10);
-        this.plugin.settings.chatContextBudgetTokens = Number.isFinite(n) ? Math.max(1e3, n) : 2e5;
-        await this.plugin.saveSettings();
-      })
-    );
-    containerEl.createEl("h3", { text: "Harness" });
-    new import_obsidian3.Setting(containerEl).setName("\u9879\u76EE\u6587\u4EF6\u5939").setDesc(
-      "Harness \u4ECE\u6B64\u6587\u4EF6\u5939\u8BFB\u53D6 _INDEX.md \u548C\u5404\u9879\u76EE\u7684 modes.md"
-    ).addText(
-      (text) => text.setPlaceholder("KB/Projects").setValue(this.plugin.settings.harnessProjectsFolder).onChange(async (value) => {
-        this.plugin.settings.harnessProjectsFolder = value.trim() || "KB/Projects";
-        await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName("Inbox \u6587\u4EF6").setDesc(
-      "Harness \u72B6\u6001\u680F\u4E2D\u663E\u793A\u5F85\u529E\u8BA1\u6570\u7684\u6587\u4EF6\u8DEF\u5F84"
-    ).addText(
-      (text) => text.setPlaceholder("KB/Inbox/ideas.md").setValue(this.plugin.settings.harnessInboxFile).onChange(async (value) => {
-        this.plugin.settings.harnessInboxFile = value.trim() || "KB/Inbox/ideas.md";
-        await this.plugin.saveSettings();
-      })
-    );
+    containerEl.createEl("h3", { text: "Feed \u8BA2\u9605\u6E90" });
+    this.renderFeedSourceList(containerEl);
     containerEl.createEl("h3", { text: "\u4EE3\u7406\u6A21\u5F0F\uFF08\u79FB\u52A8\u7AEF\uFF09" });
     new import_obsidian3.Setting(containerEl).setName("\u542F\u7528\u4EE3\u7406\u6A21\u5F0F").setDesc(
       "\u901A\u8FC7\u684C\u9762\u7AEF proxy-server \u53D1\u9001\u8BF7\u6C42\uFF08\u4F7F\u7528 Claude \u8BA2\u9605\u989D\u5EA6\uFF0C\u4E0D\u6D88\u8017 API \u8D39\u7528\uFF09"
@@ -1491,66 +1542,14 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    containerEl.createEl("h3", { text: "Prompt \u6A21\u677F" });
-    this.renderPromptTemplates(containerEl);
-    containerEl.createEl("h3", { text: "\u672C\u5730\u56FE\u7247" });
-    new import_obsidian3.Setting(containerEl).setName("\u542F\u7528\u672C\u5730\u56FE\u7247\u8BC6\u522B").setDesc(
-      "\u5F00\u542F\u540E\uFF0C\u7B14\u8BB0\u4E2D\u5F15\u7528\u7684\u672C\u5730\u56FE\u7247\uFF08![[img.png]]\uFF09\u4F1A\u81EA\u52A8\u53D1\u9001\u7ED9 Claude \u8FDB\u884C\u591A\u6A21\u6001\u5BF9\u8BDD"
-    ).addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.enableLocalImages).onChange(async (value) => {
-        this.plugin.settings.enableLocalImages = value;
-        await this.plugin.saveSettings();
+    containerEl.createEl("h3", { text: "\u5DE5\u5177" });
+    new import_obsidian3.Setting(containerEl).setName("\u751F\u6210 Vault \u53C2\u8003\u6A21\u677F").setDesc(
+      "\u6839\u636E\u5F53\u524D\u8BBE\u7F6E\u751F\u6210 _cortex-guide/ \u6587\u4EF6\u5939\uFF0C\u5305\u542B\u6587\u4EF6\u5939\u7ED3\u6784\u6A21\u677F\u3001modes \u914D\u7F6E\u793A\u4F8B\u548C CLAUDE.md\u3002\u4FEE\u6539\u8BBE\u7F6E\u540E\u53EF\u91CD\u65B0\u751F\u6210\u3002"
+    ).addButton(
+      (btn) => btn.setButtonText("\u751F\u6210\u6A21\u677F").onClick(async () => {
+        await this.generateVaultGuide();
       })
     );
-    new import_obsidian3.Setting(containerEl).setName("\u5355\u6B21\u6700\u5927\u56FE\u7247\u6570").setDesc("\u6BCF\u6761\u6D88\u606F\u6700\u591A\u9644\u5E26\u7684\u56FE\u7247\u6570\u91CF").addSlider(
-      (slider) => slider.setLimits(1, 10, 1).setValue(this.plugin.settings.maxImagesPerMessage).setDynamicTooltip().onChange(async (value) => {
-        this.plugin.settings.maxImagesPerMessage = value;
-        await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName("\u5355\u56FE\u6700\u5927\u4F53\u79EF (MB)").setDesc("\u8D85\u8FC7\u8BE5\u4F53\u79EF\u7684\u56FE\u7247\u5C06\u88AB\u8DF3\u8FC7").addSlider(
-      (slider) => slider.setLimits(1, 10, 1).setValue(
-        Math.round(this.plugin.settings.maxImageBytes / 1048576)
-      ).setDynamicTooltip().onChange(async (value) => {
-        this.plugin.settings.maxImageBytes = value * 1048576;
-        await this.plugin.saveSettings();
-      })
-    );
-    containerEl.createEl("h3", { text: "\u81EA\u52A8\u6807\u6CE8" });
-    new import_obsidian3.Setting(containerEl).setName("\u542F\u7528\u81EA\u52A8\u6807\u6CE8").setDesc(
-      "\u65B0\u5EFA\u6216\u4FEE\u6539\u7B14\u8BB0\u65F6\uFF0C\u81EA\u52A8\u8C03\u7528 Claude \u751F\u6210 tags \u548C summary \u5199\u5165 frontmatter"
-    ).addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.enableAutoTagging).onChange(async (value) => {
-        this.plugin.settings.enableAutoTagging = value;
-        await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName("\u76D1\u63A7\u6587\u4EF6\u5939").setDesc("\u4EC5\u5BF9\u8FD9\u4E9B\u6587\u4EF6\u5939\u4E2D\u7684\u7B14\u8BB0\u81EA\u52A8\u6807\u6CE8\uFF0C\u7528\u9017\u53F7\u5206\u9694").addText(
-      (text) => text.setPlaceholder("Raw").setValue(this.plugin.settings.autoTagFolders.join(",")).onChange(async (value) => {
-        this.plugin.settings.autoTagFolders = value.split(",").map((s) => s.trim()).filter(Boolean);
-        await this.plugin.saveSettings();
-      })
-    );
-    const autoTagPromptSetting = new import_obsidian3.Setting(containerEl).setName("\u81EA\u5B9A\u4E49\u6807\u6CE8 Prompt").setDesc("\u7559\u7A7A\u4F7F\u7528\u9ED8\u8BA4 prompt").addTextArea(
-      (text) => text.setPlaceholder("\u4F60\u662F\u4E00\u4E2A\u77E5\u8BC6\u5E93\u6807\u6CE8\u52A9\u624B...").setValue(this.plugin.settings.autoTagPrompt).onChange(async (value) => {
-        this.plugin.settings.autoTagPrompt = value;
-        await this.plugin.saveSettings();
-      })
-    );
-    autoTagPromptSetting.settingEl.addClass("ai-daily-setting-full");
-    const autoTagTextarea = autoTagPromptSetting.settingEl.querySelector("textarea");
-    if (autoTagTextarea) {
-      autoTagTextarea.rows = 3;
-    }
-    containerEl.createEl("h3", { text: "\u77E5\u8BC6\u6574\u7406" });
-    new import_obsidian3.Setting(containerEl).setName("\u84B8\u998F\u76EE\u6807\u6587\u4EF6\u5939").setDesc("\u5BF9\u8BDD\u84B8\u998F\u548C\u77E5\u8BC6\u6574\u7406\u7684\u8F93\u51FA\u76EE\u6807\u6587\u4EF6\u5939").addText(
-      (text) => text.setPlaceholder("Wiki").setValue(this.plugin.settings.distillTargetFolder).onChange(async (value) => {
-        this.plugin.settings.distillTargetFolder = value.trim() || "Wiki";
-        await this.plugin.saveSettings();
-      })
-    );
-    containerEl.createEl("h3", { text: "Feed \u8BA2\u9605\u6E90" });
-    this.renderFeedSourceList(containerEl);
   }
   async generateVaultGuide() {
     const vault = this.plugin.app.vault;
@@ -1572,7 +1571,7 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
   }
   renderPromptTemplates(containerEl) {
     const wrapper = containerEl.createDiv({ cls: "ai-daily-prompt-templates" });
-    const desc = new import_obsidian3.Setting(wrapper).setName("\u5728\u8F93\u5165\u6846\u4E2D\u952E\u5165 / \u53EF\u5FEB\u901F\u9009\u62E9\u6A21\u677F").addButton(
+    const desc = new import_obsidian3.Setting(wrapper).setName("Prompt \u6A21\u677F").setDesc("\u5728\u8F93\u5165\u6846\u4E2D\u952E\u5165 / \u53EF\u5FEB\u901F\u9009\u62E9\u6A21\u677F").addButton(
       (btn) => btn.setButtonText("\u6DFB\u52A0\u6A21\u677F").setCta().onClick(async () => {
         this.plugin.settings.promptTemplates.push({
           name: "",

@@ -1,0 +1,11 @@
+interface:
+  display_name: "微信读书"
+  short_description: "搜索书籍、查询书架、阅读进度、划线、想法与阅读统计"
+  default_prompt: "Use $weread-library to review my recent WeRead highlights and summarize the key ideas."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "obsidian_vault"
+      description: "Obsidian Vault MCP server providing the weread_api tool"
+policy:
+  allow_implicit_invocation: true

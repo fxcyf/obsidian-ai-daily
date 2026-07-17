@@ -37,6 +37,13 @@ jobs:
           PLUGIN_DIR="$HOME/MyFiles/Obsidian/All in One/.obsidian/plugins/ai-daily-chat"
           mkdir -p "$PLUGIN_DIR"
           cp -r dist/* "$PLUGIN_DIR/"
+          SKILL_SOURCE="$GITHUB_WORKSPACE/.agents/skills/weread-library"
+          mkdir -p "$HOME/MyFiles/Obsidian/All in One/.agents/skills"
+          rm -rf "$HOME/MyFiles/Obsidian/All in One/.agents/skills/weread-library"
+          cp -r "$SKILL_SOURCE" "$HOME/MyFiles/Obsidian/All in One/.agents/skills/weread-library"
+          mkdir -p "$HOME/MyFiles/Obsidian/All in One/.claude/skills"
+          rm -rf "$HOME/MyFiles/Obsidian/All in One/.claude/skills/weread-library"
+          cp -r "$SKILL_SOURCE" "$HOME/MyFiles/Obsidian/All in One/.claude/skills/weread-library"
           echo "Deployed plugin to $PLUGIN_DIR"
 
       - name: Deploy backend services to persistent repo

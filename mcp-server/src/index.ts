@@ -305,7 +305,6 @@ const WEREAD_GATEWAY = "https://i.weread.qq.com/api/agent/gateway";
 const WEREAD_SKILL_VERSION = "1.0.3";
 const MAX_WEREAD_CHARS = 20_000;
 
-if (WEREAD_API_KEY) {
 	server.tool(
 		"weread_api",
 		"调用微信读书 API。搜索书籍、获取书架、查看笔记划线、书评、阅读统计、推荐等。通过 api_name 指定接口，其余参数平铺传入。",
@@ -314,6 +313,9 @@ if (WEREAD_API_KEY) {
 			params: z.record(z.string(), z.unknown()).optional().describe("接口业务参数，如 {keyword: '三体', count: 10}"),
 		},
 		async ({ api_name, params }) => {
+			if (!WEREAD_API_KEY) {
+				return textResult("WeRead is not configured. Enable 微信读书 and set the API key in Cortex settings.");
+			}
 			try {
 				const body = JSON.stringify({
 					api_name,
@@ -343,7 +345,6 @@ if (WEREAD_API_KEY) {
 			}
 		}
 	);
-}
 
 // ── Main ───────────────────────────────────────────────────────────
 

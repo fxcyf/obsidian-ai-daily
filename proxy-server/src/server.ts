@@ -895,8 +895,13 @@ function buildCodexMcpArgs(permissionMode: "read-only" | "vault-write"): string[
 				: TOOL_POLICY.codex.readOnlyMcp)}`,
 			`${prefix}.default_tools_approval_mode="approve"`,
 		];
-		if (server.env && Object.keys(server.env).length > 0) {
-			const envTable = Object.entries(server.env)
+		const wereadApiKey = loadWeReadApiKey();
+		const runtimeEnv = {
+			...(server.env || {}),
+			...(wereadApiKey ? { WEREAD_API_KEY: wereadApiKey } : {}),
+		};
+		if (Object.keys(runtimeEnv).length > 0) {
+			const envTable = Object.entries(runtimeEnv)
 				.map(([key, value]) => `${JSON.stringify(key)} = ${JSON.stringify(value)}`)
 				.join(", ");
 			overrides.push(`${prefix}.env={ ${envTable} }`);
@@ -905,6 +910,23 @@ function buildCodexMcpArgs(permissionMode: "read-only" | "vault-write"): string[
 	} catch (error) {
 		console.error(`[Proxy] Failed to load Codex MCP config: ${error}`);
 		return [];
+	}
+}
+
+function loadWeReadApiKey(): string {
+	if (process.env.WEREAD_API_KEY) return process.env.WEREAD_API_KEY;
+	if (!VAULT_PATH) return "";
+	try {
+		const settingsPath = resolve(VAULT_PATH, ".obsidian/plugins/ai-daily-chat/data.json");
+		const settings = JSON.parse(readFileSync(settingsPath, "utf-8")) as {
+			enableWeRead?: boolean;
+			wereadApiKey?: string;
+		};
+		return settings.enableWeRead && typeof settings.wereadApiKey === "string"
+			? settings.wereadApiKey.trim()
+			: "";
+	} catch {
+		return "";
 	}
 }
 

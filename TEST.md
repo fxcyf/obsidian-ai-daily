@@ -29,6 +29,13 @@
 2. 确认流中出现 `mcp_tool_call`，服务名为 `obsidian_vault`、工具名为 `list_notes`，且 Codex 不再声称没有 Obsidian 工具。
 3. 确认工具能通过插件 API 或文件系统回退读取 vault，并返回实际文件列表。
 
+## 微信读书 Skill
+
+1. 运行 Codex app-server `skills/list`，确认 Vault 工作目录下存在 enabled 的 `weread-library`，且依赖 `obsidian_vault`。
+2. 在未配置 Key 的 MCP 进程调用 `tools/list`，确认仍注册 `weread_api`；调用时应返回 Cortex 配置提示。
+3. 在 Cortex 启用微信读书并配置 Key，通过 Proxy 新建 Codex thread，确认 `weread_api` 可用且不会在日志中输出 Key。
+4. 请求“查看我的微信读书书架”，确认 Codex 隐式触发 skill，并使用 `/shelf/sync`，而不是声称没有微信读书能力。
+
 ## Codex 非交互安全边界
 
 1. 从没有 `codexPermissionMode` 字段的旧版 `data.json` 升级，确认设置自动迁移为“Vault 可写”。

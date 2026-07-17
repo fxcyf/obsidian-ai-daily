@@ -24,6 +24,7 @@
 - **Harness 面板** — 独立的学习/工作模式管理面板，支持模式切换（学习、Inbox、工作、自由对话）、项目选择、状态摘要展示；点击「开始」自动注入对应文件内容到 Chat View 的 system prompt，AI 直接进入对应角色
 - **对话存档** — 会话自动保存为 vault 内 JSON（默认 `.ai-chat/`），「历史」中可搜索与恢复；切换到远端 Codex 时会把已有消息恢复为原生 Codex thread，并为 Claude Code/Codex 分别保存代理会话
 - **受限写入** — Codex 默认可通过 Obsidian Vault MCP 创建、追加、编辑笔记和更新 frontmatter；Shell 始终只读，删除与重命名工具不开放，也可在设置中切换为完全只读
+- **微信读书 Skill** — 启用微信读书后，Codex 可自动发现 `weread-library` skill，并通过 Vault MCP 查询书架、进度、划线、想法、统计与推荐
 - **上下文提示** — 底部显示估算 token 用量；超出阈值时可自动摘要早期对话以腾出上下文（可在设置中调节）
 
 ## 推荐的 Vault 结构

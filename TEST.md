@@ -62,6 +62,7 @@ npm run test:watch # 监听模式
 | `proxy-server/src/codex-app-server.test.ts` | Codex 原生历史 item 映射与 JSON-RPC 请求序列化 |
 | `src/feeds.test.ts` | timeDecay, socialBoost, detectBursts, scoreRelevance |
 | `src/chat-session.test.ts` | newSessionId, titleFromMessages, isValidChatSession, shouldPruneToday |
+| `src/markdown-normalize.test.ts` | Codex LaTeX 分隔符转 Obsidian MathJax，代码区域保持原样 |
 | `src/vault-tools.test.ts` | parseFrontmatter, serializeFrontmatter, findHeadingRange |
 | `mcp-server/src/knowledge-path.test.ts` | 单一逻辑知识库根路径映射、完整路径兼容与多根目录防歧义 |
 | `src/image-tools.test.ts` | extractLocalImageRefs（wikilink/markdown 图片解析、去重、过滤） |
@@ -87,6 +88,12 @@ npm run test:watch # 监听模式
 - [ ] 鼠标悬停代码块时出现复制按钮
 - [ ] 点击复制按钮，代码复制到剪贴板
 - [ ] 按钮短暂显示为"已复制"状态
+
+### 数学公式渲染
+- [ ] Codex 回复中的 `\\[...\\]` 块级公式按数学公式渲染，不显示裸方括号
+- [ ] Codex 回复中的 `\\(...\\)` 行内公式按数学公式渲染，不显示裸圆括号
+- [ ] 行内代码和 fenced code 中的上述字符保持原样
+- [ ] 重新打开旧对话后，旧消息中的公式同样正常渲染
 
 ### 笔记 CRUD 工具
 - [ ] 对话中让 Claude 创建新笔记（`create_note`），验证文件和 frontmatter 正确生成

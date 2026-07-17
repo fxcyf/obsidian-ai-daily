@@ -27,6 +27,7 @@ import { loadProjectIndex, parseModesFromContent, resolveFileEntries, type Harne
 import { WorkspaceStudio } from "./workspace-studio";
 import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
 import type { PreparedImage } from "./image-tools";
+import { normalizeMarkdownForObsidian } from "./markdown-normalize";
 import { distillConversation, prepareDistillation, prepareHealthFix, type HealthCheckResult } from "./knowledge-agent";
 import { isClaudeCodeAvailable, spawnClaudeCode, getMcpServerPath, seedClaudeCodeSession, type UndoData } from "./claude-code";
 import { isCodexAvailable, spawnCodex } from "./codex";
@@ -1411,7 +1412,7 @@ export class ChatView extends ItemView {
 			assistantEl.empty();
 			await MarkdownRenderer.render(
 				this.app,
-				content,
+				normalizeMarkdownForObsidian(content),
 				assistantEl,
 				"",
 				this.plugin
@@ -1919,7 +1920,7 @@ export class ChatView extends ItemView {
 		if (role === "assistant") {
 			void MarkdownRenderer.render(
 				this.app,
-				content,
+				normalizeMarkdownForObsidian(content),
 				msgEl,
 				"",
 				this.plugin
@@ -2351,7 +2352,7 @@ export class ChatView extends ItemView {
 				if (typewriterTimer !== null) { window.clearTimeout(typewriterTimer); typewriterTimer = null; }
 				if (assistantEl && accumulated) {
 					assistantEl.empty();
-					void MarkdownRenderer.render(this.app, accumulated, assistantEl, "", this.plugin).then(() => {
+					void MarkdownRenderer.render(this.app, normalizeMarkdownForObsidian(accumulated), assistantEl, "", this.plugin).then(() => {
 						assistantEl!.removeClass("ai-daily-msg-streaming");
 						this.postProcessAssistantEl(assistantEl!);
 					});
@@ -2370,7 +2371,7 @@ export class ChatView extends ItemView {
 				if (typewriterTimer !== null) { window.clearTimeout(typewriterTimer); typewriterTimer = null; }
 				if (assistantEl) {
 					assistantEl.empty();
-					void MarkdownRenderer.render(this.app, fullText, assistantEl, "", this.plugin).then(() => {
+					void MarkdownRenderer.render(this.app, normalizeMarkdownForObsidian(fullText), assistantEl, "", this.plugin).then(() => {
 						assistantEl!.removeClass("ai-daily-msg-streaming");
 						this.postProcessAssistantEl(assistantEl!);
 					});
@@ -2535,7 +2536,7 @@ export class ChatView extends ItemView {
 				if (typewriterTimer !== null) { window.clearTimeout(typewriterTimer); typewriterTimer = null; }
 				if (assistantEl && accumulated) {
 					assistantEl.empty();
-					void MarkdownRenderer.render(this.app, accumulated, assistantEl, "", this.plugin).then(() => {
+					void MarkdownRenderer.render(this.app, normalizeMarkdownForObsidian(accumulated), assistantEl, "", this.plugin).then(() => {
 						assistantEl!.removeClass("ai-daily-msg-streaming");
 						this.postProcessAssistantEl(assistantEl!);
 					});
@@ -2553,7 +2554,7 @@ export class ChatView extends ItemView {
 				if (typewriterTimer !== null) { window.clearTimeout(typewriterTimer); typewriterTimer = null; }
 				if (assistantEl) {
 					assistantEl.empty();
-					void MarkdownRenderer.render(this.app, fullText, assistantEl, "", this.plugin).then(() => {
+					void MarkdownRenderer.render(this.app, normalizeMarkdownForObsidian(fullText), assistantEl, "", this.plugin).then(() => {
 						assistantEl!.removeClass("ai-daily-msg-streaming");
 						this.postProcessAssistantEl(assistantEl!);
 					});
@@ -2622,7 +2623,7 @@ export class ChatView extends ItemView {
 		const renderStreamingMarkdown = async (content: string) => {
 			if (!assistantEl) return;
 			assistantEl.empty();
-			await MarkdownRenderer.render(this.app, content, assistantEl, "", this.plugin);
+			await MarkdownRenderer.render(this.app, normalizeMarkdownForObsidian(content), assistantEl, "", this.plugin);
 			this.scrollToBottomIfFollowing();
 		};
 		const scheduleStreamingMarkdown = (content: string) => {
@@ -2846,7 +2847,7 @@ export class ChatView extends ItemView {
 		const renderStreamingMarkdown = async (content: string) => {
 			if (!assistantEl) return;
 			assistantEl.empty();
-			await MarkdownRenderer.render(this.app, content, assistantEl, "", this.plugin);
+			await MarkdownRenderer.render(this.app, normalizeMarkdownForObsidian(content), assistantEl, "", this.plugin);
 			this.scrollToBottomIfFollowing();
 		};
 		const scheduleStreamingMarkdown = (content: string) => {
@@ -3567,7 +3568,7 @@ export class ChatView extends ItemView {
 			if (m.role === "assistant") {
 				await MarkdownRenderer.render(
 					this.app,
-					m.content,
+					normalizeMarkdownForObsidian(m.content),
 					msgEl,
 					"",
 					this.plugin

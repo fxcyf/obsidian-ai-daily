@@ -98,6 +98,7 @@ rebase 发生冲突时：
 - `.agents/skills/weread-library/` — 微信读书 skill 单一来源；部署到 Vault 的 `.agents/skills`（Codex）与 `.claude/skills`（Claude Code）
 - `src/system-prompt.ts` — 统一 system prompt 构建（API/Claude Code/Proxy 三模式共享，含 harness 注入）
 - `src/chat-view.ts` — 聊天侧边栏 UI
+- `src/markdown-normalize.ts` — 助手消息渲染兼容层，将 Codex 常用的 `\\[...\\]` / `\\(...\\)` 数学分隔符转换为 Obsidian MathJax 语法（代码区域除外）
 - `src/claude.ts` — Claude API client，支持 tool_use agentic loop、real/typewriter/off 流式调度、proxy 模式（含重试）
 - `src/anthropic-sse.ts` — Anthropic SSE 解析与组装（纯函数，单测覆盖）
 - `src/anthropic-sse.test.ts` — `npm test` 入口（vitest）

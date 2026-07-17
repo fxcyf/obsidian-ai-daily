@@ -515,6 +515,7 @@ export class ClaudeClient {
 		seedHistory?: { role: string; content: string }[],
 		proxyBackend?: "claude-code" | "codex",
 		proxyModel?: string,
+		codexPermissionMode?: "read-only" | "vault-write",
 		onStatus?: (message: string) => void,
 	): Promise<string> {
 		if (!this.proxyUrl || !this.proxyToken) {
@@ -532,6 +533,9 @@ export class ClaudeClient {
 			}
 			if (proxyModel) {
 				body.model = proxyModel;
+			}
+			if (proxyBackend === "codex" && codexPermissionMode) {
+				body.codexPermissionMode = codexPermissionMode;
 			}
 			if (this.proxySessionId) {
 				body.sessionId = this.proxySessionId;

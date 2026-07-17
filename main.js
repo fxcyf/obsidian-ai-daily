@@ -1257,6 +1257,7 @@ var DEFAULT_SETTINGS = {
   model: "claude-haiku-4-5",
   cliBackend: "claude-code",
   codexModel: "",
+  codexPermissionMode: "read-only",
   chatHistoryFolder: ".ai-chat",
   chatHistoryRetentionDays: 30,
   chatStreamMode: "auto",
@@ -1345,6 +1346,12 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
       new import_obsidian3.Setting(containerEl).setName("Codex \u6A21\u578B").setDesc("Codex CLI \u4F7F\u7528\u7684\u6A21\u578B").addDropdown(
         (dropdown) => dropdown.addOption("", "\u8D26\u6237\u9ED8\u8BA4\uFF08\u63A8\u8350\uFF09").addOption("gpt-5.6-sol", "GPT-5.6 Sol\uFF08\u6700\u5F3A\uFF09").addOption("gpt-5.6-terra", "GPT-5.6 Terra\uFF08\u5747\u8861\uFF09").addOption("gpt-5.6-luna", "GPT-5.6 Luna\uFF08\u7ECF\u6D4E\uFF09").addOption("gpt-5.3-codex", "GPT-5.3 Codex\uFF08Agent \u7F16\u7801\uFF09").setValue(this.plugin.settings.codexModel).onChange(async (value) => {
           this.plugin.settings.codexModel = value;
+          await this.plugin.saveSettings();
+        })
+      );
+      new import_obsidian3.Setting(containerEl).setName("Codex \u6743\u9650").setDesc("\u65E0\u9700\u4EA4\u4E92\u5BA1\u6279\uFF1BShell \u59CB\u7EC8\u53EA\u8BFB\uFF0CVault \u5199\u5165\u4EC5\u901A\u8FC7 MCP \u767D\u540D\u5355").addDropdown(
+        (dropdown) => dropdown.addOption("read-only", "\u53EA\u8BFB\uFF08\u63A8\u8350\uFF09").addOption("vault-write", "Vault \u53EF\u5199\uFF08\u65E0\u5220\u9664/\u91CD\u547D\u540D\uFF09").setValue(this.plugin.settings.codexPermissionMode).onChange(async (value) => {
+          this.plugin.settings.codexPermissionMode = value;
           await this.plugin.saveSettings();
         })
       );
@@ -2523,7 +2530,7 @@ var ClaudeClient = class {
     }
     return collectedText.join("");
   }
-  async proxyChat(userMessage, onAssistantDelta, onToolCall, seedHistory, proxyBackend, proxyModel, onStatus) {
+  async proxyChat(userMessage, onAssistantDelta, onToolCall, seedHistory, proxyBackend, proxyModel, codexPermissionMode, onStatus) {
     var _a;
     if (!this.proxyUrl || !this.proxyToken) {
       throw new Error("Proxy mode not configured");
@@ -2538,6 +2545,9 @@ var ClaudeClient = class {
       }
       if (proxyModel) {
         body.model = proxyModel;
+      }
+      if (proxyBackend === "codex" && codexPermissionMode) {
+        body.codexPermissionMode = codexPermissionMode;
       }
       if (this.proxySessionId) {
         body.sessionId = this.proxySessionId;
@@ -6092,6 +6102,8 @@ async function seedClaudeCodeSession(history, cwd, model) {
 
 // src/codex.ts
 var import_obsidian12 = require("obsidian");
+var CODEX_READ_TOOLS = ["read_note", "search_vault", "list_notes", "get_links", "read_image"];
+var CODEX_WRITE_TOOLS = ["create_note", "append_to_note", "edit_note", "update_frontmatter"];
 var cachedCodexPath = null;
 function getCodexSearchPaths(home) {
   return [
@@ -6187,7 +6199,7 @@ function findNodeBin() {
 function spawnCodex(prompt, options, callbacks) {
   var _a, _b;
   const { spawn } = require("child_process");
-  const { mcpConfig, sessionId, model } = options;
+  const { mcpConfig, sessionId, model, codexPermissionMode = "read-only" } = options;
   const nodeBin = findNodeBin();
   ensureCodexMcp({
     mcpServerPath: mcpConfig.mcpServerPath,
@@ -6203,21 +6215,26 @@ function spawnCodex(prompt, options, callbacks) {
       "resume",
       sessionId,
       prompt,
-      "--json",
-      "--dangerously-bypass-approvals-and-sandbox",
-      "--sandbox",
-      "danger-full-access"
+      "--json"
     ];
   } else {
     args = [
       "exec",
       prompt,
-      "--json",
-      "--dangerously-bypass-approvals-and-sandbox",
-      "--sandbox",
-      "danger-full-access"
+      "--json"
     ];
   }
+  const enabledTools = codexPermissionMode === "vault-write" ? [...CODEX_READ_TOOLS, ...CODEX_WRITE_TOOLS] : CODEX_READ_TOOLS;
+  args.push(
+    "-c",
+    'approval_policy="never"',
+    "-c",
+    'sandbox_mode="read-only"',
+    "-c",
+    `mcp_servers.obsidian-vault.enabled_tools=${JSON.stringify(enabledTools)}`,
+    "-c",
+    'mcp_servers.obsidian-vault.default_tools_approval_mode="approve"'
+  );
   if (model) {
     args.push("-m", model);
   }
@@ -7751,6 +7768,7 @@ ${filesList}` : "",
             seedHistory,
             this.plugin.settings.cliBackend,
             this.plugin.settings.cliBackend === "codex" ? this.plugin.settings.codexModel : void 0,
+            this.plugin.settings.codexPermissionMode,
             (message) => loadingTextEl.setText(message)
           );
           actualSource = "proxy";
@@ -8517,7 +8535,12 @@ ${filesList}` : "",
       }
       if (streamTextEl) streamTextEl.removeClass("ai-daily-stream-text");
     };
-    const handle = spawnCodex(prompt, { mcpConfig, sessionId, model }, {
+    const handle = spawnCodex(prompt, {
+      mcpConfig,
+      sessionId,
+      model,
+      codexPermissionMode: this.plugin.settings.codexPermissionMode
+    }, {
       onText: (delta) => {
         if (this.closed) return;
         loadingEl.remove();

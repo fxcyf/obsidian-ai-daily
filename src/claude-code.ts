@@ -328,6 +328,7 @@ export interface ClaudeCodeOptions {
 	mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[]; wereadApiKey?: string };
 	sessionId?: string;
 	model?: string;
+	codexPermissionMode?: "read-only" | "vault-write";
 }
 
 // ---------------------------------------------------------------------------

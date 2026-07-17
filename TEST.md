@@ -27,6 +27,13 @@
 2. 确认流中出现 `mcp_tool_call`，服务名为 `obsidian_vault`、工具名为 `list_notes`，且 Codex 不再声称没有 Obsidian 工具。
 3. 确认工具能通过插件 API 或文件系统回退读取 vault，并返回实际文件列表。
 
+## Codex 非交互安全边界
+
+1. 在“只读”权限下要求 Codex 用 Shell 创建临时文件，确认返回只读文件系统错误且不会等待审批。
+2. 确认 Obsidian MCP 只暴露 read_note、search_vault、list_notes、get_links、read_image。
+3. 切换“Vault 可写”，确认额外暴露 create_note、append_to_note、edit_note、update_frontmatter。
+4. 两种模式均不得暴露 delete_note、rename_note、feed、播客或微信读书工具。
+
 ## 运行测试
 
 ```bash

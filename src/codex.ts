@@ -3,6 +3,9 @@ import { ChildProcess } from "child_process";
 import { getMcpServerPath } from "./claude-code";
 import type { ClaudeCodeStreamCallbacks, ClaudeCodeOptions } from "./claude-code";
 
+const CODEX_READ_TOOLS = ["read_note", "search_vault", "list_notes", "get_links", "read_image"];
+const CODEX_WRITE_TOOLS = ["create_note", "append_to_note", "edit_note", "update_frontmatter"];
+
 let cachedCodexPath: string | false | null = null;
 
 function getCodexSearchPaths(home: string): string[] {
@@ -129,7 +132,7 @@ export function spawnCodex(
 	callbacks: ClaudeCodeStreamCallbacks
 ): { abort: () => void } {
 	const { spawn } = require("child_process") as typeof import("child_process");
-	const { mcpConfig, sessionId, model } = options;
+	const { mcpConfig, sessionId, model, codexPermissionMode = "read-only" } = options;
 
 	const nodeBin = findNodeBin();
 	ensureCodexMcp({
@@ -145,17 +148,22 @@ export function spawnCodex(
 		args = [
 			"exec", "resume", sessionId, prompt,
 			"--json",
-			"--dangerously-bypass-approvals-and-sandbox",
-			"--sandbox", "danger-full-access",
 		];
 	} else {
 		args = [
 			"exec", prompt,
 			"--json",
-			"--dangerously-bypass-approvals-and-sandbox",
-			"--sandbox", "danger-full-access",
 		];
 	}
+	const enabledTools = codexPermissionMode === "vault-write"
+		? [...CODEX_READ_TOOLS, ...CODEX_WRITE_TOOLS]
+		: CODEX_READ_TOOLS;
+	args.push(
+		"-c", 'approval_policy="never"',
+		"-c", 'sandbox_mode="read-only"',
+		"-c", `mcp_servers.obsidian-vault.enabled_tools=${JSON.stringify(enabledTools)}`,
+		"-c", 'mcp_servers.obsidian-vault.default_tools_approval_mode="approve"',
+	);
 
 	if (model) {
 		args.push("-m", model);

@@ -1613,6 +1613,7 @@ export class ChatView extends ItemView {
 						seedHistory,
 						this.plugin.settings.cliBackend,
 						this.plugin.settings.cliBackend === "codex" ? this.plugin.settings.codexModel : undefined,
+						this.plugin.settings.codexPermissionMode,
 						(message) => loadingTextEl.setText(message),
 					);
 					actualSource = "proxy";
@@ -2449,7 +2450,12 @@ export class ChatView extends ItemView {
 			if (streamTextEl) streamTextEl.removeClass("ai-daily-stream-text");
 		};
 
-		const handle = spawnCodex(prompt, { mcpConfig, sessionId, model }, {
+		const handle = spawnCodex(prompt, {
+			mcpConfig,
+			sessionId,
+			model,
+			codexPermissionMode: this.plugin.settings.codexPermissionMode,
+		}, {
 			onText: (delta) => {
 				if (this.closed) return;
 				loadingEl.remove();

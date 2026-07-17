@@ -37,6 +37,7 @@ interface ChatRequest {
 	history?: { role: string; content: string }[];
 	backend?: "claude-code" | "codex";
 	model?: string;
+	codexPermissionMode?: "read-only" | "vault-write";
 }
 
 interface ClaudeStreamEvent {
@@ -805,12 +806,16 @@ function buildClaudeArgs(body: ChatRequest): string[] {
 
 function buildCodexArgs(body: ChatRequest): string[] {
 	const model = body.model || CODEX_MODEL;
-	const mcpArgs = buildCodexMcpArgs();
+	const mcpArgs = buildCodexMcpArgs(body.codexPermissionMode || "read-only");
+	const securityArgs = [
+		"-c", 'approval_policy="never"',
+		"-c", 'sandbox_mode="read-only"',
+	];
 	if (body.sessionId) {
 		const args = [
 			"exec", "resume", body.sessionId, body.message,
 			"--json",
-			"--dangerously-bypass-approvals-and-sandbox",
+			...securityArgs,
 			...mcpArgs,
 		];
 		if (model) args.push("-m", model);
@@ -821,15 +826,14 @@ function buildCodexArgs(body: ChatRequest): string[] {
 	const args = [
 		"exec", prompt,
 		"--json",
-		"--dangerously-bypass-approvals-and-sandbox",
-		"--sandbox", "danger-full-access",
+		...securityArgs,
 		...mcpArgs,
 	];
 	if (model) args.push("-m", model);
 	return args;
 }
 
-function buildCodexMcpArgs(): string[] {
+function buildCodexMcpArgs(permissionMode: "read-only" | "vault-write"): string[] {
 	try {
 		const config = JSON.parse(readFileSync(MCP_CONFIG, "utf-8")) as {
 			mcpServers?: Record<string, { command?: string; args?: string[]; env?: Record<string, string> }>;
@@ -841,6 +845,10 @@ function buildCodexMcpArgs(): string[] {
 		const overrides = [
 			`${prefix}.command=${JSON.stringify(server.command)}`,
 			`${prefix}.args=${JSON.stringify(server.args || [])}`,
+			`${prefix}.enabled_tools=${JSON.stringify(permissionMode === "vault-write"
+				? ["read_note", "search_vault", "list_notes", "get_links", "read_image", "create_note", "append_to_note", "edit_note", "update_frontmatter"]
+				: ["read_note", "search_vault", "list_notes", "get_links", "read_image"])}`,
+			`${prefix}.default_tools_approval_mode="approve"`,
 		];
 		if (server.env && Object.keys(server.env).length > 0) {
 			const envTable = Object.entries(server.env)

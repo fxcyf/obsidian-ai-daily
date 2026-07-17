@@ -34,6 +34,7 @@ export const DEFAULT_PROMPT_TEMPLATES: PromptTemplate[] = [
 ];
 
 export type CliBackend = "claude-code" | "codex";
+export type CodexPermissionMode = "read-only" | "vault-write";
 
 export interface AIDailyChatSettings {
 	apiKey: string;
@@ -42,6 +43,7 @@ export interface AIDailyChatSettings {
 	model: string;
 	cliBackend: CliBackend;
 	codexModel: string;
+	codexPermissionMode: CodexPermissionMode;
 	chatHistoryFolder: string;
 	chatHistoryRetentionDays: number;
 	chatStreamMode: StreamMode;
@@ -83,6 +85,7 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	model: "claude-haiku-4-5",
 	cliBackend: "claude-code",
 	codexModel: "",
+	codexPermissionMode: "read-only",
 	chatHistoryFolder: ".ai-chat",
 	chatHistoryRetentionDays: 30,
 	chatStreamMode: "auto",
@@ -231,6 +234,20 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 						.setValue(this.plugin.settings.codexModel)
 						.onChange(async (value) => {
 							this.plugin.settings.codexModel = value;
+							await this.plugin.saveSettings();
+						})
+				);
+
+			new Setting(containerEl)
+				.setName("Codex 权限")
+				.setDesc("无需交互审批；Shell 始终只读，Vault 写入仅通过 MCP 白名单")
+				.addDropdown((dropdown) =>
+					dropdown
+						.addOption("read-only", "只读（推荐）")
+						.addOption("vault-write", "Vault 可写（无删除/重命名）")
+						.setValue(this.plugin.settings.codexPermissionMode)
+						.onChange(async (value) => {
+							this.plugin.settings.codexPermissionMode = value as CodexPermissionMode;
 							await this.plugin.saveSettings();
 						})
 				);

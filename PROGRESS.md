@@ -1,5 +1,11 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-07-17 — Codex Proxy 长任务无反馈 (`594e56c`)
+
+- **问题**：请求已到 Proxy，但 Codex 的 reasoning、`item.started` 和存活状态没有转发，前端只能长期显示“思考中”。
+- **解决**：转发推理与工具生命周期状态，增加 15 秒心跳；日志按 task ID 记录 backend、Codex 事件和退出结果。
+- **教训**：长任务协议不能只传最终正文；至少要有接收确认、阶段状态、心跳与可关联的服务端日志。
+
 ## 2026-05-14 — Commit & Push 全流程测试（含 worktree）
 
 - **目的**：验证完整的 worktree 创建 → commit → rebase → merge → push → 清理流程

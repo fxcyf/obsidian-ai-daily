@@ -122,7 +122,7 @@ rebase 发生冲突时：
 - `src/feeds.ts` — 多源抓取（RSS/HN API/Reddit/GitHub Trending）、社交热度评分、时间衰减、爆发检测
 - `src/feed-generator.ts` — Feed 生成器，编排 RSS + vault 搜索 + Claude 汇总；含独立播客 Feed 生成（transcript 提取 + Claude 深度分析）
 - `mcp-server/` — 独立 MCP server，用于 Claude Code 操作 vault；优先通过插件 HTTP API 使用 Obsidian API，回退到文件系统操作
-- `proxy-server/` — 桌面端代理服务器，接收移动端请求并转发给 Claude Code CLI（使用订阅额度），SSE 流式响应 + session 管理
+- `proxy-server/` — 桌面端代理服务器，接收移动端请求并转发给 Claude Code/Codex（使用订阅额度），SSE 流式响应 + 后端独立 session 管理；Codex 通过 app-server 的 `thread/inject_items` 原生恢复历史
 
 ## 版本管理
 

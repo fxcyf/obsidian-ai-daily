@@ -2410,6 +2410,8 @@ var ClaudeClient = class {
   constructor(apiKey, model, systemPrompt, options) {
     this.messages = [];
     this.abortController = null;
+    this.proxySessionIds = {};
+    this.proxyTaskIds = {};
     var _a, _b, _c, _d, _e, _f, _g, _h;
     this.apiKey = apiKey;
     this.model = model;
@@ -2430,26 +2432,26 @@ var ClaudeClient = class {
     this.proxyUrl = rawUrl && !/^https?:\/\//i.test(rawUrl) ? `https://${rawUrl}` : rawUrl;
     this.proxyToken = options == null ? void 0 : options.proxyToken;
   }
-  getProxySessionId() {
-    return this.proxySessionId;
+  getProxySessionId(backend) {
+    return this.proxySessionIds[backend];
   }
-  getProxySessionBackend() {
-    return this.proxySessionBackend;
+  setProxySessionId(backend, id) {
+    this.proxySessionIds[backend] = id;
   }
-  setProxySessionId(id, backend) {
-    this.proxySessionId = id;
-    this.proxySessionBackend = backend;
+  clearProxySessionId(backend) {
+    if (backend) {
+      delete this.proxySessionIds[backend];
+      delete this.proxyTaskIds[backend];
+    } else {
+      this.proxySessionIds = {};
+      this.proxyTaskIds = {};
+    }
   }
-  clearProxySessionId() {
-    this.proxySessionId = void 0;
-    this.proxyTaskId = void 0;
-    this.proxySessionBackend = void 0;
+  getProxyTaskId(backend) {
+    return this.proxyTaskIds[backend];
   }
-  getProxyTaskId() {
-    return this.proxyTaskId;
-  }
-  setProxyTaskId(id) {
-    this.proxyTaskId = id;
+  setProxyTaskId(backend, id) {
+    this.proxyTaskIds[backend] = id;
   }
   isProxyMode() {
     return !!(this.proxyUrl && this.proxyToken);
@@ -2591,9 +2593,7 @@ var ClaudeClient = class {
       throw new Error("Proxy mode not configured");
     }
     this.messages.push({ role: "user", content: userMessage });
-    if (this.proxySessionId && (!this.proxySessionBackend || proxyBackend && this.proxySessionBackend !== proxyBackend)) {
-      this.clearProxySessionId();
-    }
+    const backend = proxyBackend != null ? proxyBackend : "claude-code";
     this.abortController = new AbortController();
     const signal = this.abortController.signal;
     try {
@@ -2607,8 +2607,8 @@ var ClaudeClient = class {
       if (proxyBackend === "codex" && codexPermissionMode) {
         body.codexPermissionMode = codexPermissionMode;
       }
-      if (this.proxySessionId) {
-        body.sessionId = this.proxySessionId;
+      if (this.proxySessionIds[backend]) {
+        body.sessionId = this.proxySessionIds[backend];
       } else {
         body.systemPrompt = this.systemPrompt;
         if (seedHistory == null ? void 0 : seedHistory.length) {
@@ -2671,7 +2671,7 @@ var ClaudeClient = class {
             continue;
           }
           if (event.type === "task_id" && event.taskId) {
-            this.proxyTaskId = event.taskId;
+            this.proxyTaskIds[backend] = event.taskId;
           } else if (event.type === "text" && event.content) {
             accumulated += event.content;
             onAssistantDelta == null ? void 0 : onAssistantDelta(event.content, accumulated);
@@ -2687,8 +2687,7 @@ var ClaudeClient = class {
           } else if (event.type === "done") {
             receivedDone = true;
             if (event.sessionId) {
-              this.proxySessionId = event.sessionId;
-              this.proxySessionBackend = proxyBackend;
+              this.proxySessionIds[backend] = event.sessionId;
             }
             if (event.result) {
               accumulated = event.result;
@@ -2698,9 +2697,9 @@ var ClaudeClient = class {
           }
         }
       }
-      if (!receivedDone && this.proxyTaskId && this.proxyUrl) {
+      if (!receivedDone && this.proxyTaskIds[backend] && this.proxyUrl) {
         try {
-          const recovered = await this.recoverFromTask(signal);
+          const recovered = await this.recoverFromTask(backend, signal);
           if (recovered !== null) {
             accumulated = recovered;
           }
@@ -2719,18 +2718,19 @@ var ClaudeClient = class {
       this.abortController = null;
     }
   }
-  async recoverFromTask(signal) {
-    if (!this.proxyTaskId || !this.proxyUrl) return null;
+  async recoverFromTask(backend, signal) {
+    const taskId = this.proxyTaskIds[backend];
+    if (!taskId || !this.proxyUrl) return null;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5e3);
     try {
-      const resp = await fetch(`${this.proxyUrl}/task/${this.proxyTaskId}`, {
+      const resp = await fetch(`${this.proxyUrl}/task/${taskId}`, {
         headers: { Authorization: `Bearer ${this.proxyToken}` },
         signal: signal != null ? signal : controller.signal
       });
       if (!resp.ok) return null;
       const data = await resp.json();
-      if (data.sessionId) this.proxySessionId = data.sessionId;
+      if (data.sessionId) this.proxySessionIds[backend] = data.sessionId;
       if (data.status === "done" && data.result) return data.result;
       return null;
     } catch (e) {
@@ -6662,6 +6662,8 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     this.readImageCount = 0;
     this.claudeCodeAbort = null;
     this.codexAbort = null;
+    this.restoredProxySessionIds = {};
+    this.restoredProxyTaskIds = {};
     this.claudeCodeUndoHistory = [];
     this.claudeCodeUndoCounter = 0;
     this.workspaceColorMap = /* @__PURE__ */ new Map();
@@ -7638,15 +7640,7 @@ ${entry}
     const proxySettingsChanged = this.client && this.client.isProxyMode() !== (this.plugin.settings.proxyEnabled && !!this.plugin.settings.proxyUrl);
     if (!this.client || proxySettingsChanged) {
       await this.initClient();
-      if (this.restoredProxySessionId) {
-        this.client.setProxySessionId(this.restoredProxySessionId, this.restoredProxySessionBackend);
-        this.restoredProxySessionId = void 0;
-        this.restoredProxySessionBackend = void 0;
-      }
-      if (this.restoredProxyTaskId) {
-        this.client.setProxyTaskId(this.restoredProxyTaskId);
-        this.restoredProxyTaskId = void 0;
-      }
+      this.restoreProxyHandlesToClient();
     }
     const loadingEl = this.messagesEl.createDiv({
       cls: "ai-daily-loading"
@@ -7821,7 +7815,8 @@ ${entry}
       let reply;
       let actualSource = "api";
       if (this.client.isProxyMode()) {
-        const isFirstProxyMessage = !this.client.getProxySessionId();
+        const proxyBackend = this.plugin.settings.cliBackend;
+        const isFirstProxyMessage = !this.client.getProxySessionId(proxyBackend);
         let seedHistory;
         if (isFirstProxyMessage && this.messages.length > 1) {
           seedHistory = this.messages.slice(0, -1).map((m) => ({
@@ -7853,7 +7848,7 @@ ${filesList}` : "",
             streamCb,
             onToolCall,
             seedHistory,
-            this.plugin.settings.cliBackend,
+            proxyBackend,
             this.plugin.settings.cliBackend === "codex" ? this.plugin.settings.codexModel : void 0,
             this.plugin.settings.codexPermissionMode,
             (message) => loadingTextEl.setText(message)
@@ -7863,7 +7858,7 @@ ${filesList}` : "",
           if (this.plugin.settings.proxyFallbackToApi && this.plugin.getEffectiveApiKey()) {
             console.warn("[ai-daily] proxy failed, falling back to API:", proxyErr);
             new import_obsidian13.Notice("\u4EE3\u7406\u4E0D\u53EF\u7528\uFF0C\u56DE\u9000\u5230\u672C\u5730 API", 4e3);
-            this.client.clearProxySessionId();
+            this.client.clearProxySessionId(proxyBackend);
             this.lastMode = "api";
             reply = await doLocalChat();
             actualSource = "api";
@@ -8066,7 +8061,7 @@ ${filesList}` : "",
     });
   }
   async persistSession() {
-    var _a, _b, _c, _d, _e, _f, _g, _h;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
     if (!this.sessionId) return;
     const { chatHistoryFolder, model } = this.plugin.settings;
     const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -8089,12 +8084,13 @@ ${filesList}` : "",
       messages: persisted,
       claudeCodeSessionId: this.claudeCodeSessionId,
       codexSessionId: this.codexSessionId,
-      proxySessionId: (_b = this.client) == null ? void 0 : _b.getProxySessionId(),
-      proxyTaskId: (_c = this.client) == null ? void 0 : _c.getProxyTaskId(),
-      proxySessionBackend: (_d = this.client) == null ? void 0 : _d.getProxySessionBackend(),
-      harnessContext: (_e = this.harnessContext) != null ? _e : void 0,
-      lastMode: (_f = this.lastMode) != null ? _f : void 0,
-      workspace: (_h = (_g = this.harnessContext) == null ? void 0 : _g.workspace) != null ? _h : existing == null ? void 0 : existing.workspace,
+      claudeCodeProxySessionId: (_b = this.client) == null ? void 0 : _b.getProxySessionId("claude-code"),
+      codexProxySessionId: (_c = this.client) == null ? void 0 : _c.getProxySessionId("codex"),
+      claudeCodeProxyTaskId: (_d = this.client) == null ? void 0 : _d.getProxyTaskId("claude-code"),
+      codexProxyTaskId: (_e = this.client) == null ? void 0 : _e.getProxyTaskId("codex"),
+      harnessContext: (_f = this.harnessContext) != null ? _f : void 0,
+      lastMode: (_g = this.lastMode) != null ? _g : void 0,
+      workspace: (_i = (_h = this.harnessContext) == null ? void 0 : _h.workspace) != null ? _i : existing == null ? void 0 : existing.workspace,
       pinned: existing == null ? void 0 : existing.pinned
     };
     try {
@@ -9257,9 +9253,8 @@ ${m.content}`);
     this.claudeCodeSessionId = void 0;
     this.codexSessionId = void 0;
     this.claudeCodeUndoHistory = [];
-    this.restoredProxySessionId = void 0;
-    this.restoredProxyTaskId = void 0;
-    this.restoredProxySessionBackend = void 0;
+    this.restoredProxySessionIds = {};
+    this.restoredProxyTaskIds = {};
     this.lastMode = null;
     this.attachedFiles = [];
     this.renderAttachBar();
@@ -9577,7 +9572,7 @@ ${m.content}`);
     renderList(sessions);
   }
   async loadSession(id) {
-    var _a, _b, _c;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
     const { chatHistoryFolder } = this.plugin.settings;
     const data = await loadChatSession(this.app.vault, chatHistoryFolder, id);
     if (!data || !((_a = data.messages) == null ? void 0 : _a.length)) {
@@ -9587,11 +9582,22 @@ ${m.content}`);
     this.sessionId = data.id;
     this.claudeCodeSessionId = data.claudeCodeSessionId;
     this.codexSessionId = data.codexSessionId;
-    this.restoredProxySessionId = data.proxySessionId;
-    this.restoredProxyTaskId = data.proxyTaskId;
-    this.restoredProxySessionBackend = data.proxySessionBackend;
-    this.harnessContext = data.harnessContext ? { ...data.harnessContext, mode: { ...data.harnessContext.mode, actions: (_b = data.harnessContext.mode.actions) != null ? _b : [] } } : null;
-    this.lastMode = (_c = data.lastMode) != null ? _c : null;
+    this.restoredProxySessionIds = {
+      "claude-code": data.claudeCodeProxySessionId,
+      codex: data.codexProxySessionId
+    };
+    this.restoredProxyTaskIds = {
+      "claude-code": data.claudeCodeProxyTaskId,
+      codex: data.codexProxyTaskId
+    };
+    if (data.proxySessionId && data.proxySessionBackend) {
+      (_d = (_b = this.restoredProxySessionIds)[_c = data.proxySessionBackend]) != null ? _d : _b[_c] = data.proxySessionId;
+    }
+    if (data.proxyTaskId && data.proxySessionBackend) {
+      (_g = (_e = this.restoredProxyTaskIds)[_f = data.proxySessionBackend]) != null ? _g : _e[_f] = data.proxyTaskId;
+    }
+    this.harnessContext = data.harnessContext ? { ...data.harnessContext, mode: { ...data.harnessContext.mode, actions: (_h = data.harnessContext.mode.actions) != null ? _h : [] } } : null;
+    this.lastMode = (_i = data.lastMode) != null ? _i : null;
     this.messages = data.messages.map((m) => ({
       role: m.role,
       content: m.content,
@@ -9661,9 +9667,7 @@ ${m.content}`);
       }
     }
     await this.initClient();
-    if (this.restoredProxySessionId) {
-      this.client.setProxySessionId(this.restoredProxySessionId, this.restoredProxySessionBackend);
-    }
+    this.restoreProxyHandlesToClient();
     this.client.setHistoryFromStrings(
       this.messages.map((m) => ({
         role: m.role,
@@ -9673,11 +9677,24 @@ ${m.content}`);
     this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
     this.updateTokenBar();
     new import_obsidian13.Notice("\u5DF2\u6062\u590D\u5386\u53F2\u5BF9\u8BDD", 3e3);
-    if (this.restoredProxyTaskId && this.plugin.settings.proxyEnabled && this.plugin.settings.proxyUrl) {
-      this.recoverProxyTask(this.restoredProxyTaskId);
+    if (this.plugin.settings.proxyEnabled && this.plugin.settings.proxyUrl) {
+      const backend = this.plugin.settings.cliBackend;
+      const taskId = (_j = this.client) == null ? void 0 : _j.getProxyTaskId(backend);
+      if (taskId) void this.recoverProxyTask(taskId, backend);
     }
   }
-  async recoverProxyTask(taskId) {
+  restoreProxyHandlesToClient() {
+    if (!this.client) return;
+    for (const backend of ["claude-code", "codex"]) {
+      const sessionId = this.restoredProxySessionIds[backend];
+      const taskId = this.restoredProxyTaskIds[backend];
+      if (sessionId) this.client.setProxySessionId(backend, sessionId);
+      if (taskId) this.client.setProxyTaskId(backend, taskId);
+    }
+    this.restoredProxySessionIds = {};
+    this.restoredProxyTaskIds = {};
+  }
+  async recoverProxyTask(taskId, backend) {
     var _a;
     const proxyUrl = (_a = this.plugin.settings.proxyUrl) == null ? void 0 : _a.trim();
     const baseUrl = proxyUrl && !/^https?:\/\//i.test(proxyUrl) ? `https://${proxyUrl}` : proxyUrl;
@@ -9689,7 +9706,7 @@ ${m.content}`);
       if (!resp.ok) return;
       const data = await resp.json();
       if (data.sessionId && this.client) {
-        this.client.setProxySessionId(data.sessionId);
+        this.client.setProxySessionId(backend, data.sessionId);
       }
       if (data.status === "done" && data.result) {
         const lastMsg = this.messages[this.messages.length - 1];

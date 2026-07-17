@@ -1385,15 +1385,7 @@ export class ChatView extends ItemView {
 		);
 		if (!this.client || proxySettingsChanged) {
 			await this.initClient();
-			if (this.restoredProxySessionId) {
-				this.client!.setProxySessionId(this.restoredProxySessionId, this.restoredProxySessionBackend);
-				this.restoredProxySessionId = undefined;
-				this.restoredProxySessionBackend = undefined;
-			}
-			if (this.restoredProxyTaskId) {
-				this.client!.setProxyTaskId(this.restoredProxyTaskId);
-				this.restoredProxyTaskId = undefined;
-			}
+			this.restoreProxyHandlesToClient();
 		}
 
 		const loadingEl = this.messagesEl.createDiv({
@@ -1581,7 +1573,8 @@ export class ChatView extends ItemView {
 			let reply: string;
 			let actualSource: MessageSource = "api";
 			if (this.client!.isProxyMode()) {
-				const isFirstProxyMessage = !this.client!.getProxySessionId();
+				const proxyBackend = this.plugin.settings.cliBackend;
+				const isFirstProxyMessage = !this.client!.getProxySessionId(proxyBackend);
 				let seedHistory: { role: string; content: string }[] | undefined;
 				if (isFirstProxyMessage && this.messages.length > 1) {
 					seedHistory = this.messages.slice(0, -1).map((m) => ({
@@ -1612,7 +1605,7 @@ export class ChatView extends ItemView {
 						streamCb,
 						onToolCall,
 						seedHistory,
-						this.plugin.settings.cliBackend,
+						proxyBackend,
 						this.plugin.settings.cliBackend === "codex" ? this.plugin.settings.codexModel : undefined,
 						this.plugin.settings.codexPermissionMode,
 						(message) => loadingTextEl.setText(message),
@@ -1622,7 +1615,7 @@ export class ChatView extends ItemView {
 					if (this.plugin.settings.proxyFallbackToApi && this.plugin.getEffectiveApiKey()) {
 						console.warn("[ai-daily] proxy failed, falling back to API:", proxyErr);
 						new Notice("代理不可用，回退到本地 API", 4000);
-						this.client!.clearProxySessionId();
+						this.client!.clearProxySessionId(proxyBackend);
 						this.lastMode = "api";
 						reply = await doLocalChat();
 						actualSource = "api";
@@ -1881,9 +1874,10 @@ export class ChatView extends ItemView {
 			messages: persisted,
 			claudeCodeSessionId: this.claudeCodeSessionId,
 			codexSessionId: this.codexSessionId,
-			proxySessionId: this.client?.getProxySessionId(),
-			proxyTaskId: this.client?.getProxyTaskId(),
-			proxySessionBackend: this.client?.getProxySessionBackend(),
+			claudeCodeProxySessionId: this.client?.getProxySessionId("claude-code"),
+			codexProxySessionId: this.client?.getProxySessionId("codex"),
+			claudeCodeProxyTaskId: this.client?.getProxyTaskId("claude-code"),
+			codexProxyTaskId: this.client?.getProxyTaskId("codex"),
 			harnessContext: this.harnessContext ?? undefined,
 			lastMode: this.lastMode ?? undefined,
 			workspace: this.harnessContext?.workspace ?? existing?.workspace,
@@ -2583,9 +2577,8 @@ export class ChatView extends ItemView {
 	private codexAbort: (() => void) | null = null;
 	private claudeCodeSessionId: string | undefined;
 	private codexSessionId: string | undefined;
-	private restoredProxySessionId: string | undefined;
-	private restoredProxyTaskId: string | undefined;
-	private restoredProxySessionBackend: "claude-code" | "codex" | undefined;
+	private restoredProxySessionIds: Partial<Record<"claude-code" | "codex", string>> = {};
+	private restoredProxyTaskIds: Partial<Record<"claude-code" | "codex", string>> = {};
 	private claudeCodeUndoHistory: { id: number; data: UndoData; description: string }[] = [];
 	private claudeCodeUndoCounter = 0;
 
@@ -3133,9 +3126,8 @@ export class ChatView extends ItemView {
 		this.claudeCodeSessionId = undefined;
 		this.codexSessionId = undefined;
 		this.claudeCodeUndoHistory = [];
-		this.restoredProxySessionId = undefined;
-		this.restoredProxyTaskId = undefined;
-		this.restoredProxySessionBackend = undefined;
+		this.restoredProxySessionIds = {};
+		this.restoredProxyTaskIds = {};
 		this.lastMode = null;
 		this.attachedFiles = [];
 		this.renderAttachBar();
@@ -3492,9 +3484,22 @@ export class ChatView extends ItemView {
 		this.sessionId = data.id;
 		this.claudeCodeSessionId = data.claudeCodeSessionId;
 		this.codexSessionId = data.codexSessionId;
-		this.restoredProxySessionId = data.proxySessionId;
-		this.restoredProxyTaskId = data.proxyTaskId;
-		this.restoredProxySessionBackend = data.proxySessionBackend;
+		this.restoredProxySessionIds = {
+			"claude-code": data.claudeCodeProxySessionId,
+			codex: data.codexProxySessionId,
+		};
+		this.restoredProxyTaskIds = {
+			"claude-code": data.claudeCodeProxyTaskId,
+			codex: data.codexProxyTaskId,
+		};
+		// Migrate the former shared field only when its backend is known. An
+		// unlabelled ID must not be resumed by the wrong CLI.
+		if (data.proxySessionId && data.proxySessionBackend) {
+			this.restoredProxySessionIds[data.proxySessionBackend] ??= data.proxySessionId;
+		}
+		if (data.proxyTaskId && data.proxySessionBackend) {
+			this.restoredProxyTaskIds[data.proxySessionBackend] ??= data.proxyTaskId;
+		}
 		this.harnessContext = data.harnessContext
 			? { ...data.harnessContext, mode: { ...data.harnessContext.mode, actions: data.harnessContext.mode.actions ?? [] } }
 			: null;
@@ -3571,9 +3576,7 @@ export class ChatView extends ItemView {
 			}
 		}
 		await this.initClient();
-		if (this.restoredProxySessionId) {
-			this.client!.setProxySessionId(this.restoredProxySessionId, this.restoredProxySessionBackend);
-		}
+		this.restoreProxyHandlesToClient();
 		this.client!.setHistoryFromStrings(
 			this.messages.map((m) => ({
 				role: m.role,
@@ -3584,12 +3587,26 @@ export class ChatView extends ItemView {
 		this.updateTokenBar();
 		new Notice("已恢复历史对话", 3000);
 
-		if (this.restoredProxyTaskId && this.plugin.settings.proxyEnabled && this.plugin.settings.proxyUrl) {
-			this.recoverProxyTask(this.restoredProxyTaskId);
+		if (this.plugin.settings.proxyEnabled && this.plugin.settings.proxyUrl) {
+			const backend = this.plugin.settings.cliBackend;
+			const taskId = this.client?.getProxyTaskId(backend);
+			if (taskId) void this.recoverProxyTask(taskId, backend);
 		}
 	}
 
-	private async recoverProxyTask(taskId: string): Promise<void> {
+	private restoreProxyHandlesToClient(): void {
+		if (!this.client) return;
+		for (const backend of ["claude-code", "codex"] as const) {
+			const sessionId = this.restoredProxySessionIds[backend];
+			const taskId = this.restoredProxyTaskIds[backend];
+			if (sessionId) this.client.setProxySessionId(backend, sessionId);
+			if (taskId) this.client.setProxyTaskId(backend, taskId);
+		}
+		this.restoredProxySessionIds = {};
+		this.restoredProxyTaskIds = {};
+	}
+
+	private async recoverProxyTask(taskId: string, backend: "claude-code" | "codex"): Promise<void> {
 		const proxyUrl = this.plugin.settings.proxyUrl?.trim();
 		const baseUrl = proxyUrl && !/^https?:\/\//i.test(proxyUrl) ? `https://${proxyUrl}` : proxyUrl;
 		if (!baseUrl || !this.plugin.settings.proxyToken) return;
@@ -3608,7 +3625,7 @@ export class ChatView extends ItemView {
 			};
 
 			if (data.sessionId && this.client) {
-				this.client.setProxySessionId(data.sessionId);
+				this.client.setProxySessionId(backend, data.sessionId);
 			}
 
 			if (data.status === "done" && data.result) {

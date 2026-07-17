@@ -291,9 +291,8 @@ export class ClaudeClient {
 	private abortController: AbortController | null = null;
 	private proxyUrl?: string;
 	private proxyToken?: string;
-	private proxySessionId?: string;
-	private proxyTaskId?: string;
-	private proxySessionBackend?: "claude-code" | "codex";
+	private proxySessionIds: Partial<Record<"claude-code" | "codex", string>> = {};
+	private proxyTaskIds: Partial<Record<"claude-code" | "codex", string>> = {};
 
 	constructor(
 		apiKey: string,
@@ -322,31 +321,30 @@ export class ClaudeClient {
 		this.proxyToken = options?.proxyToken;
 	}
 
-	getProxySessionId(): string | undefined {
-		return this.proxySessionId;
+	getProxySessionId(backend: "claude-code" | "codex"): string | undefined {
+		return this.proxySessionIds[backend];
 	}
 
-	getProxySessionBackend(): "claude-code" | "codex" | undefined {
-		return this.proxySessionBackend;
+	setProxySessionId(backend: "claude-code" | "codex", id: string): void {
+		this.proxySessionIds[backend] = id;
 	}
 
-	setProxySessionId(id: string, backend?: "claude-code" | "codex"): void {
-		this.proxySessionId = id;
-		this.proxySessionBackend = backend;
+	clearProxySessionId(backend?: "claude-code" | "codex"): void {
+		if (backend) {
+			delete this.proxySessionIds[backend];
+			delete this.proxyTaskIds[backend];
+		} else {
+			this.proxySessionIds = {};
+			this.proxyTaskIds = {};
+		}
 	}
 
-	clearProxySessionId(): void {
-		this.proxySessionId = undefined;
-		this.proxyTaskId = undefined;
-		this.proxySessionBackend = undefined;
+	getProxyTaskId(backend: "claude-code" | "codex"): string | undefined {
+		return this.proxyTaskIds[backend];
 	}
 
-	getProxyTaskId(): string | undefined {
-		return this.proxyTaskId;
-	}
-
-	setProxyTaskId(id: string): void {
-		this.proxyTaskId = id;
+	setProxyTaskId(backend: "claude-code" | "codex", id: string): void {
+		this.proxyTaskIds[backend] = id;
 	}
 
 	isProxyMode(): boolean {
@@ -531,9 +529,7 @@ export class ClaudeClient {
 		}
 
 		this.messages.push({ role: "user", content: userMessage });
-		if (this.proxySessionId && (!this.proxySessionBackend || (proxyBackend && this.proxySessionBackend !== proxyBackend))) {
-			this.clearProxySessionId();
-		}
+		const backend = proxyBackend ?? "claude-code";
 		this.abortController = new AbortController();
 		const signal = this.abortController.signal;
 
@@ -548,8 +544,8 @@ export class ClaudeClient {
 			if (proxyBackend === "codex" && codexPermissionMode) {
 				body.codexPermissionMode = codexPermissionMode;
 			}
-			if (this.proxySessionId) {
-				body.sessionId = this.proxySessionId;
+			if (this.proxySessionIds[backend]) {
+				body.sessionId = this.proxySessionIds[backend];
 			} else {
 				body.systemPrompt = this.systemPrompt;
 				if (seedHistory?.length) {
@@ -622,7 +618,7 @@ export class ClaudeClient {
 					}
 
 					if (event.type === "task_id" && (event as Record<string, unknown>).taskId) {
-						this.proxyTaskId = (event as Record<string, unknown>).taskId as string;
+						this.proxyTaskIds[backend] = (event as Record<string, unknown>).taskId as string;
 					} else if (event.type === "text" && event.content) {
 						accumulated += event.content;
 						onAssistantDelta?.(event.content, accumulated);
@@ -638,8 +634,7 @@ export class ClaudeClient {
 					} else if (event.type === "done") {
 						receivedDone = true;
 						if (event.sessionId) {
-							this.proxySessionId = event.sessionId;
-							this.proxySessionBackend = proxyBackend;
+							this.proxySessionIds[backend] = event.sessionId;
 						}
 						if (event.result) {
 							accumulated = event.result;
@@ -650,9 +645,9 @@ export class ClaudeClient {
 				}
 			}
 
-			if (!receivedDone && this.proxyTaskId && this.proxyUrl) {
+			if (!receivedDone && this.proxyTaskIds[backend] && this.proxyUrl) {
 				try {
-					const recovered = await this.recoverFromTask(signal);
+					const recovered = await this.recoverFromTask(backend, signal);
 					if (recovered !== null) {
 						accumulated = recovered;
 					}
@@ -673,12 +668,13 @@ export class ClaudeClient {
 		}
 	}
 
-	private async recoverFromTask(signal?: AbortSignal): Promise<string | null> {
-		if (!this.proxyTaskId || !this.proxyUrl) return null;
+	private async recoverFromTask(backend: "claude-code" | "codex", signal?: AbortSignal): Promise<string | null> {
+		const taskId = this.proxyTaskIds[backend];
+		if (!taskId || !this.proxyUrl) return null;
 		const controller = new AbortController();
 		const timeout = setTimeout(() => controller.abort(), 5000);
 		try {
-			const resp = await fetch(`${this.proxyUrl}/task/${this.proxyTaskId}`, {
+			const resp = await fetch(`${this.proxyUrl}/task/${taskId}`, {
 				headers: { Authorization: `Bearer ${this.proxyToken}` },
 				signal: signal ?? controller.signal,
 			});
@@ -688,7 +684,7 @@ export class ClaudeClient {
 				result?: string;
 				sessionId?: string;
 			};
-			if (data.sessionId) this.proxySessionId = data.sessionId;
+			if (data.sessionId) this.proxySessionIds[backend] = data.sessionId;
 			if (data.status === "done" && data.result) return data.result;
 			return null;
 		} catch {

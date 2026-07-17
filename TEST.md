@@ -19,8 +19,9 @@
 
 1. 在 Claude 或本地会话中先完成至少一轮对话，再切换到远端 Codex Proxy。
 2. 发送一个依赖前文的问题，确认 Codex 能引用切换前的历史。
-3. 紧接着发送第二条消息，确认 `codex exec resume` 成功且日志出现 `thread.started`，不能出现 `unexpected argument '--sandbox'`。
-4. 在同一聊天中从 Claude Proxy 切换到 Codex，确认不会把 Claude session ID 传给 `codex exec resume`，且历史仍通过首轮 prompt 注入。
+3. 紧接着发送第二条消息，确认 app-server 通过 `thread/resume` 恢复相同 Codex thread ID。
+4. 在同一聊天中从 Claude Proxy 切换到 Codex，确认不会把 Claude session ID 传给 Codex；首次切换应依次执行 `thread/start`、`thread/inject_items`、`turn/start`，不能把历史拼接进首轮 prompt。
+5. 在历史 assistant 消息中放入一个随机标记，当前问题只询问该标记；确认 Codex 能从原生 thread 历史准确返回它。
 
 ## Codex Proxy Obsidian MCP
 
@@ -49,6 +50,7 @@ npm run test:watch # 监听模式
 | 文件 | 覆盖范围 |
 |------|---------|
 | `src/anthropic-sse.test.ts` | SSE 解析与 ApiResponse 组装 |
+| `proxy-server/src/codex-app-server.test.ts` | Codex 原生历史 item 映射与 JSON-RPC 请求序列化 |
 | `src/feeds.test.ts` | timeDecay, socialBoost, detectBursts, scoreRelevance |
 | `src/chat-session.test.ts` | newSessionId, titleFromMessages, isValidChatSession, shouldPruneToday |
 | `src/vault-tools.test.ts` | parseFrontmatter, serializeFrontmatter, findHeadingRange |

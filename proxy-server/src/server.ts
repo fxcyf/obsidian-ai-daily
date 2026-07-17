@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { readFile, writeFile, mkdir } from "fs/promises";
 import { readFileSync } from "fs";
 import { randomUUID } from "crypto";
+import { appServerRequest, buildCodexHistoryItems } from "./codex-app-server.js";
 
 // ── Config ─────────────────────────────────────────────────────────
 
@@ -573,15 +574,13 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 	console.log(`[Proxy] Task ${taskId} starting backend=${useCodex ? "codex" : "claude"} model=${body.model || (useCodex ? CODEX_MODEL || "account-default" : CLAUDE_MODEL)} session=${body.sessionId || "new"}`);
 
 	const cliPath = useCodex ? CODEX_PATH : CLAUDE_PATH;
-	const args = useCodex ? buildCodexArgs(body) : buildClaudeArgs(body);
+	const args = useCodex ? buildCodexAppServerArgs(body) : buildClaudeArgs(body);
 	const backendName = useCodex ? "codex" : "claude";
 
 	let proc: ChildProcess;
 	try {
 		proc = spawn(cliPath, args, {
-			// Codex appends piped stdin to an argument prompt and waits for EOF before
-			// starting the turn. Do not leave an unused writable pipe open.
-			stdio: [useCodex ? "ignore" : "pipe", "pipe", "pipe"],
+			stdio: ["pipe", "pipe", "pipe"],
 			env: { ...process.env, FORCE_COLOR: "0" },
 			cwd: VAULT_PATH || process.env.HOME || undefined,
 		});
@@ -615,6 +614,18 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 
 	if (useCodex) {
 		sendEvent({ type: "status", message: "Codex 已接收请求" });
+		const writeRequest = (id: number, method: string, params: Record<string, unknown>) => {
+			proc.stdin?.write(appServerRequest(id, method, params));
+		};
+		const startTurn = () => writeRequest(4, "turn/start", {
+			threadId: sessionId,
+			input: [{ type: "text", text: body.message }],
+		});
+
+		writeRequest(1, "initialize", {
+			clientInfo: { name: "obsidian-ai-daily-proxy", version: "0.1.0" },
+		});
+
 		rl.on("line", (line: string) => {
 			if (!line.trim()) return;
 
@@ -625,18 +636,61 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 				return;
 			}
 
-			const type = event.type as string | undefined;
-			console.log(`[Proxy] Task ${taskId} codex event=${type || "unknown"}`);
+			const method = event.method as string | undefined;
+			const requestId = event.id as number | undefined;
+			const params = (event.params as Record<string, unknown> | undefined) || {};
+			console.log(`[Proxy] Task ${taskId} codex event=${method || `response:${requestId ?? "unknown"}`}`);
 
-			if (type === "thread.started") {
-				sessionId = (event.thread_id as string) || sessionId;
+			if (event.error) {
+				const error = event.error as Record<string, unknown>;
+				task.status = "error";
+				task.error = (error.message as string) || "Codex app-server error";
+				sendEvent({ type: "error", message: task.error });
+				proc.stdin?.end();
+				return;
+			}
+
+			if (requestId === 1 && event.result) {
+				if (body.sessionId) {
+					writeRequest(2, "thread/resume", {
+						threadId: body.sessionId,
+						cwd: VAULT_PATH || process.env.HOME || "/",
+						approvalPolicy: "never",
+						sandbox: "read-only",
+						...(body.model || CODEX_MODEL ? { model: body.model || CODEX_MODEL } : {}),
+					});
+				} else {
+					writeRequest(2, "thread/start", {
+						cwd: VAULT_PATH || process.env.HOME || "/",
+						approvalPolicy: "never",
+						sandbox: "read-only",
+						ephemeral: false,
+						...(body.systemPrompt ? { developerInstructions: body.systemPrompt } : {}),
+						...(body.model || CODEX_MODEL ? { model: body.model || CODEX_MODEL } : {}),
+					});
+				}
+			} else if (requestId === 2 && event.result) {
+				const result = event.result as Record<string, unknown>;
+				const thread = result.thread as Record<string, unknown> | undefined;
+				sessionId = (thread?.id as string) || body.sessionId || sessionId;
+				const historyItems = !body.sessionId && body.history?.length
+					? buildCodexHistoryItems(body.history)
+					: [];
+				if (historyItems.length > 0) {
+					writeRequest(3, "thread/inject_items", { threadId: sessionId, items: historyItems });
+				} else {
+					startTurn();
+				}
+			} else if (requestId === 3 && event.result) {
+				startTurn();
+			} else if (method === "thread/started") {
 				sendEvent({ type: "status", message: "Codex 正在思考" });
-			} else if (type === "item.started") {
-				const item = event.item as Record<string, unknown> | undefined;
+			} else if (method === "item/started") {
+				const item = params.item as Record<string, unknown> | undefined;
 				if (!item) return;
-				if (item.type === "command_execution") {
+				if (item.type === "commandExecution") {
 					sendEvent({ type: "tool_use", name: "shell", input: { command: item.command }, status: "start" });
-				} else if (item.type === "mcp_tool_call") {
+				} else if (item.type === "mcpToolCall") {
 					sendEvent({
 						type: "tool_use",
 						name: item.name || item.tool || "mcp_tool",
@@ -646,24 +700,24 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 				} else if (item.type === "reasoning") {
 					sendEvent({ type: "status", message: "Codex 正在推理" });
 				}
-			} else if (type === "item.completed") {
-				const item = event.item as Record<string, unknown> | undefined;
+			} else if (method === "item/agentMessage/delta") {
+				const delta = (params.delta as string) || "";
+				if (delta) {
+					task.chunks.push(delta);
+					sendEvent({ type: "text", content: delta });
+					lastText += delta;
+				}
+			} else if (method === "item/completed") {
+				const item = params.item as Record<string, unknown> | undefined;
 				if (!item) return;
-				if (item.type === "agent_message") {
-					const text = (item.text as string) || "";
-					if (text) {
-						task.chunks.push(text);
-						sendEvent({ type: "text", content: text });
-						lastText += text;
-					}
-				} else if (item.type === "command_execution") {
+				if (item.type === "commandExecution") {
 					sendEvent({
 						type: "tool_use",
 						name: "shell",
 						input: { command: item.command },
 						status: "done",
 					});
-				} else if (item.type === "mcp_tool_call") {
+				} else if (item.type === "mcpToolCall") {
 					sendEvent({
 						type: "tool_use",
 						name: item.name || item.tool || "mcp_tool",
@@ -673,7 +727,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 				} else if (item.type === "reasoning") {
 					sendEvent({ type: "status", message: "Codex 正在组织回复" });
 				}
-			} else if (type === "turn.completed") {
+			} else if (method === "turn/completed") {
 				task.status = "done";
 				task.result = lastText;
 				task.sessionId = sessionId;
@@ -682,13 +736,14 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 					result: task.result,
 					sessionId,
 				});
-			} else if (type === "error" || type === "turn.failed") {
-				const msg = (event.message as string) ||
-					((event.error as Record<string, unknown>)?.message as string) ||
-					"Codex error";
+				proc.stdin?.end();
+			} else if (method === "error" || method === "turn/failed") {
+				const error = params.error as Record<string, unknown> | undefined;
+				const msg = (params.message as string) || (error?.message as string) || "Codex error";
 				task.status = "error";
 				task.error = msg;
 				sendEvent({ type: "error", message: msg });
+				proc.stdin?.end();
 			}
 		});
 	} else {
@@ -760,15 +815,16 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 	proc.on("close", (code) => {
 		clearTimeout(timeout);
 		clearInterval(heartbeat);
+		const wasRunning = task.status === "running";
 		if (task.status === "running") {
 			task.status = "error";
 			task.error = `${backendName} exited with code ${code}: ${stderrOutput.slice(0, 500)}`;
 		}
-		if (code !== 0) {
+		if (wasRunning || code !== 0) {
 			console.error(`[Proxy] Task ${taskId} ${backendName} stderr=${stderrOutput.slice(0, 1000).replace(/\s+/g, " ").trim()}`);
 			sendEvent({
 				type: "error",
-				message: `${backendName} exited with code ${code}: ${stderrOutput.slice(0, 500)}`,
+				message: task.error || `${backendName} exited with code ${code}: ${stderrOutput.slice(0, 500)}`,
 			});
 		}
 		console.log(`[Proxy] Task ${taskId} closed backend=${backendName} code=${code} status=${task.status}`);
@@ -812,35 +868,14 @@ function buildClaudeArgs(body: ChatRequest): string[] {
 	return args;
 }
 
-function buildCodexArgs(body: ChatRequest): string[] {
-	const model = body.model || CODEX_MODEL;
+function buildCodexAppServerArgs(body: ChatRequest): string[] {
 	const mcpArgs = buildCodexMcpArgs(body.codexPermissionMode || "read-only");
-	const securityArgs = [
+	return [
+		"app-server", "--stdio",
 		"-c", 'approval_policy="never"',
 		"-c", 'sandbox_mode="read-only"',
-	];
-	if (body.sessionId) {
-		const args = [
-			"exec", "resume", body.sessionId, body.message,
-			"--json",
-			"--skip-git-repo-check",
-			...securityArgs,
-			...mcpArgs,
-		];
-		if (model) args.push("-m", model);
-		return args;
-	}
-
-	const prompt = buildCodexInitialPrompt(body);
-	const args = [
-		"exec", prompt,
-		"--json",
-		"--skip-git-repo-check",
-		...securityArgs,
 		...mcpArgs,
 	];
-	if (model) args.push("-m", model);
-	return args;
 }
 
 function buildCodexMcpArgs(permissionMode: "read-only" | "vault-write"): string[] {
@@ -871,22 +906,6 @@ function buildCodexMcpArgs(permissionMode: "read-only" | "vault-write"): string[
 		console.error(`[Proxy] Failed to load Codex MCP config: ${error}`);
 		return [];
 	}
-}
-
-function buildCodexInitialPrompt(body: ChatRequest): string {
-	const sections: string[] = [];
-	if (body.systemPrompt) {
-		sections.push(`[System instructions]\n${body.systemPrompt}`);
-	}
-	if (body.history?.length) {
-		const transcript = body.history.map((message) => {
-			const role = message.role === "assistant" ? "Assistant" : "User";
-			return `${role}:\n${message.content}`;
-		}).join("\n\n");
-		sections.push(`[Conversation history]\n${transcript}`);
-	}
-	sections.push(`[Current user message]\n${body.message}`);
-	return sections.join("\n\n---\n\n");
 }
 
 // ── Helpers ────────────────────────────────────────────────────────

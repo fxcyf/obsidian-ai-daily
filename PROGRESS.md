@@ -1,5 +1,12 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-07-17 — Codex 原生 thread 历史恢复 (`c1c6a61`)
+
+- **问题**：把跨后端历史拼进 Codex 首轮 prompt 会丢失真实 user/assistant 角色语义，也不等同于恢复原生会话。
+- **解决**：Proxy 改用 Codex app-server：首次通过 `thread/start` 创建持久 thread，以 `thread/inject_items` 注入 Responses API 历史 items，再执行 `turn/start`；后续通过独立 Codex thread ID 调用 `thread/resume`。Claude Code/Codex 的 Proxy session 与 task ID 也分别持久化。
+- **验证**：端到端测试把随机标记只放在历史 assistant item 中，首轮 populate 和第二轮 resume 均准确返回同一标记。
+- **教训**：跨 Agent 迁移历史应优先使用目标运行时的原生 history/session API，不能用 transcript prompt 模拟 session。
+
 ## 2026-07-17 — Claude/Codex Proxy session 污染 (`2f17932`)
 
 - **问题**：两个 backend 共用 `proxySessionId`，切到 Codex 时会拿 Claude session 执行 resume，报 `no rollout found`；本次重试又恰逢另一条部署重启而中断。

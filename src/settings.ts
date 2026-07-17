@@ -33,11 +33,15 @@ export const DEFAULT_PROMPT_TEMPLATES: PromptTemplate[] = [
 	{ name: "查找相关笔记", prompt: "找出知识库中与当前笔记相关的内容" },
 ];
 
+export type CliBackend = "claude-code" | "codex";
+
 export interface AIDailyChatSettings {
 	apiKey: string;
 	enableApi: boolean;
 	knowledgeFolders: string[];
 	model: string;
+	cliBackend: CliBackend;
+	codexModel: string;
 	chatHistoryFolder: string;
 	chatHistoryRetentionDays: number;
 	chatStreamMode: StreamMode;
@@ -77,6 +81,8 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	enableApi: true,
 	knowledgeFolders: ["Raw", "Wiki"],
 	model: "claude-haiku-4-5",
+	cliBackend: "claude-code",
+	codexModel: "o4-mini",
 	chatHistoryFolder: ".ai-chat",
 	chatHistoryRetentionDays: 30,
 	chatStreamMode: "auto",
@@ -195,6 +201,38 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+
+		new Setting(containerEl)
+			.setName("CLI 后端")
+			.setDesc("桌面端和代理模式使用的 Agent CLI 工具")
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("claude-code", "Claude Code")
+					.addOption("codex", "Codex (OpenAI)")
+					.setValue(this.plugin.settings.cliBackend)
+					.onChange(async (value) => {
+						this.plugin.settings.cliBackend = value as CliBackend;
+						await this.plugin.saveSettings();
+						this.display();
+					})
+			);
+
+		if (this.plugin.settings.cliBackend === "codex") {
+			new Setting(containerEl)
+				.setName("Codex 模型")
+				.setDesc("Codex CLI 使用的模型")
+				.addDropdown((dropdown) =>
+					dropdown
+						.addOption("o4-mini", "o4-mini (快速)")
+						.addOption("o3", "o3 (均衡)")
+						.addOption("gpt-5.5", "GPT-5.5 (最强)")
+						.setValue(this.plugin.settings.codexModel)
+						.onChange(async (value) => {
+							this.plugin.settings.codexModel = value;
+							await this.plugin.saveSettings();
+						})
+				);
+		}
 
 		containerEl.createEl("h3", { text: "对话与历史" });
 

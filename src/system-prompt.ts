@@ -2,7 +2,7 @@ import { toolSummaryForPrompt } from "./tool-definitions";
 import { WEREAD_SYSTEM_PROMPT, WEREAD_CLAUDE_CODE_PROMPT } from "./weread-prompts";
 import type { HarnessContext } from "./harness-view";
 
-export type ChatMode = "api" | "claude-code" | "proxy";
+export type ChatMode = "api" | "claude-code" | "codex" | "proxy";
 
 export interface SystemPromptConfig {
 	mode: ChatMode;
@@ -27,7 +27,7 @@ export function buildSystemPrompt(config: SystemPromptConfig): string {
 		`- 知识整理目标文件夹: ${config.distillTargetFolder}`,
 	];
 
-	if (config.mode === "claude-code" || config.mode === "proxy") {
+	if (config.mode === "claude-code" || config.mode === "codex" || config.mode === "proxy") {
 		parts.push(
 			"",
 			"## 重要：工具使用规则",

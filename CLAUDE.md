@@ -116,7 +116,8 @@ rebase 发生冲突时：
 - `src/harness-view.ts` — Harness View 面板（从 `{active_project}/modes.md` 读取模式定义，`## {id}` 正文作为 prompt，注入到 Chat View）；同时导出 `parseModesFromContent`/`loadProjectIndex`/`resolveFileEntries` 给 Studio 复用
 - `src/workspace-studio.ts` — Workspace Studio 面板（Chat View 内部页面，非独立 View）：workspace 选择器 + mode 卡片 + 最近对话 + 创建/编辑/移除 workspace（modal）
 - `src/modes-serializer.ts` — 将 `HarnessMode[]` 序列化回 `modes.md`（YAML block + `## {id}` sections），供 Studio 编辑功能使用
-- `src/settings.ts` — 插件设置（含 Feed 配置、微信读书配置）
+- `src/codex.ts` — Codex CLI 集成（检测、spawn、JSONL 流解析、MCP 配置管理），与 `claude-code.ts` 对称
+- `src/settings.ts` — 插件设置（含 Feed 配置、微信读书配置、CLI 后端选择）
 - `src/feeds.ts` — 多源抓取（RSS/HN API/Reddit/GitHub Trending）、社交热度评分、时间衰减、爆发检测
 - `src/feed-generator.ts` — Feed 生成器，编排 RSS + vault 搜索 + Claude 汇总；含独立播客 Feed 生成（transcript 提取 + Claude 深度分析）
 - `mcp-server/` — 独立 MCP server，用于 Claude Code 操作 vault；优先通过插件 HTTP API 使用 Obsidian API，回退到文件系统操作

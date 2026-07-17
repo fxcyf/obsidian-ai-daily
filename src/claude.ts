@@ -513,6 +513,7 @@ export class ClaudeClient {
 		onAssistantDelta?: (delta: string, accumulated: string) => void,
 		onToolCall?: (name: string, input: Record<string, unknown>, status: "start" | "done" | "error") => void,
 		seedHistory?: { role: string; content: string }[],
+		proxyBackend?: "claude-code" | "codex",
 	): Promise<string> {
 		if (!this.proxyUrl || !this.proxyToken) {
 			throw new Error("Proxy mode not configured");
@@ -524,6 +525,9 @@ export class ClaudeClient {
 
 		try {
 			const body: Record<string, unknown> = { message: userMessage };
+			if (proxyBackend) {
+				body.backend = proxyBackend;
+			}
 			if (this.proxySessionId) {
 				body.sessionId = this.proxySessionId;
 			} else {

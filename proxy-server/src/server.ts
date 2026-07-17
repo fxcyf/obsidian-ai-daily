@@ -13,6 +13,8 @@ const AUTH_TOKEN = process.env.AUTH_TOKEN || "";
 const MCP_CONFIG = process.env.MCP_CONFIG || resolve(dirname(fileURLToPath(import.meta.url)), "../mcp-config.json");
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "sonnet";
 const CLAUDE_PATH = process.env.CLAUDE_PATH || "claude";
+const CODEX_MODEL = process.env.CODEX_MODEL || "o4-mini";
+const CODEX_PATH = process.env.CODEX_PATH || "codex";
 const VAULT_PATH = process.env.VAULT_PATH || "";
 const UNDO_STACK_FILE = VAULT_PATH
 	? resolve(VAULT_PATH, ".obsidian/plugins/ai-daily-chat/.undo-stack.json")
@@ -30,6 +32,7 @@ interface ChatRequest {
 	sessionId?: string;
 	systemPrompt?: string;
 	history?: { role: string; content: string }[];
+	backend?: "claude-code" | "codex";
 }
 
 interface ClaudeStreamEvent {
@@ -523,7 +526,9 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 		return;
 	}
 
-	if (body.history?.length && !body.sessionId) {
+	const useCodex = body.backend === "codex";
+
+	if (body.history?.length && !body.sessionId && !useCodex) {
 		const seededId = randomUUID();
 		try {
 			await seedSession(seededId, body.history, body.systemPrompt);
@@ -553,18 +558,20 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 
 	sendEvent({ type: "task_id", taskId });
 
-	const args = buildClaudeArgs(body);
+	const cliPath = useCodex ? CODEX_PATH : CLAUDE_PATH;
+	const args = useCodex ? buildCodexArgs(body) : buildClaudeArgs(body);
+	const backendName = useCodex ? "codex" : "claude";
 
 	let proc: ChildProcess;
 	try {
-		proc = spawn(CLAUDE_PATH, args, {
+		proc = spawn(cliPath, args, {
 			stdio: ["pipe", "pipe", "pipe"],
 			env: { ...process.env, FORCE_COLOR: "0" },
 			cwd: VAULT_PATH || process.env.HOME || undefined,
 		});
 	} catch (e) {
 		task.status = "error";
-		task.error = `Failed to spawn claude: ${e}`;
+		task.error = `Failed to spawn ${backendName}: ${e}`;
 		sendEvent({ type: "error", message: task.error });
 		res.end();
 		return;
@@ -584,53 +591,111 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 
 	const rl = createInterface({ input: proc.stdout! });
 
-	rl.on("line", (line: string) => {
-		if (!line.trim()) return;
+	if (useCodex) {
+		rl.on("line", (line: string) => {
+			if (!line.trim()) return;
 
-		let event: ClaudeStreamEvent;
-		try {
-			event = JSON.parse(line);
-		} catch {
-			return;
-		}
-
-		if (event.type === "system" && event.subtype === "init") {
-			const mcpServers = (event as Record<string, unknown>).mcp_servers;
-			if (Array.isArray(mcpServers)) {
-				const failed = mcpServers.filter((s: Record<string, unknown>) => s.status !== "connected" && s.status !== "needs-auth");
-				if (failed.length > 0) {
-					sendEvent({ type: "mcp_status", servers: mcpServers });
-				}
+			let event: Record<string, unknown>;
+			try {
+				event = JSON.parse(line);
+			} catch {
+				return;
 			}
-		} else if (event.type === "assistant" && event.message?.content) {
-			for (const block of event.message.content) {
-				if (block.type === "text" && block.text) {
-					const delta = block.text.slice(lastText.length);
-					if (delta) {
-						lastText = block.text;
-						task.chunks.push(delta);
-						sendEvent({ type: "text", content: delta });
+
+			const type = event.type as string | undefined;
+
+			if (type === "thread.started") {
+				sessionId = (event.thread_id as string) || sessionId;
+			} else if (type === "item.completed") {
+				const item = event.item as Record<string, unknown> | undefined;
+				if (!item) return;
+				if (item.type === "agent_message") {
+					const text = (item.text as string) || "";
+					if (text) {
+						task.chunks.push(text);
+						sendEvent({ type: "text", content: text });
+						lastText += text;
 					}
-				} else if (block.type === "tool_use") {
+				} else if (item.type === "command_execution") {
 					sendEvent({
 						type: "tool_use",
-						name: block.name,
-						input: block.input,
+						name: "shell",
+						input: { command: item.command },
+					});
+				} else if (item.type === "mcp_tool_call") {
+					sendEvent({
+						type: "tool_use",
+						name: item.name,
+						input: item.arguments || {},
 					});
 				}
+			} else if (type === "turn.completed") {
+				task.status = "done";
+				task.result = lastText;
+				task.sessionId = sessionId;
+				sendEvent({
+					type: "done",
+					result: task.result,
+					sessionId,
+				});
+			} else if (type === "error" || type === "turn.failed") {
+				const msg = (event.message as string) ||
+					((event.error as Record<string, unknown>)?.message as string) ||
+					"Codex error";
+				task.status = "error";
+				task.error = msg;
+				sendEvent({ type: "error", message: msg });
 			}
-		} else if (event.type === "result") {
-			sessionId = event.session_id || sessionId;
-			task.status = "done";
-			task.result = event.result || lastText;
-			task.sessionId = sessionId;
-			sendEvent({
-				type: "done",
-				result: task.result,
-				sessionId,
-			});
-		}
-	});
+		});
+	} else {
+		rl.on("line", (line: string) => {
+			if (!line.trim()) return;
+
+			let event: ClaudeStreamEvent;
+			try {
+				event = JSON.parse(line);
+			} catch {
+				return;
+			}
+
+			if (event.type === "system" && event.subtype === "init") {
+				const mcpServers = (event as Record<string, unknown>).mcp_servers;
+				if (Array.isArray(mcpServers)) {
+					const failed = mcpServers.filter((s: Record<string, unknown>) => s.status !== "connected" && s.status !== "needs-auth");
+					if (failed.length > 0) {
+						sendEvent({ type: "mcp_status", servers: mcpServers });
+					}
+				}
+			} else if (event.type === "assistant" && event.message?.content) {
+				for (const block of event.message.content) {
+					if (block.type === "text" && block.text) {
+						const delta = block.text.slice(lastText.length);
+						if (delta) {
+							lastText = block.text;
+							task.chunks.push(delta);
+							sendEvent({ type: "text", content: delta });
+						}
+					} else if (block.type === "tool_use") {
+						sendEvent({
+							type: "tool_use",
+							name: block.name,
+							input: block.input,
+						});
+					}
+				}
+			} else if (event.type === "result") {
+				sessionId = event.session_id || sessionId;
+				task.status = "done";
+				task.result = event.result || lastText;
+				task.sessionId = sessionId;
+				sendEvent({
+					type: "done",
+					result: task.result,
+					sessionId,
+				});
+			}
+		});
+	}
 
 	let stderrOutput = "";
 	proc.stderr?.on("data", (chunk: Buffer) => {
@@ -652,12 +717,12 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 		clearTimeout(timeout);
 		if (task.status === "running") {
 			task.status = "error";
-			task.error = `claude exited with code ${code}: ${stderrOutput.slice(0, 500)}`;
+			task.error = `${backendName} exited with code ${code}: ${stderrOutput.slice(0, 500)}`;
 		}
 		if (code !== 0) {
 			sendEvent({
 				type: "error",
-				message: `claude exited with code ${code}: ${stderrOutput.slice(0, 500)}`,
+				message: `${backendName} exited with code ${code}: ${stderrOutput.slice(0, 500)}`,
 			});
 		}
 		if (!res.writableEnded) {
@@ -699,6 +764,28 @@ function buildClaudeArgs(body: ChatRequest): string[] {
 	return args;
 }
 
+function buildCodexArgs(body: ChatRequest): string[] {
+	if (body.sessionId) {
+		const args = [
+			"exec", "resume", body.sessionId, body.message,
+			"--json",
+			"--dangerously-bypass-approvals-and-sandbox",
+			"--sandbox", "danger-full-access",
+			"-m", CODEX_MODEL,
+		];
+		return args;
+	}
+
+	const args = [
+		"exec", body.message,
+		"--json",
+		"--dangerously-bypass-approvals-and-sandbox",
+		"--sandbox", "danger-full-access",
+		"-m", CODEX_MODEL,
+	];
+	return args;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────
 
 function readBody<T>(req: IncomingMessage): Promise<T> {
@@ -722,5 +809,6 @@ function readBody<T>(req: IncomingMessage): Promise<T> {
 server.listen(PORT, "0.0.0.0", () => {
 	console.log(`[Proxy] Listening on 0.0.0.0:${PORT}`);
 	console.log(`[Proxy] Claude model: ${CLAUDE_MODEL}`);
+	console.log(`[Proxy] Codex model: ${CODEX_MODEL}`);
 	console.log(`[Proxy] MCP config: ${MCP_CONFIG}`);
 });

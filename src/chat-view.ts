@@ -29,6 +29,7 @@ import { extractLocalImageRefs, prepareLocalImages } from "./image-tools";
 import type { PreparedImage } from "./image-tools";
 import { distillConversation, prepareDistillation, prepareHealthFix, type HealthCheckResult } from "./knowledge-agent";
 import { isClaudeCodeAvailable, spawnClaudeCode, getMcpServerPath, seedClaudeCodeSession, type UndoData } from "./claude-code";
+import { isCodexAvailable, spawnCodex } from "./codex";
 import {
 	newSessionId,
 	titleFromMessages,
@@ -1271,6 +1272,11 @@ export class ChatView extends ItemView {
 			this.claudeCodeAbort = null;
 			return;
 		}
+		if (this.codexAbort) {
+			this.codexAbort();
+			this.codexAbort = null;
+			return;
+		}
 		if (this.client) {
 			this.client.abort();
 		}
@@ -1296,13 +1302,16 @@ export class ChatView extends ItemView {
 			return;
 		}
 
-		const useClaudeCode = await isClaudeCodeAvailable();
+		const cliBackend = this.plugin.settings.cliBackend;
+		const useCodex = cliBackend === "codex" && await isCodexAvailable();
+		const useClaudeCode = cliBackend === "claude-code" && await isClaudeCodeAvailable();
+		const useCliAgent = useCodex || useClaudeCode;
 
 		const proxyReady = this.plugin.settings.proxyEnabled && !!this.plugin.settings.proxyUrl && !!this.plugin.settings.proxyToken;
-		if (!useClaudeCode && !this.plugin.getEffectiveApiKey() && !proxyReady) {
+		if (!useCliAgent && !this.plugin.getEffectiveApiKey() && !proxyReady) {
 			this.addMessage(
 				"assistant",
-				"请先在插件设置中配置 Anthropic API Key，或安装 Claude Code。"
+				"请先在插件设置中配置 Anthropic API Key，或安装 Claude Code / Codex。"
 			);
 			return;
 		}
@@ -1316,25 +1325,39 @@ export class ChatView extends ItemView {
 		this.expandBtn.classList.remove("visible");
 		this.expandBtn.textContent = "展开 ↑";
 
-		const currentMode: MessageSource = useClaudeCode
-			? "claude-code"
-			: proxyReady ? "proxy" : "api";
+		const currentMode: MessageSource = useCodex
+			? "codex"
+			: useClaudeCode
+				? "claude-code"
+				: proxyReady ? "proxy" : "api";
 
 		if (this.lastMode && this.lastMode !== currentMode) {
-			if (this.lastMode === "proxy" || (this.lastMode === "claude-code" && currentMode === "proxy")) {
+			if (this.lastMode === "proxy" || ((this.lastMode === "claude-code" || this.lastMode === "codex") && currentMode === "proxy")) {
 				this.client?.clearProxySessionId();
 			}
-			if (this.lastMode === "claude-code" || (this.lastMode === "proxy" && currentMode === "claude-code")) {
+			if (this.lastMode === "claude-code" || this.lastMode === "codex" || (this.lastMode === "proxy" && (currentMode === "claude-code" || currentMode === "codex"))) {
 				this.claudeCodeSessionId = undefined;
+				this.codexSessionId = undefined;
 			}
 			const modeNames: Record<MessageSource, string> = {
 				"claude-code": "本地 Claude Code",
+				"codex": "本地 Codex",
 				"proxy": "代理模式",
 				"api": "API 直连",
 			};
 			new Notice(`已切换到${modeNames[currentMode]}，对话上下文将自动同步`, 4000);
 		}
 		this.lastMode = currentMode;
+
+		if (useCodex) {
+			this.handleSendViaCodex(text).catch((e) => {
+				console.error("[ai-daily] Codex error:", e);
+				this.addMessage("assistant", `Codex 出错: ${e instanceof Error ? e.message : String(e)}`, "codex");
+				this.isLoading = false;
+				this.setSendButtonState(false);
+			});
+			return;
+		}
 
 		if (useClaudeCode) {
 			this.handleSendViaClaudeCode(text).catch((e) => {
@@ -1583,7 +1606,7 @@ export class ChatView extends ItemView {
 					proxyMessage = harnessBlock + proxyMessage;
 				}
 				try {
-					reply = await this.client!.proxyChat(proxyMessage, streamCb, onToolCall, seedHistory);
+					reply = await this.client!.proxyChat(proxyMessage, streamCb, onToolCall, seedHistory, this.plugin.settings.cliBackend);
 					actualSource = "proxy";
 				} catch (proxyErr) {
 					if (this.plugin.settings.proxyFallbackToApi && this.plugin.getEffectiveApiKey()) {
@@ -1705,6 +1728,38 @@ export class ChatView extends ItemView {
 		this.runClaudeCodeStream(prompt, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.model);
 	}
 
+	private async handleSendViaCodex(text: string): Promise<void> {
+		this.addMessage("user", text, "codex");
+		if (!this.sessionId) this.sessionId = newSessionId();
+
+		const isFirstMessage = !this.codexSessionId;
+		const attachedContent = await this.consumeAttachedFiles();
+		let prompt = text;
+
+		if (isFirstMessage) {
+			const adapter = this.app.vault.adapter as { basePath?: string };
+			const vaultAbsPath = adapter.basePath || "";
+
+			const systemPromptText = buildSystemPrompt({
+				mode: "codex",
+				knowledgeFolders: this.plugin.settings.knowledgeFolders,
+				distillTargetFolder: this.plugin.settings.distillTargetFolder,
+				autoTagFolders: this.plugin.settings.autoTagFolders,
+				enableWebSearch: false,
+				enableWeRead: this.plugin.settings.enableWeRead && !!this.plugin.settings.wereadApiKey,
+				enablePodcast: false,
+				harnessContext: this.harnessContext,
+				vaultAbsPath,
+			});
+
+			prompt = systemPromptText + "\n\n" + (attachedContent ? attachedContent + "\n\n" : "") + text;
+		} else if (attachedContent) {
+			prompt = attachedContent + "\n\n" + text;
+		}
+
+		this.runCodexStream(prompt, this.getMcpConfig(), this.codexSessionId, this.plugin.settings.codexModel);
+	}
+
 	private readImageCount = 0;
 	private static readonly MAX_IMAGES_PER_TURN = 5;
 
@@ -1815,6 +1870,7 @@ export class ChatView extends ItemView {
 			updated: now,
 			messages: persisted,
 			claudeCodeSessionId: this.claudeCodeSessionId,
+			codexSessionId: this.codexSessionId,
 			proxySessionId: this.client?.getProxySessionId(),
 			proxyTaskId: this.client?.getProxyTaskId(),
 			harnessContext: this.harnessContext ?? undefined,
@@ -2137,9 +2193,14 @@ export class ChatView extends ItemView {
 		if (this.isLoading) return;
 		this.isLoading = true;
 		this.setSendButtonState(true);
-		this.addMessage("user", userText);
+		const source: MessageSource = this.plugin.settings.cliBackend === "codex" ? "codex" : "claude-code";
+		this.addMessage("user", userText, source);
 		if (!this.sessionId) this.sessionId = newSessionId();
-		this.runClaudeCodeStream(userText, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.model);
+		if (source === "codex") {
+			this.runCodexStream(userText, this.getMcpConfig(), this.codexSessionId, this.plugin.settings.codexModel);
+		} else {
+			this.runClaudeCodeStream(userText, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.model);
+		}
 	}
 
 	private runClaudeCodeStream(prompt: string, mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] }, sessionId?: string, model?: string): void {
@@ -2325,8 +2386,187 @@ export class ChatView extends ItemView {
 		this.claudeCodeAbort = handle.abort;
 	}
 
+	private runCodexStream(prompt: string, mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[]; wereadApiKey?: string }, sessionId?: string, model?: string): void {
+		const loadingEl = this.messagesEl.createDiv({ cls: "ai-daily-loading" });
+		loadingEl.createSpan({ text: "Codex 处理中" });
+		const dotsEl = loadingEl.createSpan({ cls: "ai-daily-loading-dots" });
+		dotsEl.createEl("span");
+		dotsEl.createEl("span");
+		dotsEl.createEl("span");
+		this.scrollToBottomIfFollowing();
+
+		let assistantEl: HTMLElement | null = null;
+		let streamTextEl: HTMLElement | null = null;
+		let accumulated = "";
+		let rendered = 0;
+		let typewriterTimer: number | null = null;
+
+		let toolCallsEl: HTMLElement | null = null;
+		let toolCallsSummaryEl: HTMLElement | null = null;
+		let toolTotal = 0;
+		let toolRunning = 0;
+		const toolCallEls = new Map<string, HTMLElement>();
+
+		let thinkingEl: HTMLElement | null = null;
+		let thinkingContentEl: HTMLElement | null = null;
+		let thinkingText = "";
+
+		const startTypewriter = () => {
+			if (typewriterTimer !== null) return;
+			const tick = () => {
+				if (!streamTextEl || rendered >= accumulated.length) {
+					typewriterTimer = null;
+					if (streamTextEl) streamTextEl.removeClass("ai-daily-stream-text");
+					return;
+				}
+				const next = Math.min(rendered + 3, accumulated.length);
+				streamTextEl.textContent = accumulated.slice(0, next);
+				rendered = next;
+				this.scrollToBottomIfFollowing();
+				if (streamTextEl) streamTextEl.addClass("ai-daily-stream-text");
+				typewriterTimer = window.setTimeout(tick, 25);
+			};
+			typewriterTimer = window.setTimeout(tick, 25);
+		};
+
+		const flushTypewriter = () => {
+			if (typewriterTimer !== null) {
+				window.clearTimeout(typewriterTimer);
+				typewriterTimer = null;
+			}
+			if (streamTextEl && rendered < accumulated.length) {
+				streamTextEl.textContent = accumulated;
+				rendered = accumulated.length;
+			}
+			if (streamTextEl) streamTextEl.removeClass("ai-daily-stream-text");
+		};
+
+		const handle = spawnCodex(prompt, { mcpConfig, sessionId, model }, {
+			onText: (delta) => {
+				if (this.closed) return;
+				loadingEl.remove();
+				if (!assistantEl) {
+					assistantEl = this.messagesEl.createDiv({
+						cls: "ai-daily-msg ai-daily-msg-assistant ai-daily-msg-streaming",
+					});
+					streamTextEl = assistantEl.createEl("pre", {
+						cls: "ai-daily-stream-text",
+					});
+				} else if (streamTextEl && !streamTextEl.hasClass("ai-daily-stream-text")) {
+					streamTextEl.addClass("ai-daily-stream-text");
+				}
+				accumulated += delta;
+				startTypewriter();
+			},
+			onToolCall: (id, name, input, status) => {
+				if (this.closed) return;
+				if (status === "running") {
+					loadingEl.remove();
+					flushTypewriter();
+					if (!toolCallsEl) {
+						const wrapper = this.messagesEl.createDiv({ cls: "ai-daily-tool-calls" });
+						const detailsEl = wrapper.createEl("details", { cls: "ai-daily-tool-calls-details" });
+						toolCallsSummaryEl = detailsEl.createEl("summary", { cls: "ai-daily-tool-calls-summary" });
+						toolCallsEl = detailsEl.createDiv({ cls: "ai-daily-tool-calls-list" });
+					}
+					toolTotal++;
+					toolRunning++;
+					const el = toolCallsEl.createDiv({ cls: "ai-daily-tool-call ai-daily-tool-call-running" });
+					const iconSpan = el.createSpan({ cls: "ai-daily-tool-call-icon" });
+					setIcon(iconSpan, "loader");
+					el.createSpan({ cls: "ai-daily-tool-call-text", text: toolCallSummary(name, input) });
+					toolCallEls.set(id, el);
+					this.updateToolCallsSummary(toolCallsSummaryEl!, toolTotal, toolRunning);
+					this.scrollToBottomIfFollowing();
+				} else {
+					const el = toolCallEls.get(id);
+					if (el) {
+						el.removeClass("ai-daily-tool-call-running");
+						el.addClass(status === "done" ? "ai-daily-tool-call-done" : "ai-daily-tool-call-error");
+						const iconSpan = el.querySelector(".ai-daily-tool-call-icon");
+						if (iconSpan) {
+							iconSpan.empty();
+							setIcon(iconSpan as HTMLElement, status === "done" ? "check" : "x");
+						}
+					}
+					toolRunning = Math.max(0, toolRunning - 1);
+					this.updateToolCallsSummary(toolCallsSummaryEl!, toolTotal, toolRunning);
+				}
+			},
+			onToolResult: (id, result, isError) => {
+				if (this.closed) return;
+				const el = toolCallEls.get(id);
+				if (!el || !result) return;
+				const details = el.createEl("details", { cls: "ai-daily-tool-result" });
+				details.createEl("summary", { text: isError ? "错误" : "结果" });
+				const pre = details.createEl("pre", { cls: "ai-daily-tool-result-content" });
+				pre.createEl("code", { text: result.length > 2000 ? result.slice(0, 2000) + "\n…(已截断)" : result });
+			},
+			onThinking: (text) => {
+				if (this.closed) return;
+				loadingEl.remove();
+				thinkingText += text;
+				if (!thinkingEl) {
+					thinkingEl = this.messagesEl.createDiv({ cls: "ai-daily-thinking" });
+					const details = thinkingEl.createEl("details", { cls: "ai-daily-thinking-details" });
+					details.createEl("summary", { text: "💭 思考过程" });
+					thinkingContentEl = details.createEl("pre", { cls: "ai-daily-thinking-content" });
+				}
+				if (thinkingContentEl) {
+					thinkingContentEl.textContent = thinkingText;
+				}
+				this.scrollToBottomIfFollowing();
+			},
+			onError: (error) => {
+				if (this.closed) return;
+				loadingEl.remove();
+				if (typewriterTimer !== null) { window.clearTimeout(typewriterTimer); typewriterTimer = null; }
+				if (assistantEl && accumulated) {
+					assistantEl.empty();
+					void MarkdownRenderer.render(this.app, accumulated, assistantEl, "", this.plugin).then(() => {
+						assistantEl!.removeClass("ai-daily-msg-streaming");
+						this.postProcessAssistantEl(assistantEl!);
+					});
+					this.messages.push({ role: "assistant", content: accumulated, source: "codex" });
+				} else if (assistantEl) {
+					assistantEl.remove();
+				}
+				this.addMessage("assistant", `Codex 出错: ${error}`, "codex");
+				this.isLoading = false;
+				this.setSendButtonState(false);
+			},
+			onDone: (fullText) => {
+				if (this.closed) return;
+				loadingEl.remove();
+				if (typewriterTimer !== null) { window.clearTimeout(typewriterTimer); typewriterTimer = null; }
+				if (assistantEl) {
+					assistantEl.empty();
+					void MarkdownRenderer.render(this.app, fullText, assistantEl, "", this.plugin).then(() => {
+						assistantEl!.removeClass("ai-daily-msg-streaming");
+						this.postProcessAssistantEl(assistantEl!);
+					});
+					this.messages.push({ role: "assistant", content: fullText, source: "codex" });
+				} else if (fullText) {
+					this.addMessage("assistant", fullText, "codex");
+				}
+				this.scrollToBottomIfFollowing();
+				void this.persistSession();
+				this.isLoading = false;
+				this.setSendButtonState(false);
+			},
+			onSessionId: (id) => {
+				this.codexSessionId = id;
+				console.log("[ai-daily] Codex session:", id);
+			},
+		});
+
+		this.codexAbort = handle.abort;
+	}
+
 	private claudeCodeAbort: (() => void) | null = null;
+	private codexAbort: (() => void) | null = null;
 	private claudeCodeSessionId: string | undefined;
+	private codexSessionId: string | undefined;
 	private restoredProxySessionId: string | undefined;
 	private restoredProxyTaskId: string | undefined;
 	private claudeCodeUndoHistory: { id: number; data: UndoData; description: string }[] = [];
@@ -2745,6 +2985,7 @@ export class ChatView extends ItemView {
 
 		this.client?.clearProxySessionId();
 		this.claudeCodeSessionId = undefined;
+		this.codexSessionId = undefined;
 
 		if (this.client) {
 			const keepCount = this.messages.filter((m) => m.source === "api" || m.source === "proxy").length;
@@ -2873,6 +3114,7 @@ export class ChatView extends ItemView {
 		this.vaultTools = null;
 		this.harnessContext = null;
 		this.claudeCodeSessionId = undefined;
+		this.codexSessionId = undefined;
 		this.claudeCodeUndoHistory = [];
 		this.restoredProxySessionId = undefined;
 		this.restoredProxyTaskId = undefined;
@@ -3182,6 +3424,7 @@ export class ChatView extends ItemView {
 		}
 		this.sessionId = data.id;
 		this.claudeCodeSessionId = data.claudeCodeSessionId;
+		this.codexSessionId = data.codexSessionId;
 		this.restoredProxySessionId = data.proxySessionId;
 		this.restoredProxyTaskId = data.proxyTaskId;
 		this.harnessContext = data.harnessContext
@@ -3326,6 +3569,10 @@ export class ChatView extends ItemView {
 		if (this.claudeCodeAbort) {
 			this.claudeCodeAbort();
 			this.claudeCodeAbort = null;
+		}
+		if (this.codexAbort) {
+			this.codexAbort();
+			this.codexAbort = null;
 		}
 		this.client?.abort();
 		this.closeHistoryOverlay();

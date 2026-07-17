@@ -22,7 +22,7 @@ __export(main_exports, {
   default: () => AIDailyChat
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian15 = require("obsidian");
+var import_obsidian16 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian3 = require("obsidian");
@@ -1255,6 +1255,8 @@ var DEFAULT_SETTINGS = {
   enableApi: true,
   knowledgeFolders: ["Raw", "Wiki"],
   model: "claude-haiku-4-5",
+  cliBackend: "claude-code",
+  codexModel: "o4-mini",
   chatHistoryFolder: ".ai-chat",
   chatHistoryRetentionDays: 30,
   chatStreamMode: "auto",
@@ -1332,6 +1334,21 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
+    new import_obsidian3.Setting(containerEl).setName("CLI \u540E\u7AEF").setDesc("\u684C\u9762\u7AEF\u548C\u4EE3\u7406\u6A21\u5F0F\u4F7F\u7528\u7684 Agent CLI \u5DE5\u5177").addDropdown(
+      (dropdown) => dropdown.addOption("claude-code", "Claude Code").addOption("codex", "Codex (OpenAI)").setValue(this.plugin.settings.cliBackend).onChange(async (value) => {
+        this.plugin.settings.cliBackend = value;
+        await this.plugin.saveSettings();
+        this.display();
+      })
+    );
+    if (this.plugin.settings.cliBackend === "codex") {
+      new import_obsidian3.Setting(containerEl).setName("Codex \u6A21\u578B").setDesc("Codex CLI \u4F7F\u7528\u7684\u6A21\u578B").addDropdown(
+        (dropdown) => dropdown.addOption("o4-mini", "o4-mini (\u5FEB\u901F)").addOption("o3", "o3 (\u5747\u8861)").addOption("gpt-5.5", "GPT-5.5 (\u6700\u5F3A)").setValue(this.plugin.settings.codexModel).onChange(async (value) => {
+          this.plugin.settings.codexModel = value;
+          await this.plugin.saveSettings();
+        })
+      );
+    }
     containerEl.createEl("h3", { text: "\u5BF9\u8BDD\u4E0E\u5386\u53F2" });
     new import_obsidian3.Setting(containerEl).setName("\u5BF9\u8BDD\u5B58\u6863\u76EE\u5F55").setDesc("\u4F1A\u8BDD JSON \u4FDD\u5B58\u5728\u8BE5\u6587\u4EF6\u5939\uFF08\u53EF\u4E0E\u7B14\u8BB0\u4E00\u5E76\u540C\u6B65\uFF09").addText(
       (text) => text.setPlaceholder(".ai-chat").setValue(this.plugin.settings.chatHistoryFolder).onChange(async (value) => {
@@ -1797,7 +1814,7 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
 };
 
 // src/chat-view.ts
-var import_obsidian12 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 
 // src/claude.ts
 var import_obsidian4 = require("obsidian");
@@ -2506,7 +2523,7 @@ var ClaudeClient = class {
     }
     return collectedText.join("");
   }
-  async proxyChat(userMessage, onAssistantDelta, onToolCall, seedHistory) {
+  async proxyChat(userMessage, onAssistantDelta, onToolCall, seedHistory, proxyBackend) {
     var _a;
     if (!this.proxyUrl || !this.proxyToken) {
       throw new Error("Proxy mode not configured");
@@ -2516,6 +2533,9 @@ var ClaudeClient = class {
     const signal = this.abortController.signal;
     try {
       const body = { message: userMessage };
+      if (proxyBackend) {
+        body.backend = proxyBackend;
+      }
       if (this.proxySessionId) {
         body.sessionId = this.proxySessionId;
       } else {
@@ -3701,7 +3721,7 @@ function buildSystemPrompt(config) {
     `- \u539F\u59CB\u7B14\u8BB0\u6587\u4EF6\u5939: ${config.autoTagFolders.join("\u3001")}`,
     `- \u77E5\u8BC6\u6574\u7406\u76EE\u6807\u6587\u4EF6\u5939: ${config.distillTargetFolder}`
   ];
-  if (config.mode === "claude-code" || config.mode === "proxy") {
+  if (config.mode === "claude-code" || config.mode === "codex" || config.mode === "proxy") {
     parts.push(
       "",
       "## \u91CD\u8981\uFF1A\u5DE5\u5177\u4F7F\u7528\u89C4\u5219",
@@ -6061,6 +6081,274 @@ async function seedClaudeCodeSession(history, cwd, model) {
   return sessionId;
 }
 
+// src/codex.ts
+var import_obsidian12 = require("obsidian");
+var cachedCodexPath = null;
+function getCodexSearchPaths(home) {
+  return [
+    `${home}/.local/bin/codex`,
+    `${home}/.npm-global/bin/codex`,
+    `${home}/.cargo/bin/codex`,
+    `${home}/.volta/bin/codex`,
+    "/usr/local/bin/codex",
+    "/usr/bin/codex",
+    "/opt/homebrew/bin/codex"
+  ];
+}
+async function findCodexBinary() {
+  const { existsSync } = require("fs");
+  const { execFile } = require("child_process");
+  const home = process.env.HOME || process.env.USERPROFILE || "";
+  for (const p of getCodexSearchPaths(home)) {
+    if (existsSync(p)) {
+      console.log(`[ai-daily] found codex at: ${p}`);
+      return p;
+    }
+  }
+  return new Promise((resolve) => {
+    execFile("codex", ["--version"], {
+      timeout: 5e3
+    }, (err) => {
+      if (!err) {
+        console.log("[ai-daily] found codex via PATH");
+        resolve("codex");
+      } else {
+        console.log("[ai-daily] codex not found");
+        resolve(false);
+      }
+    });
+  });
+}
+async function isCodexAvailable() {
+  if (import_obsidian12.Platform.isMobile) return false;
+  if (cachedCodexPath !== null) return cachedCodexPath !== false;
+  try {
+    cachedCodexPath = await findCodexBinary();
+    console.log("[ai-daily] codex detection result:", cachedCodexPath);
+    return cachedCodexPath !== false;
+  } catch (e) {
+    console.error("[ai-daily] codex detection error:", e);
+    cachedCodexPath = false;
+    return false;
+  }
+}
+function getCodexPath() {
+  return cachedCodexPath || "codex";
+}
+function ensureCodexMcp(config) {
+  const { execFileSync } = require("child_process");
+  const codexBin = getCodexPath();
+  try {
+    execFileSync(codexBin, ["mcp", "remove", "obsidian-vault"], {
+      timeout: 5e3,
+      stdio: "ignore"
+    });
+  } catch (e) {
+  }
+  const args = [
+    "mcp",
+    "add",
+    "--env",
+    `VAULT_PATH=${config.vaultPath}`,
+    "--env",
+    `KNOWLEDGE_FOLDERS=${config.knowledgeFolders.join(",")}`
+  ];
+  if (config.wereadApiKey) {
+    args.push("--env", `WEREAD_API_KEY=${config.wereadApiKey}`);
+  }
+  args.push("obsidian-vault", "--", config.nodeBin, config.mcpServerPath);
+  execFileSync(codexBin, args, { timeout: 1e4, stdio: "ignore" });
+  console.log("[ai-daily] Codex MCP server registered");
+}
+function findNodeBin() {
+  const { existsSync } = require("fs");
+  const home = process.env.HOME || process.env.USERPROFILE || "";
+  const candidates = [
+    `${home}/.nvm/current/bin/node`,
+    `${home}/.volta/bin/node`,
+    "/opt/homebrew/bin/node",
+    "/usr/local/bin/node",
+    "/usr/bin/node"
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  return "node";
+}
+function spawnCodex(prompt, options, callbacks) {
+  var _a, _b;
+  const { spawn } = require("child_process");
+  const { mcpConfig, sessionId, model } = options;
+  const nodeBin = findNodeBin();
+  ensureCodexMcp({
+    mcpServerPath: mcpConfig.mcpServerPath,
+    vaultPath: mcpConfig.vaultPath,
+    knowledgeFolders: mcpConfig.knowledgeFolders,
+    wereadApiKey: mcpConfig.wereadApiKey,
+    nodeBin
+  });
+  let args;
+  if (sessionId) {
+    args = [
+      "exec",
+      "resume",
+      sessionId,
+      prompt,
+      "--json",
+      "--dangerously-bypass-approvals-and-sandbox",
+      "--sandbox",
+      "danger-full-access"
+    ];
+  } else {
+    args = [
+      "exec",
+      prompt,
+      "--json",
+      "--dangerously-bypass-approvals-and-sandbox",
+      "--sandbox",
+      "danger-full-access"
+    ];
+  }
+  if (model) {
+    args.push("-m", model);
+  }
+  const codexBin = getCodexPath();
+  console.log("[ai-daily] spawn codex:", codexBin, args.filter((a) => a !== prompt).join(" "));
+  let child;
+  try {
+    child = spawn(codexBin, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env },
+      cwd: mcpConfig.vaultPath || void 0
+    });
+  } catch (e) {
+    callbacks.onError(`Failed to spawn codex: ${e instanceof Error ? e.message : String(e)}`);
+    return { abort: () => {
+    } };
+  }
+  let fullText = "";
+  let buffer = "";
+  (_a = child.stdout) == null ? void 0 : _a.on("data", (chunk) => {
+    buffer += chunk.toString("utf-8");
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const event = JSON.parse(line);
+        handleCodexStreamEvent(event, callbacks, (t) => {
+          fullText += t;
+        });
+      } catch (e) {
+        callbacks.onText(line);
+        fullText += line;
+      }
+    }
+  });
+  (_b = child.stderr) == null ? void 0 : _b.on("data", (chunk) => {
+    const text = chunk.toString("utf-8").trim();
+    if (text) console.warn("[ai-daily] codex stderr:", text);
+  });
+  child.on("close", (code) => {
+    if (buffer.trim()) {
+      try {
+        const event = JSON.parse(buffer);
+        handleCodexStreamEvent(event, callbacks, (t) => {
+          fullText += t;
+        });
+      } catch (e) {
+        callbacks.onText(buffer);
+        fullText += buffer;
+      }
+    }
+    if (code !== 0 && code !== null && !fullText) {
+      callbacks.onError(`Codex exited with code ${code}`);
+    } else {
+      callbacks.onDone(fullText);
+    }
+  });
+  child.on("error", (err) => {
+    callbacks.onError(`Codex error: ${err.message}`);
+  });
+  return {
+    abort: () => {
+      child.kill("SIGTERM");
+    }
+  };
+}
+function handleCodexStreamEvent(event, callbacks, appendText) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i;
+  const type = event.type;
+  switch (type) {
+    case "thread.started": {
+      const threadId = event.thread_id;
+      if (threadId) (_a = callbacks.onSessionId) == null ? void 0 : _a.call(callbacks, threadId);
+      break;
+    }
+    case "item.started": {
+      const item = event.item;
+      if (!item) break;
+      if (item.type === "command_execution") {
+        const id = item.id || `tool-${Date.now()}`;
+        const cmd = item.command || "";
+        (_b = callbacks.onToolCall) == null ? void 0 : _b.call(callbacks, id, "shell", { command: cmd }, "running");
+      } else if (item.type === "mcp_tool_call") {
+        const id = item.id || `tool-${Date.now()}`;
+        const name = item.name || "mcp_tool";
+        const input = item.arguments || {};
+        (_c = callbacks.onToolCall) == null ? void 0 : _c.call(callbacks, id, name, input, "running");
+      }
+      break;
+    }
+    case "item.completed": {
+      const item = event.item;
+      if (!item) break;
+      if (item.type === "command_execution") {
+        const id = item.id || "";
+        const output = item.aggregated_output || "";
+        const exitCode = item.exit_code;
+        const isError = exitCode !== null && exitCode !== 0;
+        (_d = callbacks.onToolCall) == null ? void 0 : _d.call(callbacks, id, "shell", {}, isError ? "error" : "done");
+        if (output) (_e = callbacks.onToolResult) == null ? void 0 : _e.call(callbacks, id, output, isError);
+      } else if (item.type === "mcp_tool_call") {
+        const id = item.id || "";
+        const output = item.output || JSON.stringify((_f = item.result) != null ? _f : "");
+        const isError = item.status === "failed";
+        const name = item.name || "mcp_tool";
+        (_g = callbacks.onToolCall) == null ? void 0 : _g.call(callbacks, id, name, {}, isError ? "error" : "done");
+        if (output) (_h = callbacks.onToolResult) == null ? void 0 : _h.call(callbacks, id, output, isError);
+      } else if (item.type === "agent_message") {
+        const text = item.text || "";
+        if (text) {
+          callbacks.onText(text);
+          appendText(text);
+        }
+      } else if (item.type === "reasoning") {
+        const text = item.text || "";
+        if (text) (_i = callbacks.onThinking) == null ? void 0 : _i.call(callbacks, text);
+      } else if (item.type === "error") {
+        const msg = item.message || "Unknown error";
+        console.warn("[ai-daily] codex item error:", msg);
+      }
+      break;
+    }
+    case "turn.completed": {
+      break;
+    }
+    case "turn.failed": {
+      const error = event.error;
+      const msg = (error == null ? void 0 : error.message) || "Codex turn failed";
+      callbacks.onError(msg);
+      break;
+    }
+    case "error": {
+      const msg = event.message || "Codex error";
+      callbacks.onError(msg);
+      break;
+    }
+  }
+}
+
 // src/chat-view.ts
 var VIEW_TYPE = "ai-daily-chat";
 var STREAM_MARKDOWN_RENDER_INTERVAL_MS = 120;
@@ -6161,7 +6449,7 @@ function formatTokenK(n) {
   if (n >= 1e3) return `${(n / 1e3).toFixed(1)}k`;
   return String(Math.round(n));
 }
-var ConfirmModal = class extends import_obsidian12.Modal {
+var ConfirmModal = class extends import_obsidian13.Modal {
   constructor(app, message, onConfirm) {
     super(app);
     this.message = message;
@@ -6186,7 +6474,7 @@ var ConfirmModal = class extends import_obsidian12.Modal {
     this.contentEl.empty();
   }
 };
-var RenameModal = class extends import_obsidian12.Modal {
+var RenameModal = class extends import_obsidian13.Modal {
   constructor(app, currentTitle, onRename) {
     super(app);
     this.currentTitle = currentTitle;
@@ -6231,7 +6519,7 @@ var RenameModal = class extends import_obsidian12.Modal {
     this.contentEl.empty();
   }
 };
-var _ChatView = class _ChatView extends import_obsidian12.ItemView {
+var _ChatView = class _ChatView extends import_obsidian13.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.closed = false;
@@ -6261,6 +6549,7 @@ var _ChatView = class _ChatView extends import_obsidian12.ItemView {
     this.studio = null;
     this.readImageCount = 0;
     this.claudeCodeAbort = null;
+    this.codexAbort = null;
     this.claudeCodeUndoHistory = [];
     this.claudeCodeUndoCounter = 0;
     this.workspaceColorMap = /* @__PURE__ */ new Map();
@@ -6302,18 +6591,18 @@ var _ChatView = class _ChatView extends import_obsidian12.ItemView {
     this.updateTokenBar();
     this.buildInputArea(container);
     this.showWelcome();
-    if (import_obsidian12.Platform.isMobile) {
+    if (import_obsidian13.Platform.isMobile) {
       this.setupMobileKeyboard(container);
     }
   }
   buildHeader(container) {
     this.headerEl = container.createDiv({ cls: "ai-daily-header" });
-    if (import_obsidian12.Platform.isMobile) {
+    if (import_obsidian13.Platform.isMobile) {
       const backBtn = this.headerEl.createDiv({
         cls: "ai-daily-header-btn",
         attr: { "aria-label": "\u8FD4\u56DE", title: "\u8FD4\u56DE" }
       });
-      (0, import_obsidian12.setIcon)(backBtn, "arrow-left");
+      (0, import_obsidian13.setIcon)(backBtn, "arrow-left");
       backBtn.addEventListener("click", () => {
         this.leaf.detach();
       });
@@ -6324,22 +6613,22 @@ var _ChatView = class _ChatView extends import_obsidian12.ItemView {
       cls: "ai-daily-header-btn",
       attr: { "aria-label": "Workspace Studio", title: "Workspace Studio" }
     });
-    (0, import_obsidian12.setIcon)(studioBtn, "layout-grid");
+    (0, import_obsidian13.setIcon)(studioBtn, "layout-grid");
     studioBtn.addEventListener("click", () => this.toggleStudio());
     const newChatBtn = this.headerEl.createDiv({
       cls: "ai-daily-header-btn",
       attr: { "aria-label": "\u65B0\u5BF9\u8BDD", title: "\u65B0\u5BF9\u8BDD" }
     });
-    (0, import_obsidian12.setIcon)(newChatBtn, "plus");
+    (0, import_obsidian13.setIcon)(newChatBtn, "plus");
     newChatBtn.addEventListener("click", () => this.clearChat());
     this.moreBtnEl = this.headerEl.createDiv({
       cls: "ai-daily-header-btn",
       attr: { "aria-label": "\u66F4\u591A", title: "\u66F4\u591A" }
     });
     this.moreBtnEl.style.display = "none";
-    (0, import_obsidian12.setIcon)(this.moreBtnEl, "more-vertical");
+    (0, import_obsidian13.setIcon)(this.moreBtnEl, "more-vertical");
     this.moreBtnEl.addEventListener("click", (e) => {
-      const menu = new import_obsidian12.Menu();
+      const menu = new import_obsidian13.Menu();
       const hasSession = !!this.sessionId;
       menu.addItem(
         (item) => item.setTitle("\u4FDD\u5B58\u4E3A\u7B14\u8BB0").setIcon("file-down").setDisabled(!hasSession).onClick(() => this.saveSessionAsNote())
@@ -6380,7 +6669,7 @@ var _ChatView = class _ChatView extends import_obsidian12.ItemView {
       cls: "ai-daily-attach-btn",
       attr: { "aria-label": "\u6DFB\u52A0\u7B14\u8BB0" }
     });
-    (0, import_obsidian12.setIcon)(attachBtn, "paperclip");
+    (0, import_obsidian13.setIcon)(attachBtn, "paperclip");
     attachBtn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       this.openFilePicker();
@@ -6398,7 +6687,7 @@ var _ChatView = class _ChatView extends import_obsidian12.ItemView {
     this.sendBtn = inputRow.createEl("button", {
       cls: "ai-daily-send-btn"
     });
-    (0, import_obsidian12.setIcon)(this.sendBtn, "send");
+    (0, import_obsidian13.setIcon)(this.sendBtn, "send");
     this.expandBtn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       const isExpanded = this.inputEl.classList.toggle("expanded");
@@ -6460,7 +6749,7 @@ var _ChatView = class _ChatView extends import_obsidian12.ItemView {
         }
       }
       if (e.key === "Enter") {
-        if (import_obsidian12.Platform.isMobile) return;
+        if (import_obsidian13.Platform.isMobile) return;
         if (!e.shiftKey) {
           e.preventDefault();
           this.handleSend();
@@ -6579,7 +6868,7 @@ var _ChatView = class _ChatView extends import_obsidian12.ItemView {
         cls: `ai-daily-mention-item${i === 0 ? " ai-daily-mention-item-active" : ""}${already ? " ai-daily-mention-item-attached" : ""}`
       });
       const iconSpan = item.createSpan({ cls: "ai-daily-mention-item-icon" });
-      (0, import_obsidian12.setIcon)(iconSpan, "file-text");
+      (0, import_obsidian13.setIcon)(iconSpan, "file-text");
       const textDiv = item.createDiv({ cls: "ai-daily-mention-item-text" });
       textDiv.createDiv({ cls: "ai-daily-mention-item-name", text: file.basename });
       if (file.parent && file.parent.path !== "/") {
@@ -6646,10 +6935,10 @@ var _ChatView = class _ChatView extends import_obsidian12.ItemView {
     for (const file of this.attachedFiles) {
       const chip = this.attachBarEl.createDiv({ cls: "ai-daily-attach-chip" });
       const iconSpan = chip.createSpan({ cls: "ai-daily-attach-chip-icon" });
-      (0, import_obsidian12.setIcon)(iconSpan, "file-text");
+      (0, import_obsidian13.setIcon)(iconSpan, "file-text");
       chip.createSpan({ cls: "ai-daily-attach-chip-name", text: file.basename });
       const removeBtn = chip.createSpan({ cls: "ai-daily-attach-chip-remove" });
-      (0, import_obsidian12.setIcon)(removeBtn, "x");
+      (0, import_obsidian13.setIcon)(removeBtn, "x");
       removeBtn.addEventListener("click", () => {
         this.attachedFiles = this.attachedFiles.filter((f) => f.path !== file.path);
         this.renderAttachBar();
@@ -6686,7 +6975,7 @@ ${content}`);
   addSaveToInboxBtn(el) {
     if (el.querySelector(".ai-daily-save-inbox-btn")) return;
     const btn = el.createDiv({ cls: "ai-daily-save-inbox-btn" });
-    (0, import_obsidian12.setIcon)(btn, "pin");
+    (0, import_obsidian13.setIcon)(btn, "pin");
     btn.setAttribute("aria-label", "\u4FDD\u5B58\u5230 Inbox");
     btn.setAttribute("title", "\u4FDD\u5B58\u5230 Inbox");
     btn.addEventListener("click", async () => {
@@ -6698,7 +6987,7 @@ ${content}`);
       const entry = `- [ ] [AI \u5BF9\u8BDD] ${snippet}`;
       const inboxPath = this.plugin.settings.harnessInboxFile;
       const file = this.app.vault.getAbstractFileByPath(inboxPath);
-      if (file instanceof import_obsidian12.TFile) {
+      if (file instanceof import_obsidian13.TFile) {
         let content = await this.app.vault.read(file);
         const dateHeader2 = `## ${today}`;
         if (content.includes(dateHeader2)) {
@@ -6727,12 +7016,12 @@ ${entry}
 `);
       }
       btn.empty();
-      (0, import_obsidian12.setIcon)(btn, "check");
+      (0, import_obsidian13.setIcon)(btn, "check");
       btn.addClass("ai-daily-save-inbox-done");
-      new import_obsidian12.Notice("\u5DF2\u4FDD\u5B58\u5230 Inbox", 2e3);
+      new import_obsidian13.Notice("\u5DF2\u4FDD\u5B58\u5230 Inbox", 2e3);
       setTimeout(() => {
         btn.empty();
-        (0, import_obsidian12.setIcon)(btn, "pin");
+        (0, import_obsidian13.setIcon)(btn, "pin");
         btn.removeClass("ai-daily-save-inbox-done");
       }, 2e3);
     });
@@ -6755,7 +7044,7 @@ ${entry}
       const msgIdx = assistantMsgIndices[d];
       if (msgIdx < 1 || ((_a = this.messages[msgIdx - 1]) == null ? void 0 : _a.role) !== "user") continue;
       const btn = el.createDiv({ cls: "ai-daily-fork-btn" });
-      (0, import_obsidian12.setIcon)(btn, "git-branch");
+      (0, import_obsidian13.setIcon)(btn, "git-branch");
       btn.setAttribute("aria-label", "\u4ECE\u6B64\u5904\u5206\u53C9");
       btn.setAttribute("title", "\u4ECE\u6B64\u5904\u5206\u53C9");
       const capturedIdx = msgIdx;
@@ -6837,18 +7126,18 @@ ${entry}
       const pre = codeEl.parentElement;
       if (pre.querySelector(".ai-daily-copy-btn")) return;
       const btn = pre.createDiv({ cls: "ai-daily-copy-btn" });
-      (0, import_obsidian12.setIcon)(btn, "copy");
+      (0, import_obsidian13.setIcon)(btn, "copy");
       btn.setAttribute("aria-label", "\u590D\u5236");
       btn.addEventListener("click", async () => {
         var _a;
         const text = (_a = codeEl.textContent) != null ? _a : "";
         await navigator.clipboard.writeText(text);
         btn.empty();
-        (0, import_obsidian12.setIcon)(btn, "check");
+        (0, import_obsidian13.setIcon)(btn, "check");
         btn.classList.add("ai-daily-copy-btn-done");
         setTimeout(() => {
           btn.empty();
-          (0, import_obsidian12.setIcon)(btn, "copy");
+          (0, import_obsidian13.setIcon)(btn, "copy");
           btn.classList.remove("ai-daily-copy-btn-done");
         }, 2e3);
       });
@@ -6963,7 +7252,7 @@ ${entry}
     for (const t of tools) {
       const btn = toolsEl.createEl("button", { cls: "ai-daily-welcome-tool" });
       const iconEl = btn.createSpan({ cls: "ai-daily-welcome-tool-icon" });
-      (0, import_obsidian12.setIcon)(iconEl, t.icon);
+      (0, import_obsidian13.setIcon)(iconEl, t.icon);
       btn.createSpan({ text: t.label });
       btn.addEventListener("click", t.action);
     }
@@ -6993,7 +7282,7 @@ ${entry}
         info.createDiv({ cls: "ai-daily-welcome-hero-meta", text: metaParts });
       }
       const chevron = hero.createSpan({ cls: "ai-daily-welcome-hero-chevron" });
-      (0, import_obsidian12.setIcon)(chevron, "chevron-right");
+      (0, import_obsidian13.setIcon)(chevron, "chevron-right");
       hero.addEventListener("click", () => {
         void this.loadSession(last.id);
       });
@@ -7077,14 +7366,14 @@ ${entry}
       for (const project of activeProjects) {
         const modesPath = `${projectsFolder}/${project.name}/modes.md`;
         const modesFile = this.app.vault.getAbstractFileByPath(modesPath);
-        if (!(modesFile instanceof import_obsidian12.TFile)) continue;
+        if (!(modesFile instanceof import_obsidian13.TFile)) continue;
         void this.app.vault.read(modesFile).then((content) => {
           const modes = parseModesFromContent(content);
           if (modes.length === 0) return;
           const card = container.createDiv({ cls: "ai-daily-welcome-card" });
           const cardHead = card.createDiv({ cls: "ai-daily-welcome-card-head" });
           const cardIcon = cardHead.createSpan({ cls: "ai-daily-welcome-card-icon" });
-          (0, import_obsidian12.setIcon)(cardIcon, "folder");
+          (0, import_obsidian13.setIcon)(cardIcon, "folder");
           cardHead.createSpan({ cls: "ai-daily-welcome-card-name", text: project.name });
           if (project.name === index.activeProject) {
             cardHead.createSpan({ cls: "ai-daily-welcome-card-dot" });
@@ -7146,12 +7435,17 @@ ${entry}
       this.claudeCodeAbort = null;
       return;
     }
+    if (this.codexAbort) {
+      this.codexAbort();
+      this.codexAbort = null;
+      return;
+    }
     if (this.client) {
       this.client.abort();
     }
   }
   setSendButtonState(loading) {
-    (0, import_obsidian12.setIcon)(this.sendBtn, loading ? "square" : "send");
+    (0, import_obsidian13.setIcon)(this.sendBtn, loading ? "square" : "send");
     this.sendBtn.toggleClass("ai-daily-send-btn-stop", loading);
     this.sendBtn.setAttribute("aria-label", loading ? "\u505C\u6B62\u751F\u6210" : "\u53D1\u9001");
     this.sendBtn.setAttribute("title", loading ? "\u505C\u6B62\u751F\u6210" : "\u53D1\u9001");
@@ -7167,12 +7461,15 @@ ${entry}
       this.handleDistillAsMessage();
       return;
     }
-    const useClaudeCode = await isClaudeCodeAvailable();
+    const cliBackend = this.plugin.settings.cliBackend;
+    const useCodex = cliBackend === "codex" && await isCodexAvailable();
+    const useClaudeCode = cliBackend === "claude-code" && await isClaudeCodeAvailable();
+    const useCliAgent = useCodex || useClaudeCode;
     const proxyReady = this.plugin.settings.proxyEnabled && !!this.plugin.settings.proxyUrl && !!this.plugin.settings.proxyToken;
-    if (!useClaudeCode && !this.plugin.getEffectiveApiKey() && !proxyReady) {
+    if (!useCliAgent && !this.plugin.getEffectiveApiKey() && !proxyReady) {
       this.addMessage(
         "assistant",
-        "\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u914D\u7F6E Anthropic API Key\uFF0C\u6216\u5B89\u88C5 Claude Code\u3002"
+        "\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u914D\u7F6E Anthropic API Key\uFF0C\u6216\u5B89\u88C5 Claude Code / Codex\u3002"
       );
       return;
     }
@@ -7184,22 +7481,33 @@ ${entry}
     this.inputEl.classList.remove("expanded");
     this.expandBtn.classList.remove("visible");
     this.expandBtn.textContent = "\u5C55\u5F00 \u2191";
-    const currentMode = useClaudeCode ? "claude-code" : proxyReady ? "proxy" : "api";
+    const currentMode = useCodex ? "codex" : useClaudeCode ? "claude-code" : proxyReady ? "proxy" : "api";
     if (this.lastMode && this.lastMode !== currentMode) {
-      if (this.lastMode === "proxy" || this.lastMode === "claude-code" && currentMode === "proxy") {
+      if (this.lastMode === "proxy" || (this.lastMode === "claude-code" || this.lastMode === "codex") && currentMode === "proxy") {
         (_a = this.client) == null ? void 0 : _a.clearProxySessionId();
       }
-      if (this.lastMode === "claude-code" || this.lastMode === "proxy" && currentMode === "claude-code") {
+      if (this.lastMode === "claude-code" || this.lastMode === "codex" || this.lastMode === "proxy" && (currentMode === "claude-code" || currentMode === "codex")) {
         this.claudeCodeSessionId = void 0;
+        this.codexSessionId = void 0;
       }
       const modeNames = {
         "claude-code": "\u672C\u5730 Claude Code",
+        "codex": "\u672C\u5730 Codex",
         "proxy": "\u4EE3\u7406\u6A21\u5F0F",
         "api": "API \u76F4\u8FDE"
       };
-      new import_obsidian12.Notice(`\u5DF2\u5207\u6362\u5230${modeNames[currentMode]}\uFF0C\u5BF9\u8BDD\u4E0A\u4E0B\u6587\u5C06\u81EA\u52A8\u540C\u6B65`, 4e3);
+      new import_obsidian13.Notice(`\u5DF2\u5207\u6362\u5230${modeNames[currentMode]}\uFF0C\u5BF9\u8BDD\u4E0A\u4E0B\u6587\u5C06\u81EA\u52A8\u540C\u6B65`, 4e3);
     }
     this.lastMode = currentMode;
+    if (useCodex) {
+      this.handleSendViaCodex(text).catch((e) => {
+        console.error("[ai-daily] Codex error:", e);
+        this.addMessage("assistant", `Codex \u51FA\u9519: ${e instanceof Error ? e.message : String(e)}`, "codex");
+        this.isLoading = false;
+        this.setSendButtonState(false);
+      });
+      return;
+    }
     if (useClaudeCode) {
       this.handleSendViaClaudeCode(text).catch((e) => {
         console.error("[ai-daily] Claude Code error:", e);
@@ -7243,7 +7551,7 @@ ${entry}
     const renderStreamingMarkdown = async (content) => {
       if (!assistantEl) return;
       assistantEl.empty();
-      await import_obsidian12.MarkdownRenderer.render(
+      await import_obsidian13.MarkdownRenderer.render(
         this.app,
         content,
         assistantEl,
@@ -7296,10 +7604,10 @@ ${entry}
           );
           if (images.length > 0) {
             preparedImages = images;
-            new import_obsidian12.Notice(`\u5DF2\u9644\u5E26 ${images.length} \u5F20\u56FE\u7247`);
+            new import_obsidian13.Notice(`\u5DF2\u9644\u5E26 ${images.length} \u5F20\u56FE\u7247`);
           }
           if (skipped.length > 0) {
-            new import_obsidian12.Notice(
+            new import_obsidian13.Notice(
               `\u8DF3\u8FC7 ${skipped.length} \u5F20\u56FE\u7247: ${skipped.map((s) => s.reason).join(", ")}`
             );
           }
@@ -7325,7 +7633,7 @@ ${entry}
           const key = `${name}-${toolCallCounter++}`;
           const el = toolCallsEl.createDiv({ cls: "ai-daily-tool-call ai-daily-tool-call-running" });
           const iconSpan = el.createSpan({ cls: "ai-daily-tool-call-icon" });
-          (0, import_obsidian12.setIcon)(iconSpan, "loader");
+          (0, import_obsidian13.setIcon)(iconSpan, "loader");
           el.createSpan({ cls: "ai-daily-tool-call-text", text: toolCallSummary(name, input) });
           toolCallEls.set(key, el);
           this.updateToolCallsSummary(toolCallsSummaryEl, toolTotal, toolRunning);
@@ -7339,7 +7647,7 @@ ${entry}
             const iconSpan = el.querySelector(".ai-daily-tool-call-icon");
             if (iconSpan) {
               iconSpan.empty();
-              (0, import_obsidian12.setIcon)(iconSpan, status === "done" ? "check" : "x");
+              (0, import_obsidian13.setIcon)(iconSpan, status === "done" ? "check" : "x");
             }
             toolRunning--;
             this.updateToolCallsSummary(toolCallsSummaryEl, toolTotal, toolRunning);
@@ -7427,12 +7735,12 @@ ${filesList}` : "",
           proxyMessage = harnessBlock + proxyMessage;
         }
         try {
-          reply = await this.client.proxyChat(proxyMessage, streamCb, onToolCall, seedHistory);
+          reply = await this.client.proxyChat(proxyMessage, streamCb, onToolCall, seedHistory, this.plugin.settings.cliBackend);
           actualSource = "proxy";
         } catch (proxyErr) {
           if (this.plugin.settings.proxyFallbackToApi && this.plugin.getEffectiveApiKey()) {
             console.warn("[ai-daily] proxy failed, falling back to API:", proxyErr);
-            new import_obsidian12.Notice("\u4EE3\u7406\u4E0D\u53EF\u7528\uFF0C\u56DE\u9000\u5230\u672C\u5730 API", 4e3);
+            new import_obsidian13.Notice("\u4EE3\u7406\u4E0D\u53EF\u7528\uFF0C\u56DE\u9000\u5230\u672C\u5730 API", 4e3);
             this.client.clearProxySessionId();
             this.lastMode = "api";
             reply = await doLocalChat();
@@ -7535,6 +7843,32 @@ ${filesList}` : "",
     }
     this.runClaudeCodeStream(prompt, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.model);
   }
+  async handleSendViaCodex(text) {
+    this.addMessage("user", text, "codex");
+    if (!this.sessionId) this.sessionId = newSessionId();
+    const isFirstMessage = !this.codexSessionId;
+    const attachedContent = await this.consumeAttachedFiles();
+    let prompt = text;
+    if (isFirstMessage) {
+      const adapter = this.app.vault.adapter;
+      const vaultAbsPath = adapter.basePath || "";
+      const systemPromptText = buildSystemPrompt({
+        mode: "codex",
+        knowledgeFolders: this.plugin.settings.knowledgeFolders,
+        distillTargetFolder: this.plugin.settings.distillTargetFolder,
+        autoTagFolders: this.plugin.settings.autoTagFolders,
+        enableWebSearch: false,
+        enableWeRead: this.plugin.settings.enableWeRead && !!this.plugin.settings.wereadApiKey,
+        enablePodcast: false,
+        harnessContext: this.harnessContext,
+        vaultAbsPath
+      });
+      prompt = systemPromptText + "\n\n" + (attachedContent ? attachedContent + "\n\n" : "") + text;
+    } else if (attachedContent) {
+      prompt = attachedContent + "\n\n" + text;
+    }
+    this.runCodexStream(prompt, this.getMcpConfig(), this.codexSessionId, this.plugin.settings.codexModel);
+  }
   async executeReadImage(input) {
     const path = typeof input.path === "string" ? input.path : "";
     if (!path) return "Error: path is required";
@@ -7600,7 +7934,7 @@ ${filesList}` : "",
       enableFeeds: true,
       compressThresholdEst: chatCompressThresholdEst,
       onCompress: (detail) => {
-        new import_obsidian12.Notice(detail, 6e3);
+        new import_obsidian13.Notice(detail, 6e3);
       },
       onStreamFallback: (reason) => {
         console.warn("[ai-daily] stream fallback:", reason);
@@ -7632,6 +7966,7 @@ ${filesList}` : "",
       updated: now,
       messages: persisted,
       claudeCodeSessionId: this.claudeCodeSessionId,
+      codexSessionId: this.codexSessionId,
       proxySessionId: (_b = this.client) == null ? void 0 : _b.getProxySessionId(),
       proxyTaskId: (_c = this.client) == null ? void 0 : _c.getProxyTaskId(),
       harnessContext: (_d = this.harnessContext) != null ? _d : void 0,
@@ -7643,7 +7978,7 @@ ${filesList}` : "",
       await saveChatSession(this.app.vault, chatHistoryFolder, file);
     } catch (e) {
       console.error("[ai-daily] persist session failed", e);
-      new import_obsidian12.Notice(
+      new import_obsidian13.Notice(
         `\u5BF9\u8BDD\u5B58\u6863\u5931\u8D25: ${e instanceof Error ? e.message : String(e)}`,
         6e3
       );
@@ -7666,7 +8001,7 @@ ${filesList}` : "",
       cls: `ai-daily-msg ai-daily-msg-${role}`
     });
     if (role === "assistant") {
-      void import_obsidian12.MarkdownRenderer.render(
+      void import_obsidian13.MarkdownRenderer.render(
         this.app,
         content,
         msgEl,
@@ -7738,11 +8073,11 @@ ${filesList}` : "",
     el.empty();
     if (running > 0) {
       const iconSpan = el.createSpan({ cls: "ai-daily-tool-calls-summary-icon" });
-      (0, import_obsidian12.setIcon)(iconSpan, "loader");
+      (0, import_obsidian13.setIcon)(iconSpan, "loader");
       el.createSpan({ text: ` ${total} \u4E2A\u5DE5\u5177\u8C03\u7528 (${running} \u8FDB\u884C\u4E2D)` });
     } else {
       const iconSpan = el.createSpan({ cls: "ai-daily-tool-calls-summary-icon ai-daily-tool-calls-summary-done" });
-      (0, import_obsidian12.setIcon)(iconSpan, "check-circle");
+      (0, import_obsidian13.setIcon)(iconSpan, "check-circle");
       el.createSpan({ text: ` ${total} \u4E2A\u5DE5\u5177\u8C03\u7528\u5DF2\u5B8C\u6210` });
     }
   }
@@ -7754,7 +8089,7 @@ ${filesList}` : "",
     });
     if ((undoData == null ? void 0 : undoData.previous) !== void 0 && undoData.tool !== "create_note") {
       const diffBtn = bar.createEl("button", { cls: "ai-daily-undo-diff-btn" });
-      (0, import_obsidian12.setIcon)(diffBtn, "diff");
+      (0, import_obsidian13.setIcon)(diffBtn, "diff");
       diffBtn.setAttribute("aria-label", "\u67E5\u770B\u53D8\u66F4");
       diffBtn.setAttribute("title", "\u67E5\u770B\u53D8\u66F4");
       diffBtn.addEventListener("click", () => {
@@ -7768,16 +8103,16 @@ ${filesList}` : "",
     }
     const undoBtn = bar.createEl("button", { cls: "ai-daily-undo-btn", text: "\u64A4\u9500" });
     const iconSpan = undoBtn.createSpan({ cls: "ai-daily-undo-btn-icon" });
-    (0, import_obsidian12.setIcon)(iconSpan, "undo");
+    (0, import_obsidian13.setIcon)(iconSpan, "undo");
     undoBtn.prepend(iconSpan);
     undoBtn.addEventListener("click", async () => {
       undoBtn.disabled = true;
       undoBtn.setText("\u64A4\u9500\u4E2D...");
       try {
         const result = await onUndo();
-        new import_obsidian12.Notice(result, 3e3);
+        new import_obsidian13.Notice(result, 3e3);
       } catch (e) {
-        new import_obsidian12.Notice(`\u64A4\u9500\u5931\u8D25: ${e instanceof Error ? e.message : String(e)}`, 4e3);
+        new import_obsidian13.Notice(`\u64A4\u9500\u5931\u8D25: ${e instanceof Error ? e.message : String(e)}`, 4e3);
       }
       bar.remove();
       this.renderUndoBar();
@@ -7788,7 +8123,7 @@ ${filesList}` : "",
     let current;
     try {
       const file = this.app.vault.getAbstractFileByPath(filePath);
-      if (file && file instanceof import_obsidian12.TFile) {
+      if (file && file instanceof import_obsidian13.TFile) {
         current = await this.app.vault.cachedRead(file);
       } else {
         const adapter = this.app.vault.adapter;
@@ -7909,7 +8244,7 @@ ${filesList}` : "",
         for (const f of context.injectedFiles) {
           const pill = pills.createSpan({ cls: "ai-daily-ctx-pill" });
           const fIcon = pill.createSpan({ cls: "ai-daily-ctx-pill-icon" });
-          (0, import_obsidian12.setIcon)(fIcon, "file-text");
+          (0, import_obsidian13.setIcon)(fIcon, "file-text");
           const displayName = f.path.replace(/^.*\//, "").replace(/\.md$/, "");
           pill.createSpan({ text: displayName });
           pill.setAttribute("title", f.path);
@@ -7926,9 +8261,14 @@ ${filesList}` : "",
     if (this.isLoading) return;
     this.isLoading = true;
     this.setSendButtonState(true);
-    this.addMessage("user", userText);
+    const source = this.plugin.settings.cliBackend === "codex" ? "codex" : "claude-code";
+    this.addMessage("user", userText, source);
     if (!this.sessionId) this.sessionId = newSessionId();
-    this.runClaudeCodeStream(userText, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.model);
+    if (source === "codex") {
+      this.runCodexStream(userText, this.getMcpConfig(), this.codexSessionId, this.plugin.settings.codexModel);
+    } else {
+      this.runClaudeCodeStream(userText, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.model);
+    }
   }
   runClaudeCodeStream(prompt, mcpConfig, sessionId, model) {
     const loadingEl = this.messagesEl.createDiv({ cls: "ai-daily-loading" });
@@ -8012,7 +8352,7 @@ ${filesList}` : "",
           toolRunning++;
           const el = toolCallsEl.createDiv({ cls: "ai-daily-tool-call ai-daily-tool-call-running" });
           const iconSpan = el.createSpan({ cls: "ai-daily-tool-call-icon" });
-          (0, import_obsidian12.setIcon)(iconSpan, "loader");
+          (0, import_obsidian13.setIcon)(iconSpan, "loader");
           el.createSpan({ cls: "ai-daily-tool-call-text", text: toolCallSummary(name, input) });
           toolCallEls.set(id, el);
           this.updateToolCallsSummary(toolCallsSummaryEl, toolTotal, toolRunning);
@@ -8025,7 +8365,7 @@ ${filesList}` : "",
             const iconSpan = el.querySelector(".ai-daily-tool-call-icon");
             if (iconSpan) {
               iconSpan.empty();
-              (0, import_obsidian12.setIcon)(iconSpan, status === "done" ? "check" : "x");
+              (0, import_obsidian13.setIcon)(iconSpan, status === "done" ? "check" : "x");
             }
           }
           toolRunning = Math.max(0, toolRunning - 1);
@@ -8068,7 +8408,7 @@ ${filesList}` : "",
         }
         if (assistantEl && accumulated) {
           assistantEl.empty();
-          void import_obsidian12.MarkdownRenderer.render(this.app, accumulated, assistantEl, "", this.plugin).then(() => {
+          void import_obsidian13.MarkdownRenderer.render(this.app, accumulated, assistantEl, "", this.plugin).then(() => {
             assistantEl.removeClass("ai-daily-msg-streaming");
             this.postProcessAssistantEl(assistantEl);
           });
@@ -8090,7 +8430,7 @@ ${filesList}` : "",
         }
         if (assistantEl) {
           assistantEl.empty();
-          void import_obsidian12.MarkdownRenderer.render(this.app, fullText, assistantEl, "", this.plugin).then(() => {
+          void import_obsidian13.MarkdownRenderer.render(this.app, fullText, assistantEl, "", this.plugin).then(() => {
             assistantEl.removeClass("ai-daily-msg-streaming");
             this.postProcessAssistantEl(assistantEl);
           });
@@ -8111,17 +8451,192 @@ ${filesList}` : "",
     });
     this.claudeCodeAbort = handle.abort;
   }
+  runCodexStream(prompt, mcpConfig, sessionId, model) {
+    const loadingEl = this.messagesEl.createDiv({ cls: "ai-daily-loading" });
+    loadingEl.createSpan({ text: "Codex \u5904\u7406\u4E2D" });
+    const dotsEl = loadingEl.createSpan({ cls: "ai-daily-loading-dots" });
+    dotsEl.createEl("span");
+    dotsEl.createEl("span");
+    dotsEl.createEl("span");
+    this.scrollToBottomIfFollowing();
+    let assistantEl = null;
+    let streamTextEl = null;
+    let accumulated = "";
+    let rendered = 0;
+    let typewriterTimer = null;
+    let toolCallsEl = null;
+    let toolCallsSummaryEl = null;
+    let toolTotal = 0;
+    let toolRunning = 0;
+    const toolCallEls = /* @__PURE__ */ new Map();
+    let thinkingEl = null;
+    let thinkingContentEl = null;
+    let thinkingText = "";
+    const startTypewriter = () => {
+      if (typewriterTimer !== null) return;
+      const tick = () => {
+        if (!streamTextEl || rendered >= accumulated.length) {
+          typewriterTimer = null;
+          if (streamTextEl) streamTextEl.removeClass("ai-daily-stream-text");
+          return;
+        }
+        const next = Math.min(rendered + 3, accumulated.length);
+        streamTextEl.textContent = accumulated.slice(0, next);
+        rendered = next;
+        this.scrollToBottomIfFollowing();
+        if (streamTextEl) streamTextEl.addClass("ai-daily-stream-text");
+        typewriterTimer = window.setTimeout(tick, 25);
+      };
+      typewriterTimer = window.setTimeout(tick, 25);
+    };
+    const flushTypewriter = () => {
+      if (typewriterTimer !== null) {
+        window.clearTimeout(typewriterTimer);
+        typewriterTimer = null;
+      }
+      if (streamTextEl && rendered < accumulated.length) {
+        streamTextEl.textContent = accumulated;
+        rendered = accumulated.length;
+      }
+      if (streamTextEl) streamTextEl.removeClass("ai-daily-stream-text");
+    };
+    const handle = spawnCodex(prompt, { mcpConfig, sessionId, model }, {
+      onText: (delta) => {
+        if (this.closed) return;
+        loadingEl.remove();
+        if (!assistantEl) {
+          assistantEl = this.messagesEl.createDiv({
+            cls: "ai-daily-msg ai-daily-msg-assistant ai-daily-msg-streaming"
+          });
+          streamTextEl = assistantEl.createEl("pre", {
+            cls: "ai-daily-stream-text"
+          });
+        } else if (streamTextEl && !streamTextEl.hasClass("ai-daily-stream-text")) {
+          streamTextEl.addClass("ai-daily-stream-text");
+        }
+        accumulated += delta;
+        startTypewriter();
+      },
+      onToolCall: (id, name, input, status) => {
+        if (this.closed) return;
+        if (status === "running") {
+          loadingEl.remove();
+          flushTypewriter();
+          if (!toolCallsEl) {
+            const wrapper = this.messagesEl.createDiv({ cls: "ai-daily-tool-calls" });
+            const detailsEl = wrapper.createEl("details", { cls: "ai-daily-tool-calls-details" });
+            toolCallsSummaryEl = detailsEl.createEl("summary", { cls: "ai-daily-tool-calls-summary" });
+            toolCallsEl = detailsEl.createDiv({ cls: "ai-daily-tool-calls-list" });
+          }
+          toolTotal++;
+          toolRunning++;
+          const el = toolCallsEl.createDiv({ cls: "ai-daily-tool-call ai-daily-tool-call-running" });
+          const iconSpan = el.createSpan({ cls: "ai-daily-tool-call-icon" });
+          (0, import_obsidian13.setIcon)(iconSpan, "loader");
+          el.createSpan({ cls: "ai-daily-tool-call-text", text: toolCallSummary(name, input) });
+          toolCallEls.set(id, el);
+          this.updateToolCallsSummary(toolCallsSummaryEl, toolTotal, toolRunning);
+          this.scrollToBottomIfFollowing();
+        } else {
+          const el = toolCallEls.get(id);
+          if (el) {
+            el.removeClass("ai-daily-tool-call-running");
+            el.addClass(status === "done" ? "ai-daily-tool-call-done" : "ai-daily-tool-call-error");
+            const iconSpan = el.querySelector(".ai-daily-tool-call-icon");
+            if (iconSpan) {
+              iconSpan.empty();
+              (0, import_obsidian13.setIcon)(iconSpan, status === "done" ? "check" : "x");
+            }
+          }
+          toolRunning = Math.max(0, toolRunning - 1);
+          this.updateToolCallsSummary(toolCallsSummaryEl, toolTotal, toolRunning);
+        }
+      },
+      onToolResult: (id, result, isError) => {
+        if (this.closed) return;
+        const el = toolCallEls.get(id);
+        if (!el || !result) return;
+        const details = el.createEl("details", { cls: "ai-daily-tool-result" });
+        details.createEl("summary", { text: isError ? "\u9519\u8BEF" : "\u7ED3\u679C" });
+        const pre = details.createEl("pre", { cls: "ai-daily-tool-result-content" });
+        pre.createEl("code", { text: result.length > 2e3 ? result.slice(0, 2e3) + "\n\u2026(\u5DF2\u622A\u65AD)" : result });
+      },
+      onThinking: (text) => {
+        if (this.closed) return;
+        loadingEl.remove();
+        thinkingText += text;
+        if (!thinkingEl) {
+          thinkingEl = this.messagesEl.createDiv({ cls: "ai-daily-thinking" });
+          const details = thinkingEl.createEl("details", { cls: "ai-daily-thinking-details" });
+          details.createEl("summary", { text: "\u{1F4AD} \u601D\u8003\u8FC7\u7A0B" });
+          thinkingContentEl = details.createEl("pre", { cls: "ai-daily-thinking-content" });
+        }
+        if (thinkingContentEl) {
+          thinkingContentEl.textContent = thinkingText;
+        }
+        this.scrollToBottomIfFollowing();
+      },
+      onError: (error) => {
+        if (this.closed) return;
+        loadingEl.remove();
+        if (typewriterTimer !== null) {
+          window.clearTimeout(typewriterTimer);
+          typewriterTimer = null;
+        }
+        if (assistantEl && accumulated) {
+          assistantEl.empty();
+          void import_obsidian13.MarkdownRenderer.render(this.app, accumulated, assistantEl, "", this.plugin).then(() => {
+            assistantEl.removeClass("ai-daily-msg-streaming");
+            this.postProcessAssistantEl(assistantEl);
+          });
+          this.messages.push({ role: "assistant", content: accumulated, source: "codex" });
+        } else if (assistantEl) {
+          assistantEl.remove();
+        }
+        this.addMessage("assistant", `Codex \u51FA\u9519: ${error}`, "codex");
+        this.isLoading = false;
+        this.setSendButtonState(false);
+      },
+      onDone: (fullText) => {
+        if (this.closed) return;
+        loadingEl.remove();
+        if (typewriterTimer !== null) {
+          window.clearTimeout(typewriterTimer);
+          typewriterTimer = null;
+        }
+        if (assistantEl) {
+          assistantEl.empty();
+          void import_obsidian13.MarkdownRenderer.render(this.app, fullText, assistantEl, "", this.plugin).then(() => {
+            assistantEl.removeClass("ai-daily-msg-streaming");
+            this.postProcessAssistantEl(assistantEl);
+          });
+          this.messages.push({ role: "assistant", content: fullText, source: "codex" });
+        } else if (fullText) {
+          this.addMessage("assistant", fullText, "codex");
+        }
+        this.scrollToBottomIfFollowing();
+        void this.persistSession();
+        this.isLoading = false;
+        this.setSendButtonState(false);
+      },
+      onSessionId: (id) => {
+        this.codexSessionId = id;
+        console.log("[ai-daily] Codex session:", id);
+      }
+    });
+    this.codexAbort = handle.abort;
+  }
   async handleDistillAsMessage() {
     if (this.messages.length < 2) {
-      new import_obsidian12.Notice("\u5F53\u524D\u5BF9\u8BDD\u5185\u5BB9\u592A\u5C11\uFF0C\u65E0\u6CD5\u84B8\u998F", 3e3);
+      new import_obsidian13.Notice("\u5F53\u524D\u5BF9\u8BDD\u5185\u5BB9\u592A\u5C11\uFF0C\u65E0\u6CD5\u84B8\u998F", 3e3);
       return;
     }
     if (this.isLoading) {
-      new import_obsidian12.Notice("\u8BF7\u7B49\u5F85\u5F53\u524D\u64CD\u4F5C\u5B8C\u6210", 2e3);
+      new import_obsidian13.Notice("\u8BF7\u7B49\u5F85\u5F53\u524D\u64CD\u4F5C\u5B8C\u6210", 2e3);
       return;
     }
     if (!this.plugin.getEffectiveApiKey()) {
-      new import_obsidian12.Notice("\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u914D\u7F6E API Key", 3e3);
+      new import_obsidian13.Notice("\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u914D\u7F6E API Key", 3e3);
       return;
     }
     this.isLoading = true;
@@ -8144,7 +8659,7 @@ ${filesList}` : "",
     const renderStreamingMarkdown = async (content) => {
       if (!assistantEl) return;
       assistantEl.empty();
-      await import_obsidian12.MarkdownRenderer.render(this.app, content, assistantEl, "", this.plugin);
+      await import_obsidian13.MarkdownRenderer.render(this.app, content, assistantEl, "", this.plugin);
       this.scrollToBottomIfFollowing();
     };
     const scheduleStreamingMarkdown = (content) => {
@@ -8209,7 +8724,7 @@ ${filesList}` : "",
           const key = `${name}-${toolCallCounter++}`;
           const el = toolCallsEl.createDiv({ cls: "ai-daily-tool-call ai-daily-tool-call-running" });
           const iconSpan = el.createSpan({ cls: "ai-daily-tool-call-icon" });
-          (0, import_obsidian12.setIcon)(iconSpan, "loader");
+          (0, import_obsidian13.setIcon)(iconSpan, "loader");
           el.createSpan({ cls: "ai-daily-tool-call-text", text: toolCallSummary(name, input) });
           toolCallEls.set(key, el);
           this.updateToolCallsSummary(toolCallsSummaryEl, toolTotal, toolRunning);
@@ -8223,7 +8738,7 @@ ${filesList}` : "",
             const iconSpan = el.querySelector(".ai-daily-tool-call-icon");
             if (iconSpan) {
               iconSpan.empty();
-              (0, import_obsidian12.setIcon)(iconSpan, status === "done" ? "check" : "x");
+              (0, import_obsidian13.setIcon)(iconSpan, status === "done" ? "check" : "x");
             }
             toolRunning--;
             this.updateToolCallsSummary(toolCallsSummaryEl, toolTotal, toolRunning);
@@ -8256,7 +8771,7 @@ ${filesList}` : "",
       }
       this.scrollToBottomIfFollowing();
       await this.persistSession();
-      new import_obsidian12.Notice("\u77E5\u8BC6\u84B8\u998F\u5B8C\u6210", 3e3);
+      new import_obsidian13.Notice("\u77E5\u8BC6\u84B8\u998F\u5B8C\u6210", 3e3);
     } catch (e) {
       cancelStreamingMarkdown();
       loadingEl.remove();
@@ -8275,19 +8790,19 @@ ${filesList}` : "",
   }
   async handleDistill() {
     if (this.messages.length < 2) {
-      new import_obsidian12.Notice("\u5F53\u524D\u5BF9\u8BDD\u5185\u5BB9\u592A\u5C11\uFF0C\u65E0\u6CD5\u84B8\u998F", 3e3);
+      new import_obsidian13.Notice("\u5F53\u524D\u5BF9\u8BDD\u5185\u5BB9\u592A\u5C11\uFF0C\u65E0\u6CD5\u84B8\u998F", 3e3);
       return;
     }
     if (this.isLoading) {
-      new import_obsidian12.Notice("\u8BF7\u7B49\u5F85\u5F53\u524D\u64CD\u4F5C\u5B8C\u6210", 2e3);
+      new import_obsidian13.Notice("\u8BF7\u7B49\u5F85\u5F53\u524D\u64CD\u4F5C\u5B8C\u6210", 2e3);
       return;
     }
     if (!this.plugin.getEffectiveApiKey()) {
-      new import_obsidian12.Notice("\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u914D\u7F6E API Key", 3e3);
+      new import_obsidian13.Notice("\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u914D\u7F6E API Key", 3e3);
       return;
     }
     this.isLoading = true;
-    const notice = new import_obsidian12.Notice("\u6B63\u5728\u84B8\u998F\u5BF9\u8BDD\u77E5\u8BC6...", 0);
+    const notice = new import_obsidian13.Notice("\u6B63\u5728\u84B8\u998F\u5BF9\u8BDD\u77E5\u8BC6...", 0);
     try {
       const result = await distillConversation(this.app, this.messages, {
         apiKey: this.plugin.getEffectiveApiKey(),
@@ -8298,11 +8813,11 @@ ${filesList}` : "",
       notice.hide();
       this.addMessage("assistant", result);
       await this.persistSession();
-      new import_obsidian12.Notice("\u77E5\u8BC6\u84B8\u998F\u5B8C\u6210", 3e3);
+      new import_obsidian13.Notice("\u77E5\u8BC6\u84B8\u998F\u5B8C\u6210", 3e3);
     } catch (e) {
       notice.hide();
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian12.Notice(`\u84B8\u998F\u5931\u8D25: ${msg}`, 5e3);
+      new import_obsidian13.Notice(`\u84B8\u998F\u5931\u8D25: ${msg}`, 5e3);
     } finally {
       this.isLoading = false;
     }
@@ -8315,7 +8830,7 @@ ${filesList}` : "",
         cls: "ai-daily-health-fix-btn",
         text: "\u4E00\u952E\u4FEE\u590D"
       });
-      (0, import_obsidian12.setIcon)(btn.createSpan({ cls: "ai-daily-health-fix-icon" }), "wrench");
+      (0, import_obsidian13.setIcon)(btn.createSpan({ cls: "ai-daily-health-fix-icon" }), "wrench");
       btn.addEventListener("click", () => {
         bar.remove();
         this.handleHealthFix(fixableResult);
@@ -8324,11 +8839,11 @@ ${filesList}` : "",
   }
   async handleHealthFix(result) {
     if (this.isLoading) {
-      new import_obsidian12.Notice("\u8BF7\u7B49\u5F85\u5F53\u524D\u64CD\u4F5C\u5B8C\u6210", 2e3);
+      new import_obsidian13.Notice("\u8BF7\u7B49\u5F85\u5F53\u524D\u64CD\u4F5C\u5B8C\u6210", 2e3);
       return;
     }
     if (!this.plugin.getEffectiveApiKey()) {
-      new import_obsidian12.Notice("\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u914D\u7F6E API Key", 3e3);
+      new import_obsidian13.Notice("\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u914D\u7F6E API Key", 3e3);
       return;
     }
     this.isLoading = true;
@@ -8351,7 +8866,7 @@ ${filesList}` : "",
     const renderStreamingMarkdown = async (content) => {
       if (!assistantEl) return;
       assistantEl.empty();
-      await import_obsidian12.MarkdownRenderer.render(this.app, content, assistantEl, "", this.plugin);
+      await import_obsidian13.MarkdownRenderer.render(this.app, content, assistantEl, "", this.plugin);
       this.scrollToBottomIfFollowing();
     };
     const scheduleStreamingMarkdown = (content) => {
@@ -8412,7 +8927,7 @@ ${filesList}` : "",
           const key = `${name}-${toolCallCounter++}`;
           const el = toolCallsEl.createDiv({ cls: "ai-daily-tool-call ai-daily-tool-call-running" });
           const iconSpan = el.createSpan({ cls: "ai-daily-tool-call-icon" });
-          (0, import_obsidian12.setIcon)(iconSpan, "loader");
+          (0, import_obsidian13.setIcon)(iconSpan, "loader");
           el.createSpan({ cls: "ai-daily-tool-call-text", text: toolCallSummary(name, input) });
           toolCallEls.set(key, el);
           this.updateToolCallsSummary(toolCallsSummaryEl, toolTotal, toolRunning);
@@ -8426,7 +8941,7 @@ ${filesList}` : "",
             const iconSpan = el.querySelector(".ai-daily-tool-call-icon");
             if (iconSpan) {
               iconSpan.empty();
-              (0, import_obsidian12.setIcon)(iconSpan, status === "done" ? "check" : "x");
+              (0, import_obsidian13.setIcon)(iconSpan, status === "done" ? "check" : "x");
             }
             toolRunning--;
             this.updateToolCallsSummary(toolCallsSummaryEl, toolTotal, toolRunning);
@@ -8460,7 +8975,7 @@ ${filesList}` : "",
       this.renderUndoBar();
       this.scrollToBottomIfFollowing();
       await this.persistSession();
-      new import_obsidian12.Notice("\u77E5\u8BC6\u5E93\u4FEE\u590D\u5B8C\u6210", 3e3);
+      new import_obsidian13.Notice("\u77E5\u8BC6\u5E93\u4FEE\u590D\u5B8C\u6210", 3e3);
     } catch (e) {
       cancelStreamingMarkdown();
       loadingEl.remove();
@@ -8489,6 +9004,7 @@ ${filesList}` : "",
     this.messages.splice(assistantMsgIdx - 1);
     (_a = this.client) == null ? void 0 : _a.clearProxySessionId();
     this.claudeCodeSessionId = void 0;
+    this.codexSessionId = void 0;
     if (this.client) {
       const keepCount = this.messages.filter((m) => m.source === "api" || m.source === "proxy").length;
       while (this.client.getMessagesSnapshot().length > keepCount) {
@@ -8517,7 +9033,7 @@ ${filesList}` : "",
     this.inputEl.focus();
     await this.persistSession();
     const turnsRemoved = Math.floor(removedCount / 2);
-    new import_obsidian12.Notice(`\u5DF2\u5206\u53C9\uFF0C\u79FB\u9664 ${turnsRemoved} \u8F6E\u5BF9\u8BDD\uFF0C\u4E0B\u6B21\u53D1\u9001\u5C06\u521B\u5EFA\u65B0\u4F1A\u8BDD`, 3e3);
+    new import_obsidian13.Notice(`\u5DF2\u5206\u53C9\uFF0C\u79FB\u9664 ${turnsRemoved} \u8F6E\u5BF9\u8BDD\uFF0C\u4E0B\u6B21\u53D1\u9001\u5C06\u521B\u5EFA\u65B0\u4F1A\u8BDD`, 3e3);
   }
   async saveSessionAsNote() {
     var _a;
@@ -8537,13 +9053,13 @@ ${m.content}`);
     try {
       const existing = this.app.vault.getAbstractFileByPath(fileName);
       if (existing) {
-        new import_obsidian12.Notice(`\u7B14\u8BB0\u5DF2\u5B58\u5728: ${fileName}`, 3e3);
+        new import_obsidian13.Notice(`\u7B14\u8BB0\u5DF2\u5B58\u5728: ${fileName}`, 3e3);
         return;
       }
       await this.app.vault.create(fileName, content);
-      new import_obsidian12.Notice(`\u5DF2\u4FDD\u5B58\u4E3A\u7B14\u8BB0: ${fileName}`, 3e3);
+      new import_obsidian13.Notice(`\u5DF2\u4FDD\u5B58\u4E3A\u7B14\u8BB0: ${fileName}`, 3e3);
     } catch (e) {
-      new import_obsidian12.Notice(`\u4FDD\u5B58\u5931\u8D25: ${e instanceof Error ? e.message : String(e)}`, 5e3);
+      new import_obsidian13.Notice(`\u4FDD\u5B58\u5931\u8D25: ${e instanceof Error ? e.message : String(e)}`, 5e3);
     }
   }
   copySessionText() {
@@ -8556,7 +9072,7 @@ ${m.content}`);
       lines.push("");
     }
     navigator.clipboard.writeText(lines.join("\n")).then(() => {
-      new import_obsidian12.Notice("\u5DF2\u590D\u5236\u5168\u6587", 2e3);
+      new import_obsidian13.Notice("\u5DF2\u590D\u5236\u5168\u6587", 2e3);
     });
   }
   renameCurrentSession() {
@@ -8570,7 +9086,7 @@ ${m.content}`);
         this.sessionId,
         newTitle
       );
-      new import_obsidian12.Notice(`\u5DF2\u91CD\u547D\u540D\u4E3A\u300C${newTitle}\u300D`, 2e3);
+      new import_obsidian13.Notice(`\u5DF2\u91CD\u547D\u540D\u4E3A\u300C${newTitle}\u300D`, 2e3);
     });
     modal.open();
   }
@@ -8581,7 +9097,7 @@ ${m.content}`);
       this.plugin.settings.chatHistoryFolder,
       this.sessionId
     );
-    new import_obsidian12.Notice(pinned ? "\u5DF2\u7F6E\u9876" : "\u5DF2\u53D6\u6D88\u7F6E\u9876", 2e3);
+    new import_obsidian13.Notice(pinned ? "\u5DF2\u7F6E\u9876" : "\u5DF2\u53D6\u6D88\u7F6E\u9876", 2e3);
   }
   deleteCurrentSession() {
     if (!this.sessionId) return;
@@ -8597,7 +9113,7 @@ ${m.content}`);
           this.sessionId
         );
         this.clearChat();
-        new import_obsidian12.Notice("\u5BF9\u8BDD\u5DF2\u5220\u9664", 2e3);
+        new import_obsidian13.Notice("\u5BF9\u8BDD\u5DF2\u5220\u9664", 2e3);
       }
     ).open();
   }
@@ -8611,6 +9127,7 @@ ${m.content}`);
     this.vaultTools = null;
     this.harnessContext = null;
     this.claudeCodeSessionId = void 0;
+    this.codexSessionId = void 0;
     this.claudeCodeUndoHistory = [];
     this.restoredProxySessionId = void 0;
     this.restoredProxyTaskId = void 0;
@@ -8711,12 +9228,12 @@ ${m.content}`);
     };
     const head = overlay.createDiv({ cls: "ai-daily-history-head" });
     const backBtn = head.createDiv({ cls: "ai-daily-history-back" });
-    (0, import_obsidian12.setIcon)(backBtn, "chevron-left");
+    (0, import_obsidian13.setIcon)(backBtn, "chevron-left");
     backBtn.addEventListener("click", () => this.closeHistoryOverlay());
     head.createEl("span", { text: "\u5386\u53F2", cls: "ai-daily-history-title" });
     const headActions = head.createDiv({ cls: "ai-daily-history-head-actions" });
     const clearAllBtn = headActions.createSpan({ cls: "ai-daily-history-clear-all" });
-    (0, import_obsidian12.setIcon)(clearAllBtn, "list-filter");
+    (0, import_obsidian13.setIcon)(clearAllBtn, "list-filter");
     clearAllBtn.setAttribute("title", "\u6E05\u7A7A\u5168\u90E8");
     clearAllBtn.addEventListener("click", () => {
       if (sessions.length === 0) return;
@@ -8732,13 +9249,13 @@ ${m.content}`);
           }
           sessions = [];
           renderList([]);
-          new import_obsidian12.Notice("\u5DF2\u6E05\u7A7A\u6240\u6709\u5386\u53F2\u5BF9\u8BDD", 3e3);
+          new import_obsidian13.Notice("\u5DF2\u6E05\u7A7A\u6240\u6709\u5386\u53F2\u5BF9\u8BDD", 3e3);
         }
       ).open();
     });
     const searchWrap = overlay.createDiv({ cls: "ai-daily-history-search-wrap" });
     const searchIcon = searchWrap.createSpan({ cls: "ai-daily-history-search-icon" });
-    (0, import_obsidian12.setIcon)(searchIcon, "search");
+    (0, import_obsidian13.setIcon)(searchIcon, "search");
     const search = searchWrap.createEl("input", {
       cls: "ai-daily-history-search",
       type: "search",
@@ -8832,7 +9349,7 @@ ${m.content}`);
       if (isPinned) {
         dot.style.background = "var(--interactive-accent)";
         const pinIcon = row.createSpan({ cls: "ai-daily-history-row-pin-icon" });
-        (0, import_obsidian12.setIcon)(pinIcon, "pin");
+        (0, import_obsidian13.setIcon)(pinIcon, "pin");
       }
       const info = row.createDiv({ cls: "ai-daily-history-row-info" });
       info.createDiv({
@@ -8882,11 +9399,12 @@ ${m.content}`);
     const { chatHistoryFolder } = this.plugin.settings;
     const data = await loadChatSession(this.app.vault, chatHistoryFolder, id);
     if (!data || !((_a = data.messages) == null ? void 0 : _a.length)) {
-      new import_obsidian12.Notice("\u65E0\u6CD5\u52A0\u8F7D\u8BE5\u4F1A\u8BDD");
+      new import_obsidian13.Notice("\u65E0\u6CD5\u52A0\u8F7D\u8BE5\u4F1A\u8BDD");
       return;
     }
     this.sessionId = data.id;
     this.claudeCodeSessionId = data.claudeCodeSessionId;
+    this.codexSessionId = data.codexSessionId;
     this.restoredProxySessionId = data.proxySessionId;
     this.restoredProxyTaskId = data.proxyTaskId;
     this.harnessContext = data.harnessContext ? { ...data.harnessContext, mode: { ...data.harnessContext.mode, actions: (_b = data.harnessContext.mode.actions) != null ? _b : [] } } : null;
@@ -8935,7 +9453,7 @@ ${m.content}`);
         for (const f of ctx.injectedFiles) {
           const pill = pills.createSpan({ cls: "ai-daily-ctx-pill" });
           const fIcon = pill.createSpan({ cls: "ai-daily-ctx-pill-icon" });
-          (0, import_obsidian12.setIcon)(fIcon, "file-text");
+          (0, import_obsidian13.setIcon)(fIcon, "file-text");
           const displayName = f.path.replace(/^.*\//, "").replace(/\.md$/, "");
           pill.createSpan({ text: displayName });
           pill.setAttribute("title", f.path);
@@ -8947,7 +9465,7 @@ ${m.content}`);
         cls: `ai-daily-msg ai-daily-msg-${m.role}`
       });
       if (m.role === "assistant") {
-        await import_obsidian12.MarkdownRenderer.render(
+        await import_obsidian13.MarkdownRenderer.render(
           this.app,
           m.content,
           msgEl,
@@ -8971,7 +9489,7 @@ ${m.content}`);
     );
     this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
     this.updateTokenBar();
-    new import_obsidian12.Notice("\u5DF2\u6062\u590D\u5386\u53F2\u5BF9\u8BDD", 3e3);
+    new import_obsidian13.Notice("\u5DF2\u6062\u590D\u5386\u53F2\u5BF9\u8BDD", 3e3);
     if (this.restoredProxyTaskId && this.plugin.settings.proxyEnabled && this.plugin.settings.proxyUrl) {
       this.recoverProxyTask(this.restoredProxyTaskId);
     }
@@ -9001,10 +9519,10 @@ ${m.content}`);
           this.addMessage("assistant", data.result, "proxy");
           this.scrollToBottomIfFollowing();
           await this.persistSession();
-          new import_obsidian12.Notice("\u5DF2\u6062\u590D\u4EE3\u7406\u4EFB\u52A1\u7684\u5B8C\u6574\u56DE\u590D", 4e3);
+          new import_obsidian13.Notice("\u5DF2\u6062\u590D\u4EE3\u7406\u4EFB\u52A1\u7684\u5B8C\u6574\u56DE\u590D", 4e3);
         }
       } else if (data.status === "running") {
-        new import_obsidian12.Notice("\u4EE3\u7406\u4EFB\u52A1\u4ECD\u5728\u8FD0\u884C\u4E2D\uFF0C\u8BF7\u7A0D\u540E\u5237\u65B0", 4e3);
+        new import_obsidian13.Notice("\u4EE3\u7406\u4EFB\u52A1\u4ECD\u5728\u8FD0\u884C\u4E2D\uFF0C\u8BF7\u7A0D\u540E\u5237\u65B0", 4e3);
       }
     } catch (e) {
       console.warn("[ai-daily] proxy task recovery failed:", e);
@@ -9016,6 +9534,10 @@ ${m.content}`);
     if (this.claudeCodeAbort) {
       this.claudeCodeAbort();
       this.claudeCodeAbort = null;
+    }
+    if (this.codexAbort) {
+      this.codexAbort();
+      this.codexAbort = null;
     }
     (_a = this.client) == null ? void 0 : _a.abort();
     this.closeHistoryOverlay();
@@ -9037,7 +9559,7 @@ _ChatView.WORKSPACE_COLORS = [
 var ChatView = _ChatView;
 
 // src/feed-generator.ts
-var import_obsidian13 = require("obsidian");
+var import_obsidian14 = require("obsidian");
 var FEED_SYSTEM_PROMPT = `\u4F60\u662F\u4E00\u4E2A AI/ML \u9886\u57DF\u7684\u8D44\u6DF1\u6280\u672F\u7F16\u8F91\uFF0C\u8BFB\u8005\u662F\u6709\u7ECF\u9A8C\u7684\u5F00\u53D1\u8005\u548C\u7814\u7A76\u8005\u3002
 \u4F60\u7684\u4EFB\u52A1\u662F\u57FA\u4E8E\u591A\u6765\u6E90\u6293\u53D6\u7684\u6587\u7AE0\uFF08RSS\u3001Hacker News\u3001Reddit\u3001GitHub Trending\u3001\u6280\u672F\u535A\u5BA2\u3001\u64AD\u5BA2\uFF09\u548C\u7528\u6237\u7B14\u8BB0\u5E93\u4E2D\u7684\u76F8\u5173\u5185\u5BB9\uFF0C\u751F\u6210\u4E00\u4EFD\u6709\u6DF1\u5EA6\u7684\u4E2D\u6587\u6280\u672F Feed\u3002
 
@@ -9120,7 +9642,7 @@ async function getRecentFeedUrls(app, feedFolder, days = 3, prefixes = ["Feed"])
     for (const prefix of prefixes) {
       const filePath = `${feedFolder}/${prefix}-${dateStr}.md`;
       const file = app.vault.getAbstractFileByPath(filePath);
-      if (file instanceof import_obsidian13.TFile) {
+      if (file instanceof import_obsidian14.TFile) {
         const content = await app.vault.cachedRead(file);
         for (const match of content.matchAll(URL_PATTERN)) {
           urls.add(match[0]);
@@ -9137,7 +9659,7 @@ function getTodayFeedPath(feedFolder) {
 async function checkExistingFeed(app, feedFolder) {
   const filePath = getTodayFeedPath(feedFolder);
   const existing = app.vault.getAbstractFileByPath(filePath);
-  if (existing instanceof import_obsidian13.TFile) {
+  if (existing instanceof import_obsidian14.TFile) {
     const content = await app.vault.read(existing);
     return { file: existing, content };
   }
@@ -9225,7 +9747,7 @@ ${articlesText}`;
     await app.vault.createFolder(feedFolder);
   }
   let file;
-  if (existingFile instanceof import_obsidian13.TFile && existingContent) {
+  if (existingFile instanceof import_obsidian14.TFile && existingContent) {
     const now = /* @__PURE__ */ new Date();
     const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
     const appendContent = `
@@ -9239,7 +9761,7 @@ ${aiContent}
     const updatedContent = existingContent + appendContent;
     await app.vault.modify(existingFile, updatedContent);
     file = existingFile;
-  } else if (existingFile instanceof import_obsidian13.TFile) {
+  } else if (existingFile instanceof import_obsidian14.TFile) {
     const noteContent = `---
 type: feed
 ${topicsYaml}date: ${today}
@@ -9303,7 +9825,7 @@ function getTodayPodcastFeedPath(feedFolder) {
 async function checkExistingPodcastFeed(app, feedFolder) {
   const filePath = getTodayPodcastFeedPath(feedFolder);
   const existing = app.vault.getAbstractFileByPath(filePath);
-  if (existing instanceof import_obsidian13.TFile) {
+  if (existing instanceof import_obsidian14.TFile) {
     const content = await app.vault.read(existing);
     return { file: existing, content };
   }
@@ -9433,7 +9955,7 @@ ${episodesText}`;
     await app.vault.createFolder(feedFolder);
   }
   let file;
-  if (existingFile instanceof import_obsidian13.TFile && existingContent) {
+  if (existingFile instanceof import_obsidian14.TFile && existingContent) {
     const now = /* @__PURE__ */ new Date();
     const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
     const appendContent = `
@@ -9446,7 +9968,7 @@ ${aiContent}
 `;
     await app.vault.modify(existingFile, existingContent + appendContent);
     file = existingFile;
-  } else if (existingFile instanceof import_obsidian13.TFile) {
+  } else if (existingFile instanceof import_obsidian14.TFile) {
     const noteContent = `---
 type: podcast-feed
 date: ${today}
@@ -9475,7 +9997,7 @@ ${aiContent}
 }
 
 // src/auto-tagger.ts
-var import_obsidian14 = require("obsidian");
+var import_obsidian15 = require("obsidian");
 var DEBOUNCE_MS = 5e3;
 var AUTO_TAG_MARKER = "auto-tagged";
 var AutoTagger = class {
@@ -9516,7 +10038,7 @@ var AutoTagger = class {
   async processFile(file) {
     var _a, _b, _c, _d;
     const abstract = this.app.vault.getAbstractFileByPath(file.path);
-    if (!(abstract instanceof import_obsidian14.TFile)) return;
+    if (!(abstract instanceof import_obsidian15.TFile)) return;
     this.processing.add(file.path);
     try {
       const content = await this.app.vault.cachedRead(abstract);
@@ -9731,7 +10253,7 @@ var PluginApiServer = class {
 };
 
 // src/main.ts
-var FeedConfirmModal = class extends import_obsidian15.Modal {
+var FeedConfirmModal = class extends import_obsidian16.Modal {
   constructor(app) {
     super(app);
     this.resolved = false;
@@ -9775,7 +10297,7 @@ var FeedConfirmModal = class extends import_obsidian15.Modal {
     this.contentEl.empty();
   }
 };
-var AIDailyChat = class extends import_obsidian15.Plugin {
+var AIDailyChat = class extends import_obsidian16.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
@@ -9835,7 +10357,7 @@ var AIDailyChat = class extends import_obsidian15.Plugin {
     });
     this.addSettingTab(new AIDailyChatSettingTab(this.app, this));
     this.setupAutoTagger();
-    if (import_obsidian15.Platform.isDesktop) {
+    if (import_obsidian16.Platform.isDesktop) {
       this.apiServer = new PluginApiServer(this.app, 27080, this.settings.knowledgeFolders, this.settings.feedSources);
       this.apiServer.start();
       this.register(() => {
@@ -9843,7 +10365,7 @@ var AIDailyChat = class extends import_obsidian15.Plugin {
         return (_a = this.apiServer) == null ? void 0 : _a.stop();
       });
     }
-    if (import_obsidian15.Platform.isMobile) {
+    if (import_obsidian16.Platform.isMobile) {
       this.app.workspace.onLayoutReady(() => {
         const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
         if (leaf && this.isLeafInSidebar(leaf)) {
@@ -9866,12 +10388,12 @@ var AIDailyChat = class extends import_obsidian15.Plugin {
   async activateView() {
     const { workspace } = this.app;
     let leaf = workspace.getLeavesOfType(VIEW_TYPE)[0];
-    if (leaf && import_obsidian15.Platform.isMobile && this.isLeafInSidebar(leaf)) {
+    if (leaf && import_obsidian16.Platform.isMobile && this.isLeafInSidebar(leaf)) {
       leaf.detach();
       leaf = void 0;
     }
     if (!leaf) {
-      if (import_obsidian15.Platform.isMobile) {
+      if (import_obsidian16.Platform.isMobile) {
         leaf = workspace.getLeaf(true);
       } else {
         const rightLeaf = workspace.getRightLeaf(false);
@@ -9888,12 +10410,12 @@ var AIDailyChat = class extends import_obsidian15.Plugin {
   async activateHarnessView() {
     const { workspace } = this.app;
     let leaf = workspace.getLeavesOfType(HARNESS_VIEW_TYPE)[0];
-    if (leaf && import_obsidian15.Platform.isMobile && this.isLeafInSidebar(leaf)) {
+    if (leaf && import_obsidian16.Platform.isMobile && this.isLeafInSidebar(leaf)) {
       leaf.detach();
       leaf = void 0;
     }
     if (!leaf) {
-      if (import_obsidian15.Platform.isMobile) {
+      if (import_obsidian16.Platform.isMobile) {
         leaf = workspace.getLeaf(true);
       } else {
         const rightLeaf = workspace.getRightLeaf(false);
@@ -9920,7 +10442,7 @@ var AIDailyChat = class extends import_obsidian15.Plugin {
       const confirmed = await new FeedConfirmModal(this.app).open();
       if (!confirmed) return;
     }
-    const notice = new import_obsidian15.Notice("\u6B63\u5728\u751F\u6210 AI Feed...", 0);
+    const notice = new import_obsidian16.Notice("\u6B63\u5728\u751F\u6210 AI Feed...", 0);
     try {
       const file = await generateFeed(
         this.app,
@@ -9931,13 +10453,13 @@ var AIDailyChat = class extends import_obsidian15.Plugin {
         existing == null ? void 0 : existing.content
       );
       notice.hide();
-      new import_obsidian15.Notice(`Feed \u5DF2\u751F\u6210: ${file.path}`, 5e3);
+      new import_obsidian16.Notice(`Feed \u5DF2\u751F\u6210: ${file.path}`, 5e3);
       const leaf = this.app.workspace.getLeaf(false);
       await leaf.openFile(file);
     } catch (e) {
       notice.hide();
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian15.Notice(`Feed \u751F\u6210\u5931\u8D25: ${msg}`, 8e3);
+      new import_obsidian16.Notice(`Feed \u751F\u6210\u5931\u8D25: ${msg}`, 8e3);
     }
   }
   async generatePodcastFeed() {
@@ -9946,7 +10468,7 @@ var AIDailyChat = class extends import_obsidian15.Plugin {
       const confirmed = await new FeedConfirmModal(this.app).open();
       if (!confirmed) return;
     }
-    const notice = new import_obsidian15.Notice("\u6B63\u5728\u751F\u6210\u64AD\u5BA2 Feed...", 0);
+    const notice = new import_obsidian16.Notice("\u6B63\u5728\u751F\u6210\u64AD\u5BA2 Feed...", 0);
     try {
       const file = await generatePodcastFeed(
         this.app,
@@ -9957,13 +10479,13 @@ var AIDailyChat = class extends import_obsidian15.Plugin {
         existing == null ? void 0 : existing.content
       );
       notice.hide();
-      new import_obsidian15.Notice(`\u64AD\u5BA2 Feed \u5DF2\u751F\u6210: ${file.path}`, 5e3);
+      new import_obsidian16.Notice(`\u64AD\u5BA2 Feed \u5DF2\u751F\u6210: ${file.path}`, 5e3);
       const leaf = this.app.workspace.getLeaf(false);
       await leaf.openFile(file);
     } catch (e) {
       notice.hide();
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian15.Notice(`\u64AD\u5BA2 Feed \u751F\u6210\u5931\u8D25: ${msg}`, 8e3);
+      new import_obsidian16.Notice(`\u64AD\u5BA2 Feed \u751F\u6210\u5931\u8D25: ${msg}`, 8e3);
     }
   }
   async organizeKnowledge() {
@@ -9971,13 +10493,13 @@ var AIDailyChat = class extends import_obsidian15.Plugin {
     const useClaudeCode = await isClaudeCodeAvailable();
     console.log("[ai-daily] useClaudeCode =", useClaudeCode);
     if (!useClaudeCode && !this.getEffectiveApiKey()) {
-      new import_obsidian15.Notice("\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u914D\u7F6E Anthropic API Key\uFF0C\u6216\u5B89\u88C5 Claude Code\u3002", 5e3);
+      new import_obsidian16.Notice("\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u914D\u7F6E Anthropic API Key\uFF0C\u6216\u5B89\u88C5 Claude Code\u3002", 5e3);
       return;
     }
     const sourceFolder = this.settings.autoTagFolders[0] || "Raw";
     const unorganized = await findUnorganizedNotes(this.app, sourceFolder);
     if (unorganized.length === 0) {
-      new import_obsidian15.Notice("\u6CA1\u6709\u627E\u5230\u5F85\u6574\u7406\u7684\u7B14\u8BB0", 3e3);
+      new import_obsidian16.Notice("\u6CA1\u6709\u627E\u5230\u5F85\u6574\u7406\u7684\u7B14\u8BB0", 3e3);
       return;
     }
     const batch = unorganized.slice(0, MAX_NOTES_PER_RUN);
@@ -10004,14 +10526,14 @@ var AIDailyChat = class extends import_obsidian15.Plugin {
     if (!leaf) return;
     const view = leaf.view;
     if (useClaudeCode) {
-      new import_obsidian15.Notice("\u4F7F\u7528 Claude Code \u6574\u7406\uFF08Max plan \u989D\u5EA6\uFF09", 3e3);
+      new import_obsidian16.Notice("\u4F7F\u7528 Claude Code \u6574\u7406\uFF08Max plan \u989D\u5EA6\uFF09", 3e3);
       view.sendClaudeCodeMessage(message);
     } else {
       view.sendMessage(message);
     }
   }
   async runWikiHealthCheck() {
-    const notice = new import_obsidian15.Notice("\u6B63\u5728\u68C0\u67E5\u77E5\u8BC6\u5E93\u5065\u5EB7\u72B6\u6001...", 0);
+    const notice = new import_obsidian16.Notice("\u6B63\u5728\u68C0\u67E5\u77E5\u8BC6\u5E93\u5065\u5EB7\u72B6\u6001...", 0);
     try {
       const result = await wikiHealthCheck(this.app, this.settings.knowledgeFolders);
       const report = formatHealthCheckReport(result);
@@ -10024,7 +10546,7 @@ var AIDailyChat = class extends import_obsidian15.Plugin {
     } catch (e) {
       notice.hide();
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian15.Notice(`\u5065\u5EB7\u68C0\u67E5\u5931\u8D25: ${msg}`, 5e3);
+      new import_obsidian16.Notice(`\u5065\u5EB7\u68C0\u67E5\u5931\u8D25: ${msg}`, 5e3);
     }
   }
   setupAutoTagger() {
@@ -10038,7 +10560,7 @@ var AIDailyChat = class extends import_obsidian15.Plugin {
       folders: this.settings.autoTagFolders,
       customPrompt: this.settings.autoTagPrompt || void 0,
       onTagged: (path) => {
-        new import_obsidian15.Notice(`\u5DF2\u81EA\u52A8\u6807\u6CE8: ${path}`, 3e3);
+        new import_obsidian16.Notice(`\u5DF2\u81EA\u52A8\u6807\u6CE8: ${path}`, 3e3);
       },
       onError: (path, error) => {
         console.warn(`[ai-daily] auto-tag failed for ${path}:`, error);
@@ -10047,13 +10569,13 @@ var AIDailyChat = class extends import_obsidian15.Plugin {
     this.registerEvent(
       this.app.vault.on("create", (file) => {
         var _a2;
-        if (file instanceof import_obsidian15.TFile) (_a2 = this.autoTagger) == null ? void 0 : _a2.handleFileEvent(file);
+        if (file instanceof import_obsidian16.TFile) (_a2 = this.autoTagger) == null ? void 0 : _a2.handleFileEvent(file);
       })
     );
     this.registerEvent(
       this.app.vault.on("modify", (file) => {
         var _a2;
-        if (file instanceof import_obsidian15.TFile) (_a2 = this.autoTagger) == null ? void 0 : _a2.handleFileEvent(file);
+        if (file instanceof import_obsidian16.TFile) (_a2 = this.autoTagger) == null ? void 0 : _a2.handleFileEvent(file);
       })
     );
   }
@@ -10071,7 +10593,7 @@ var AIDailyChat = class extends import_obsidian15.Plugin {
       const restored = await this.restoreFromBackup();
       if (restored) {
         raw = restored;
-        new import_obsidian15.Notice("\u8BBE\u7F6E\u5DF2\u4ECE\u5907\u4EFD\u6062\u590D\uFF08data.json \u53EF\u80FD\u4E22\u5931\u6216\u635F\u574F\uFF09", 8e3);
+        new import_obsidian16.Notice("\u8BBE\u7F6E\u5DF2\u4ECE\u5907\u4EFD\u6062\u590D\uFF08data.json \u53EF\u80FD\u4E22\u5931\u6216\u635F\u574F\uFF09", 8e3);
         console.warn("[ai-daily] data.json was empty/missing, restored from backup");
       }
     }

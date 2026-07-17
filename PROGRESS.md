@@ -1,5 +1,12 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-07-17 — Codex 非交互安全边界 (`d14f561`)
+
+- **问题**：桌面端和 Proxy Codex 使用 bypass + danger-full-access；即使限制 MCP，通用 Shell 仍可绕过工具层访问宿主机。
+- **解决**：统一改为 `approval_policy=never` + `sandbox_mode=read-only`；增加“只读”和“Vault 可写”MCP 白名单档位，始终禁用删除、重命名和网络型工具。
+- **验证**：Shell `touch /tmp/...` 被 OS 沙箱以只读文件系统拒绝；同一配置下白名单 `list_notes` 无需审批即可读取真实 Vault。
+- **教训**：工具白名单和系统沙箱必须叠加；非交互场景不能用 Full Access 代替审批设计。
+
 ## 2026-07-17 — Codex Proxy 缺少 Obsidian MCP (`1c53621`)
 
 - **问题**：`MCP_CONFIG` 只传给 Claude Code；Codex 进程未加载 `obsidian-vault`，system prompt 虽描述了工具但运行时没有工具定义。

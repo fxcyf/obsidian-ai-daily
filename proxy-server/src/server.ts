@@ -844,12 +844,17 @@ function buildCodexMcpArgs(permissionMode: "read-only" | "vault-write"): string[
 		if (!server?.command) return [];
 
 		const prefix = "mcp_servers.obsidian_vault";
+		const readTools = [
+			"read_note", "search_vault", "list_notes", "get_links", "read_image",
+			"podcast_search", "podcast_episodes", "podcast_transcript",
+			"fetch_feeds", "fetch_rss", "weread_api",
+		];
 		const overrides = [
 			`${prefix}.command=${JSON.stringify(server.command)}`,
 			`${prefix}.args=${JSON.stringify(server.args || [])}`,
 			`${prefix}.enabled_tools=${JSON.stringify(permissionMode === "vault-write"
-				? ["read_note", "search_vault", "list_notes", "get_links", "read_image", "create_note", "append_to_note", "edit_note", "update_frontmatter"]
-				: ["read_note", "search_vault", "list_notes", "get_links", "read_image"])}`,
+				? [...readTools, "create_note", "append_to_note", "edit_note", "update_frontmatter"]
+				: readTools)}`,
 			`${prefix}.default_tools_approval_mode="approve"`,
 		];
 		if (server.env && Object.keys(server.env).length > 0) {

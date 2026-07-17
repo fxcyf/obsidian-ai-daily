@@ -78,7 +78,7 @@ export function buildSystemPrompt(config: SystemPromptConfig): string {
 		);
 	}
 
-	if (config.enablePodcast && config.mode === "api") {
+	if (config.enablePodcast) {
 		parts.push(
 			"",
 			"你可以使用 podcast_search、podcast_episodes、podcast_transcript 工具来搜索播客、获取剧集列表和文字稿。",

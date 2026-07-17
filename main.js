@@ -5113,6 +5113,7 @@ var CreateWorkspaceModal = class extends import_obsidian10.Modal {
     this.nameValue = "";
     this.plugin = plugin;
     this.onSubmit = onSubmit;
+    this.modalEl.addClass("ai-daily-modal-sm");
   }
   onOpen() {
     const { contentEl } = this;
@@ -6566,6 +6567,7 @@ var ConfirmModal = class extends import_obsidian13.Modal {
     super(app);
     this.message = message;
     this.onConfirm = onConfirm;
+    this.modalEl.addClass("ai-daily-modal-sm");
   }
   onOpen() {
     const { contentEl } = this;
@@ -6591,6 +6593,7 @@ var RenameModal = class extends import_obsidian13.Modal {
     super(app);
     this.currentTitle = currentTitle;
     this.onRename = onRename;
+    this.modalEl.addClass("ai-daily-modal-sm");
   }
   onOpen() {
     const { contentEl } = this;

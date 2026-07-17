@@ -721,14 +721,10 @@
 
 /* ── Settings: tab bar ──────────────────────────────────── */
 
-.ai-daily-settings {
-	--tab-radius: 6px;
-}
-
 .ai-daily-tab-bar {
 	display: flex;
-	gap: 4px;
-	padding: 0 0 12px;
+	gap: 2px;
+	padding: 4px 0 8px;
 	border-bottom: 1px solid var(--background-modifier-border);
 	margin-bottom: 12px;
 	flex-wrap: wrap;
@@ -739,14 +735,14 @@
 }
 
 .ai-daily-tab-btn {
-	padding: 6px 14px;
-	border: 1px solid transparent;
-	border-radius: var(--tab-radius);
+	padding: 4px 10px;
+	border: none;
+	border-radius: var(--radius-s, 4px);
 	background: transparent;
 	color: var(--text-muted);
-	font-size: 13px;
+	font-size: var(--font-ui-small);
 	cursor: pointer;
-	transition: color 0.15s, background 0.15s, border-color 0.15s;
+	-webkit-tap-highlight-color: transparent;
 }
 
 .ai-daily-tab-btn:hover {
@@ -755,10 +751,8 @@
 }
 
 .ai-daily-tab-btn.is-active {
-	color: var(--text-normal);
-	background: var(--background-primary);
-	border-color: var(--background-modifier-border);
-	font-weight: 500;
+	color: var(--text-accent);
+	background: var(--background-modifier-hover);
 }
 
 .ai-daily-tab-pane > h3:first-child {
@@ -904,8 +898,8 @@
 	margin: 8px 12px;
 	padding: 0 10px;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: 8px;
-	background: var(--background-primary);
+	border-radius: var(--radius-m, 8px);
+	background: transparent;
 	gap: 6px;
 }
 
@@ -1164,6 +1158,11 @@
 }
 
 /* ── Confirm modal ────────────────────────────────────── */
+
+.ai-daily-modal-sm {
+	max-width: min(400px, calc(100vw - 48px));
+	width: auto;
+}
 
 .ai-daily-confirm-btns {
 	display: flex;

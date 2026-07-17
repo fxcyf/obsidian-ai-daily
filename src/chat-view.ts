@@ -166,6 +166,7 @@ class ConfirmModal extends Modal {
 		super(app);
 		this.message = message;
 		this.onConfirm = onConfirm;
+		this.modalEl.addClass("ai-daily-modal-sm");
 	}
 
 	onOpen(): void {
@@ -197,6 +198,7 @@ class RenameModal extends Modal {
 		super(app);
 		this.currentTitle = currentTitle;
 		this.onRename = onRename;
+		this.modalEl.addClass("ai-daily-modal-sm");
 	}
 
 	onOpen(): void {

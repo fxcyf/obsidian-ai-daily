@@ -728,6 +728,7 @@ class CreateWorkspaceModal extends Modal {
 		super(app);
 		this.plugin = plugin;
 		this.onSubmit = onSubmit;
+		this.modalEl.addClass("ai-daily-modal-sm");
 	}
 
 	onOpen(): void {

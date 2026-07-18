@@ -1609,7 +1609,7 @@ export class ChatView extends ItemView {
 						onToolCall,
 						seedHistory,
 						proxyBackend,
-						this.plugin.settings.cliBackend === "codex" ? this.plugin.settings.codexModel : undefined,
+						this.plugin.settings.cliBackend === "codex" ? this.plugin.settings.codexModel : this.plugin.settings.model,
 						this.plugin.settings.codexPermissionMode,
 						(message) => loadingTextEl.setText(message),
 					);

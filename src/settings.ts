@@ -219,7 +219,9 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 				dropdown
 					.addOption("claude-haiku-4-5", "Haiku 4.5 (快速/便宜)")
 					.addOption("claude-sonnet-4-6", "Sonnet 4.6 (均衡)")
-					.addOption("claude-opus-4-6", "Opus 4.6 (最强)")
+					.addOption("claude-sonnet-5", "Sonnet 5 (均衡/新)")
+					.addOption("claude-opus-4-6", "Opus 4.6")
+					.addOption("claude-opus-4-8", "Opus 4.8 (最强)")
 					.setValue(this.plugin.settings.model)
 					.onChange(async (value) => {
 						this.plugin.settings.model = value;

@@ -1362,7 +1362,7 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
       })
     );
     new import_obsidian3.Setting(el).setName("\u6A21\u578B").setDesc("Claude \u6A21\u578B").addDropdown(
-      (dropdown) => dropdown.addOption("claude-haiku-4-5", "Haiku 4.5 (\u5FEB\u901F/\u4FBF\u5B9C)").addOption("claude-sonnet-4-6", "Sonnet 4.6 (\u5747\u8861)").addOption("claude-opus-4-6", "Opus 4.6 (\u6700\u5F3A)").setValue(this.plugin.settings.model).onChange(async (value) => {
+      (dropdown) => dropdown.addOption("claude-haiku-4-5", "Haiku 4.5 (\u5FEB\u901F/\u4FBF\u5B9C)").addOption("claude-sonnet-4-6", "Sonnet 4.6 (\u5747\u8861)").addOption("claude-sonnet-5", "Sonnet 5 (\u5747\u8861/\u65B0)").addOption("claude-opus-4-6", "Opus 4.6").addOption("claude-opus-4-8", "Opus 4.8 (\u6700\u5F3A)").setValue(this.plugin.settings.model).onChange(async (value) => {
         this.plugin.settings.model = value;
         await this.plugin.saveSettings();
       })
@@ -7873,7 +7873,7 @@ ${filesList}` : "",
             onToolCall,
             seedHistory,
             proxyBackend,
-            this.plugin.settings.cliBackend === "codex" ? this.plugin.settings.codexModel : void 0,
+            this.plugin.settings.cliBackend === "codex" ? this.plugin.settings.codexModel : this.plugin.settings.model,
             this.plugin.settings.codexPermissionMode,
             (message) => loadingTextEl.setText(message)
           );

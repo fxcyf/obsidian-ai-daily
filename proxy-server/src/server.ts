@@ -854,7 +854,7 @@ function buildClaudeArgs(body: ChatRequest): string[] {
 		"--permission-mode", "bypassPermissions",
 		"--tools", TOOL_POLICY.claudeCode.proxyBuiltins.join(","),
 		"--mcp-config", MCP_CONFIG,
-		"--model", CLAUDE_MODEL,
+		"--model", body.model || CLAUDE_MODEL,
 	];
 
 	if (body.sessionId) {

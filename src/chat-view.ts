@@ -773,9 +773,9 @@ export class ChatView extends ItemView {
 			const inboxPath = this.plugin.settings.harnessInboxFile;
 			const file = this.app.vault.getAbstractFileByPath(inboxPath);
 
+			const dateHeader = `## ${today}`;
 			if (file instanceof TFile) {
 				let content = await this.app.vault.read(file);
-				const dateHeader = `## ${today}`;
 				if (content.includes(dateHeader)) {
 					content = content.replace(dateHeader, `${dateHeader}\n${entry}`);
 				} else {
@@ -3592,7 +3592,7 @@ export class ChatView extends ItemView {
 
 		if (this.plugin.settings.proxyEnabled && this.plugin.settings.proxyUrl) {
 			const backend = this.plugin.settings.cliBackend;
-			const taskId = this.client?.getProxyTaskId(backend);
+			const taskId = this.client!.getProxyTaskId(backend);
 			if (taskId) void this.recoverProxyTask(taskId, backend);
 		}
 	}

@@ -233,7 +233,7 @@ export async function callClaudeSimple(options: SimpleCallOptions): Promise<stri
 
 	const response = assembler.finalize();
 	for (const block of response.content) {
-		if (block.type === "text") return block.text;
+		if (block.type === "text") return (block as TextBlock).text;
 	}
 	return "";
 }

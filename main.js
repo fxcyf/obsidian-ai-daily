@@ -5312,6 +5312,25 @@ async function prepareLocalImages(app, refs, opts) {
   return { images, skipped };
 }
 
+// src/markdown-normalize.ts
+function normalizeMarkdownForObsidian(markdown) {
+  let fence = null;
+  return markdown.split("\n").map((line) => {
+    const fenceMatch = line.match(/^\s{0,3}(`{3,}|~{3,})/);
+    if (fenceMatch) {
+      const marker = fenceMatch[1][0];
+      if (fence === marker) fence = null;
+      else if (fence === null) fence = marker;
+      return line;
+    }
+    if (fence !== null) return line;
+    return line.split(/(`+[^`]*`+)/g).map((segment, index) => {
+      if (index % 2 === 1) return segment;
+      return segment.replace(/\\\[/g, () => "$$").replace(/\\\]/g, () => "$$").replace(/\\\(/g, "$").replace(/\\\)/g, "$");
+    }).join("");
+  }).join("\n");
+}
+
 // src/knowledge-agent.ts
 var MAX_NOTES_PER_RUN = 5;
 var ORGANIZED_MARKER = "organized";
@@ -7106,23 +7125,23 @@ ${content}`);
       const entry = `- [ ] [AI \u5BF9\u8BDD] ${snippet}`;
       const inboxPath = this.plugin.settings.harnessInboxFile;
       const file = this.app.vault.getAbstractFileByPath(inboxPath);
+      const dateHeader = `## ${today}`;
       if (file instanceof import_obsidian13.TFile) {
         let content = await this.app.vault.read(file);
-        const dateHeader2 = `## ${today}`;
-        if (content.includes(dateHeader2)) {
-          content = content.replace(dateHeader2, `${dateHeader2}
+        if (content.includes(dateHeader)) {
+          content = content.replace(dateHeader, `${dateHeader}
 ${entry}`);
         } else {
           const insertPos = content.indexOf("\n## ");
           if (insertPos !== -1) {
             content = content.slice(0, insertPos) + `
-${dateHeader2}
+${dateHeader}
 ${entry}
 ` + content.slice(insertPos);
           } else {
             content += `
 
-${dateHeader2}
+${dateHeader}
 ${entry}`;
           }
         }
@@ -7665,7 +7684,7 @@ ${entry}
       assistantEl.empty();
       await import_obsidian13.MarkdownRenderer.render(
         this.app,
-        content,
+        normalizeMarkdownForObsidian(content),
         assistantEl,
         "",
         this.plugin
@@ -8127,7 +8146,7 @@ ${filesList}` : "",
     if (role === "assistant") {
       void import_obsidian13.MarkdownRenderer.render(
         this.app,
-        content,
+        normalizeMarkdownForObsidian(content),
         msgEl,
         "",
         this.plugin
@@ -8532,7 +8551,7 @@ ${filesList}` : "",
         }
         if (assistantEl && accumulated) {
           assistantEl.empty();
-          void import_obsidian13.MarkdownRenderer.render(this.app, accumulated, assistantEl, "", this.plugin).then(() => {
+          void import_obsidian13.MarkdownRenderer.render(this.app, normalizeMarkdownForObsidian(accumulated), assistantEl, "", this.plugin).then(() => {
             assistantEl.removeClass("ai-daily-msg-streaming");
             this.postProcessAssistantEl(assistantEl);
           });
@@ -8554,7 +8573,7 @@ ${filesList}` : "",
         }
         if (assistantEl) {
           assistantEl.empty();
-          void import_obsidian13.MarkdownRenderer.render(this.app, fullText, assistantEl, "", this.plugin).then(() => {
+          void import_obsidian13.MarkdownRenderer.render(this.app, normalizeMarkdownForObsidian(fullText), assistantEl, "", this.plugin).then(() => {
             assistantEl.removeClass("ai-daily-msg-streaming");
             this.postProcessAssistantEl(assistantEl);
           });
@@ -8714,7 +8733,7 @@ ${filesList}` : "",
         }
         if (assistantEl && accumulated) {
           assistantEl.empty();
-          void import_obsidian13.MarkdownRenderer.render(this.app, accumulated, assistantEl, "", this.plugin).then(() => {
+          void import_obsidian13.MarkdownRenderer.render(this.app, normalizeMarkdownForObsidian(accumulated), assistantEl, "", this.plugin).then(() => {
             assistantEl.removeClass("ai-daily-msg-streaming");
             this.postProcessAssistantEl(assistantEl);
           });
@@ -8735,7 +8754,7 @@ ${filesList}` : "",
         }
         if (assistantEl) {
           assistantEl.empty();
-          void import_obsidian13.MarkdownRenderer.render(this.app, fullText, assistantEl, "", this.plugin).then(() => {
+          void import_obsidian13.MarkdownRenderer.render(this.app, normalizeMarkdownForObsidian(fullText), assistantEl, "", this.plugin).then(() => {
             assistantEl.removeClass("ai-daily-msg-streaming");
             this.postProcessAssistantEl(assistantEl);
           });
@@ -8788,7 +8807,7 @@ ${filesList}` : "",
     const renderStreamingMarkdown = async (content) => {
       if (!assistantEl) return;
       assistantEl.empty();
-      await import_obsidian13.MarkdownRenderer.render(this.app, content, assistantEl, "", this.plugin);
+      await import_obsidian13.MarkdownRenderer.render(this.app, normalizeMarkdownForObsidian(content), assistantEl, "", this.plugin);
       this.scrollToBottomIfFollowing();
     };
     const scheduleStreamingMarkdown = (content) => {
@@ -8995,7 +9014,7 @@ ${filesList}` : "",
     const renderStreamingMarkdown = async (content) => {
       if (!assistantEl) return;
       assistantEl.empty();
-      await import_obsidian13.MarkdownRenderer.render(this.app, content, assistantEl, "", this.plugin);
+      await import_obsidian13.MarkdownRenderer.render(this.app, normalizeMarkdownForObsidian(content), assistantEl, "", this.plugin);
       this.scrollToBottomIfFollowing();
     };
     const scheduleStreamingMarkdown = (content) => {
@@ -9577,7 +9596,7 @@ ${m.content}`);
     renderList(sessions);
   }
   async loadSession(id) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
     const { chatHistoryFolder } = this.plugin.settings;
     const data = await loadChatSession(this.app.vault, chatHistoryFolder, id);
     if (!data || !((_a = data.messages) == null ? void 0 : _a.length)) {
@@ -9661,7 +9680,7 @@ ${m.content}`);
       if (m.role === "assistant") {
         await import_obsidian13.MarkdownRenderer.render(
           this.app,
-          m.content,
+          normalizeMarkdownForObsidian(m.content),
           msgEl,
           "",
           this.plugin
@@ -9684,7 +9703,7 @@ ${m.content}`);
     new import_obsidian13.Notice("\u5DF2\u6062\u590D\u5386\u53F2\u5BF9\u8BDD", 3e3);
     if (this.plugin.settings.proxyEnabled && this.plugin.settings.proxyUrl) {
       const backend = this.plugin.settings.cliBackend;
-      const taskId = (_j = this.client) == null ? void 0 : _j.getProxyTaskId(backend);
+      const taskId = this.client.getProxyTaskId(backend);
       if (taskId) void this.recoverProxyTask(taskId, backend);
     }
   }

@@ -1,7 +1,10 @@
-export default {
-	test: {
+import { defineConfig } from "vitest/config";
+import { resolve } from "path";
+
+export default defineConfig({
+	resolve: {
 		alias: {
-			obsidian: "./src/__mocks__/obsidian.ts",
+			obsidian: resolve(__dirname, "src/__mocks__/obsidian.ts"),
 		},
 	},
-};
+});

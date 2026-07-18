@@ -928,10 +928,10 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 			const input = fieldRow.createEl("input", {
 				type: "text",
 				placeholder: field.placeholder,
-				value: (source as Record<string, string>)[field.key] ?? "",
+				value: (source as unknown as Record<string, string>)[field.key] ?? "",
 			});
 			input.addEventListener("input", () => {
-				(source as Record<string, string>)[field.key] = input.value.trim();
+				(source as unknown as Record<string, string>)[field.key] = input.value.trim();
 			});
 		}
 

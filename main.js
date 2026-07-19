@@ -7260,9 +7260,17 @@ ${imageList}`;
     this.addSaveToInboxBtn(el);
     this.updateForkButtons();
   }
+  getOrCreateToolbar(el) {
+    let toolbar = el.querySelector(".ai-daily-msg-toolbar");
+    if (!toolbar) {
+      toolbar = el.createDiv({ cls: "ai-daily-msg-toolbar" });
+    }
+    return toolbar;
+  }
   addSaveToInboxBtn(el) {
     if (el.querySelector(".ai-daily-save-inbox-btn")) return;
-    const btn = el.createDiv({ cls: "ai-daily-save-inbox-btn" });
+    const toolbar = this.getOrCreateToolbar(el);
+    const btn = toolbar.createDiv({ cls: "ai-daily-save-inbox-btn" });
     (0, import_obsidian13.setIcon)(btn, "pin");
     btn.setAttribute("aria-label", "\u4FDD\u5B58\u5230 Inbox");
     btn.setAttribute("title", "\u4FDD\u5B58\u5230 Inbox");
@@ -7331,7 +7339,8 @@ ${entry}
       if (el.querySelector(".ai-daily-fork-btn")) continue;
       const msgIdx = assistantMsgIndices[d];
       if (msgIdx < 1 || ((_a = this.messages[msgIdx - 1]) == null ? void 0 : _a.role) !== "user") continue;
-      const btn = el.createDiv({ cls: "ai-daily-fork-btn" });
+      const toolbar = this.getOrCreateToolbar(el);
+      const btn = toolbar.createDiv({ cls: "ai-daily-fork-btn" });
       (0, import_obsidian13.setIcon)(btn, "git-branch");
       btn.setAttribute("aria-label", "\u4ECE\u6B64\u5904\u5206\u53C9");
       btn.setAttribute("title", "\u4ECE\u6B64\u5904\u5206\u53C9");

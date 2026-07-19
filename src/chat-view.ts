@@ -904,10 +904,19 @@ export class ChatView extends ItemView {
 		this.updateForkButtons();
 	}
 
+	private getOrCreateToolbar(el: HTMLElement): HTMLElement {
+		let toolbar = el.querySelector(".ai-daily-msg-toolbar") as HTMLElement | null;
+		if (!toolbar) {
+			toolbar = el.createDiv({ cls: "ai-daily-msg-toolbar" });
+		}
+		return toolbar;
+	}
+
 	private addSaveToInboxBtn(el: HTMLElement): void {
 		if (el.querySelector(".ai-daily-save-inbox-btn")) return;
 
-		const btn = el.createDiv({ cls: "ai-daily-save-inbox-btn" });
+		const toolbar = this.getOrCreateToolbar(el);
+		const btn = toolbar.createDiv({ cls: "ai-daily-save-inbox-btn" });
 		setIcon(btn, "pin");
 		btn.setAttribute("aria-label", "保存到 Inbox");
 		btn.setAttribute("title", "保存到 Inbox");
@@ -975,7 +984,8 @@ export class ChatView extends ItemView {
 			// Need a user message before this assistant message to fork
 			if (msgIdx < 1 || this.messages[msgIdx - 1]?.role !== "user") continue;
 
-			const btn = (el as HTMLElement).createDiv({ cls: "ai-daily-fork-btn" });
+			const toolbar = this.getOrCreateToolbar(el as HTMLElement);
+			const btn = toolbar.createDiv({ cls: "ai-daily-fork-btn" });
 			setIcon(btn, "git-branch");
 			btn.setAttribute("aria-label", "从此处分叉");
 			btn.setAttribute("title", "从此处分叉");

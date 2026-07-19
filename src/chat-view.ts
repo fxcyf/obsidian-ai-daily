@@ -844,14 +844,21 @@ export class ChatView extends ItemView {
 		}
 	}
 
-	private async savePendingImagesToTemp(): Promise<string[]> {
+	private consumePendingImages(): PreparedImage[] {
 		if (this.pendingImages.length === 0) return [];
+		const images = [...this.pendingImages];
+		this.pendingImages = [];
+		this.renderAttachBar();
+		return images;
+	}
+
+	private static saveImagesToDisk(images: PreparedImage[]): string[] {
+		if (images.length === 0) return [];
 		const { writeFileSync, mkdirSync, readdirSync, unlinkSync, statSync } = require("fs") as typeof import("fs");
 		const { join } = require("path") as typeof import("path");
 		const tmpDir = join(process.env.TMPDIR || "/tmp", "ai-daily-images");
 		try { mkdirSync(tmpDir, { recursive: true }); } catch { /* exists */ }
 
-		// Clean up files older than 1 hour
 		try {
 			const now = Date.now();
 			for (const f of readdirSync(tmpDir)) {
@@ -863,16 +870,19 @@ export class ChatView extends ItemView {
 		} catch { /* ignore */ }
 
 		const paths: string[] = [];
-		for (const img of this.pendingImages) {
+		for (const img of images) {
 			const filename = `${Date.now()}-${img.ref.path}`;
 			const filepath = join(tmpDir, filename);
-			const buf = Buffer.from(img.base64, "base64");
-			writeFileSync(filepath, buf);
+			writeFileSync(filepath, Buffer.from(img.base64, "base64"));
 			paths.push(filepath);
 		}
-		this.pendingImages = [];
-		this.renderAttachBar();
 		return paths;
+	}
+
+	private static buildImagePrompt(imagePaths: string[]): string {
+		if (imagePaths.length === 0) return "";
+		const imageList = imagePaths.map((p) => `- ${p}`).join("\n");
+		return `\n\n用户提供了以下参考图片，请先用 Read 工具查看：\n${imageList}`;
 	}
 
 	// ── Post-processing: wiki-links & code copy buttons ───
@@ -1484,8 +1494,8 @@ export class ChatView extends ItemView {
 		this.lastMode = currentMode;
 
 		if (useCodex) {
-			const imagePaths = await this.savePendingImagesToTemp();
-			this.handleSendViaCodex(text, imagePaths).catch((e) => {
+			const images = this.consumePendingImages();
+			this.handleSendViaCodex(text, images).catch((e) => {
 				console.error("[ai-daily] Codex error:", e);
 				this.addMessage("assistant", `Codex 出错: ${e instanceof Error ? e.message : String(e)}`, "codex");
 				this.isLoading = false;
@@ -1495,8 +1505,8 @@ export class ChatView extends ItemView {
 		}
 
 		if (useClaudeCode) {
-			const imagePaths = await this.savePendingImagesToTemp();
-			this.handleSendViaClaudeCode(text, imagePaths).catch((e) => {
+			const images = this.consumePendingImages();
+			this.handleSendViaClaudeCode(text, images).catch((e) => {
 				console.error("[ai-daily] Claude Code error:", e);
 				this.addMessage("assistant", `Claude Code 出错: ${e instanceof Error ? e.message : String(e)}`, "claude-code");
 				this.isLoading = false;
@@ -1505,14 +1515,14 @@ export class ChatView extends ItemView {
 			return;
 		}
 
-		const pendingImageCount = this.pendingImages.length;
+		const images = this.consumePendingImages();
 		const attachedContent = await this.consumeAttachedFiles();
 		const userMessage = attachedContent
 			? attachedContent + "\n\n" + text
 			: text;
 
-		const displayText = pendingImageCount > 0
-			? `${text}\n[📷 ${pendingImageCount} 张图片]`
+		const displayText = images.length > 0
+			? `${text}\n[📷 ${images.length} 张图片]`
 			: text;
 		this.addMessage("user", displayText);
 
@@ -1611,21 +1621,11 @@ export class ChatView extends ItemView {
 					}
 				}
 			}
-			let proxyImages: { name: string; base64: string; mediaType: string }[] | undefined;
-			if (this.pendingImages.length > 0) {
-				if (this.client?.isProxyMode()) {
-					proxyImages = this.pendingImages.map((img) => ({
-						name: img.ref.path,
-						base64: img.base64,
-						mediaType: img.mediaType,
-					}));
-					this.pendingImages = [];
-					this.renderAttachBar();
-				} else {
-					new Notice("API 模式下请使用 ![[图片]] 引用 vault 内图片");
-					this.pendingImages = [];
-					this.renderAttachBar();
-				}
+			const proxyImages = images.length > 0 && this.client?.isProxyMode()
+				? images.map((img) => ({ name: img.ref.path, base64: img.base64, mediaType: img.mediaType }))
+				: undefined;
+			if (images.length > 0 && !this.client?.isProxyMode()) {
+				new Notice("API 模式下请使用 ![[图片]] 引用 vault 内图片");
 			}
 
 			let toolCallsEl: HTMLElement | null = null;
@@ -1841,20 +1841,17 @@ export class ChatView extends ItemView {
 		return { vaultPath, mcpServerPath, knowledgeFolders, ...(enableWeRead && wereadApiKey ? { wereadApiKey } : {}) };
 	}
 
-	private async handleSendViaClaudeCode(text: string, imagePaths: string[] = []): Promise<void> {
-		const displayText = imagePaths.length > 0
-			? `${text}\n[📷 ${imagePaths.length} 张图片]`
+	private async handleSendViaClaudeCode(text: string, images: PreparedImage[] = []): Promise<void> {
+		const displayText = images.length > 0
+			? `${text}\n[📷 ${images.length} 张图片]`
 			: text;
 		this.addMessage("user", displayText, "claude-code");
 		if (!this.sessionId) this.sessionId = newSessionId();
 
 		const isFirstMessage = !this.claudeCodeSessionId;
 		const attachedContent = await this.consumeAttachedFiles();
-		let prompt = text;
-		if (imagePaths.length > 0) {
-			const imageList = imagePaths.map((p) => `- ${p}`).join("\n");
-			prompt += `\n\n用户提供了以下参考图片，请先用 Read 工具查看：\n${imageList}`;
-		}
+		const imagePaths = ChatView.saveImagesToDisk(images);
+		let prompt = text + ChatView.buildImagePrompt(imagePaths);
 
 		if (isFirstMessage && this.messages.length > 1) {
 			const adapter = this.app.vault.adapter as { basePath?: string };
@@ -1895,20 +1892,17 @@ export class ChatView extends ItemView {
 		this.runClaudeCodeStream(prompt, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.model);
 	}
 
-	private async handleSendViaCodex(text: string, imagePaths: string[] = []): Promise<void> {
-		const displayText = imagePaths.length > 0
-			? `${text}\n[📷 ${imagePaths.length} 张图片]`
+	private async handleSendViaCodex(text: string, images: PreparedImage[] = []): Promise<void> {
+		const displayText = images.length > 0
+			? `${text}\n[📷 ${images.length} 张图片]`
 			: text;
 		this.addMessage("user", displayText, "codex");
 		if (!this.sessionId) this.sessionId = newSessionId();
 
 		const isFirstMessage = !this.codexSessionId;
 		const attachedContent = await this.consumeAttachedFiles();
-		let prompt = text;
-		if (imagePaths.length > 0) {
-			const imageList = imagePaths.map((p) => `- ${p}`).join("\n");
-			prompt += `\n\n用户提供了以下参考图片，请先用 Read 工具查看：\n${imageList}`;
-		}
+		const imagePaths = ChatView.saveImagesToDisk(images);
+		let prompt = text + ChatView.buildImagePrompt(imagePaths);
 
 		if (isFirstMessage) {
 			const adapter = this.app.vault.adapter as { basePath?: string };

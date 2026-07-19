@@ -4,3 +4,6 @@ main.js
 mcp-server/dist/
 mcp-dist/
 dist/
+.agent-manager/
+.claude-manager/
+.mcp.json

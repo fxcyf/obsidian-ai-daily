@@ -14,7 +14,7 @@
 1. **领取任务** — 你已被分配任务，阅读本文件和项目代码理解上下文
 2. **创建工作区**:
    - `git fetch origin`（如有 remote）
-   - `git worktree add -b task-<简短描述> .claude-manager/worktrees/task-<简短描述> origin/main`
+   - `git worktree add -b task-<简短描述> .agent-manager/worktrees/task-<简短描述> origin/main`
    - 进入 worktree 目录工作（后续所有操作在 worktree 中）
    - 如果 worktree 创建失败，直接在当前分支工作
 3. **实现功能** — 编写代码，确保可运行
@@ -34,7 +34,7 @@
    - （纯本地项目跳过本步）
 8. **标记完成** — 更新文档（必须在清理之前，防止进程被杀时状态丢失）
 9. **清理** — 回到项目根目录:
-   - `git worktree remove .claude-manager/worktrees/<worktree名>`
+   - `git worktree remove .agent-manager/worktrees/<worktree名>`
    - `git branch -D <task-branch>`
    - 如有 remote: `git push origin --delete <task-branch>`
 10. **经验沉淀** — 在 PROGRESS.md 记录经验教训（可选）
@@ -57,9 +57,11 @@ rebase 发生冲突时：
 
 - **`CLAUDE.md` 是项目级 agent 规范单一来源**，包含架构、约定、测试要求和 git 流程。
 - **`AGENTS.md` 是 Codex 自动发现入口**，只保留指向 `CLAUDE.md` 的轻量说明，避免复制两份长期漂移。
+- **`.agent-manager/` 是开发 worktree 默认目录**，供 Claude Code/Codex 共用；旧的 `.claude-manager/` 只视为历史目录，不要在新指令中继续扩散 Claude 专属命名。
 - **`.claude/settings.json` 是 Claude Code 专属权限配置**；Codex 权限由 Codex 运行参数和 `agent-tool-policy.json` 控制。
 - **`.agents/skills/` 是 Codex skill 源目录**；需要给 Claude Code 使用的 skill 由部署流程同步到 Vault 的 `.claude/skills`。
 - **Harness/Workspace 上下文不属于某个 CLI**：`_INDEX.md`、`modes.md`、`PROGRESS.md` 由插件读取后通过 `src/system-prompt.ts` 注入 Claude Code、Codex、Proxy 和 API 模式。
+- **区分开发上下文与 Runtime 上下文**：本仓库开发时只依赖根目录 `CLAUDE.md` + `AGENTS.md` + 工具自身权限配置；插件运行时面向 vault agent 的上下文由 `src/system-prompt.ts`、Vault 内 `CLAUDE.md`/`AGENTS.md`、Harness 文件和 MCP inventory 共同决定。
 - 新增 agent 指令时，优先放到共享 system prompt、`agent-tool-policy.json` 或 `CLAUDE.md`；只有确实是某个工具的启动/权限机制时，才放到 `.claude/`、`.agents/` 或 `AGENTS.md`。
 
 ## 文件维护规则

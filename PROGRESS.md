@@ -1,5 +1,12 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-07-19 — Claude/Codex 上下文入口同步 (`250ae2d`)
+
+- **问题**：项目根目录只有 `CLAUDE.md`，Codex 没有等价的自动发现入口；Vault 参考模板也只生成 Claude Code 可直接发现的 `CLAUDE.md`，长期容易让 Claude Code/Codex 的上下文和指令漂移。
+- **解决**：新增根目录 `AGENTS.md` 作为 Codex 轻量入口，明确 `CLAUDE.md` 是项目级 agent 规范单一来源；Vault 模板同步生成 `AGENTS.md`，并新增测试锁定该契约。
+- **验证**：`npm test` 全绿；`npm run build` 生成插件 bundle，但当前环境缺少 MCP server 的 `@modelcontextprotocol/sdk` 与 `zod`，脚本按现有逻辑跳过 MCP server bundle；随后手动同步根目录 `main.js`。
+- **教训**：共享指令应尽量保留一个 canonical 文件，工具专属文件只做发现入口或权限配置；否则后续切换 agent 时很难判断哪份上下文才是最新。
+
 ## 2026-07-19 — Chat View 更多菜单显示条件 (`0b3ae68`)
 
 - **问题**：右上角“更多”按钮的显示依赖 `addMessage()` 里是否能找到并移除欢迎页；从 Workspace Studio/Harness 上下文开始时欢迎页已先被移除，首条消息不会再触发显示，导致按钮不稳定。

@@ -1,5 +1,12 @@
 # PROGRESS — 经验教训与项目进展
 
+## 2026-07-19 — Chat View 更多菜单显示条件 (`0b3ae68`)
+
+- **问题**：右上角“更多”按钮的显示依赖 `addMessage()` 里是否能找到并移除欢迎页；从 Workspace Studio/Harness 上下文开始时欢迎页已先被移除，首条消息不会再触发显示，导致按钮不稳定。
+- **解决**：抽出 `shouldShowChatMoreButton` 统一判断，有消息、有 session id 或有 Harness 上下文时显示；`buildHeader`、`addMessage`、`startWithContext`、`clearChat`、`loadSession` 均走同一个刷新方法。
+- **验证**：新增 `src/chat-view.test.ts` 覆盖上下文空对话、已有消息/会话、欢迎页隐藏三类状态；`npm test` 与插件生产构建通过。
+- **教训**：UI 控件可见性不要依赖瞬时 DOM 副作用，应绑定到稳定的业务状态并覆盖所有入口路径。
+
 ## 2026-07-17 — Codex 数学公式渲染兼容 (`e71f320`)
 
 - **问题**：Codex 常用 LaTeX 的 `\\[...\\]` 和 `\\(...\\)` 分隔公式；传输和历史存档中的反斜杠完整，但 Obsidian Markdown 只识别 `$$...$$` / `$...$`，因此界面显示裸方括号或圆括号。

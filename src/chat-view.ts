@@ -462,6 +462,15 @@ export class ChatView extends ItemView {
 				this.handleSend();
 			}
 		});
+
+		this.inputAreaEl.addEventListener("pointerdown", (e) => {
+			const target = e.target as HTMLElement;
+			if (target !== this.inputEl && !target.closest("button") && !target.closest(".ai-daily-attach-chip")) {
+				e.preventDefault();
+				this.inputEl.focus();
+			}
+		});
+
 		this.inputEl.addEventListener("input", () => {
 			this.autoResizeInput();
 			this.handleTemplateInput();

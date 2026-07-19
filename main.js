@@ -6844,6 +6844,13 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
         this.handleSend();
       }
     });
+    this.inputAreaEl.addEventListener("pointerdown", (e) => {
+      const target = e.target;
+      if (target !== this.inputEl && !target.closest("button") && !target.closest(".ai-daily-attach-chip")) {
+        e.preventDefault();
+        this.inputEl.focus();
+      }
+    });
     this.inputEl.addEventListener("input", () => {
       this.autoResizeInput();
       this.handleTemplateInput();

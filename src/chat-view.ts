@@ -55,6 +55,14 @@ interface ChatMessage {
 	source?: MessageSource;
 }
 
+export function shouldShowChatMoreButton(state: {
+	messageCount: number;
+	hasSession: boolean;
+	hasHarnessContext: boolean;
+}): boolean {
+	return state.messageCount > 0 || state.hasSession || state.hasHarnessContext;
+}
+
 const TOOL_DISPLAY_NAMES: Record<string, string> = {
 	read_note: "读取笔记",
 	search_vault: "搜索笔记",
@@ -367,7 +375,7 @@ export class ChatView extends ItemView {
 			cls: "ai-daily-header-btn",
 			attr: { "aria-label": "更多", title: "更多" },
 		});
-		this.moreBtnEl.style.display = "none";
+		this.updateMoreButtonVisibility();
 		setIcon(this.moreBtnEl, "more-vertical");
 		this.moreBtnEl.addEventListener("click", (e) => {
 			const menu = new Menu();
@@ -410,6 +418,17 @@ export class ChatView extends ItemView {
 
 			menu.showAtMouseEvent(e);
 		});
+	}
+
+	private updateMoreButtonVisibility(): void {
+		if (!this.moreBtnEl) return;
+		this.moreBtnEl.style.display = shouldShowChatMoreButton({
+			messageCount: this.messages.length,
+			hasSession: !!this.sessionId,
+			hasHarnessContext: !!this.harnessContext,
+		})
+			? ""
+			: "none";
 	}
 
 	private buildInputArea(container: HTMLElement): void {
@@ -2088,10 +2107,10 @@ export class ChatView extends ItemView {
 		const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
 		if (welcome) {
 			welcome.remove();
-			if (this.moreBtnEl) this.moreBtnEl.style.display = "";
 		}
 
 		this.messages.push({ role, content, source });
+		this.updateMoreButtonVisibility();
 		this.cachedTokenCount += estimateTextTokens(content);
 
 		const msgEl = this.messagesEl.createDiv({
@@ -2322,6 +2341,7 @@ export class ChatView extends ItemView {
 	startWithContext(context: HarnessContext | null): void {
 		this.clearChat();
 		this.harnessContext = context;
+		this.updateMoreButtonVisibility();
 
 		if (context) {
 			const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
@@ -3322,7 +3342,7 @@ export class ChatView extends ItemView {
 		this.renderAttachBar();
 		this.messagesEl.empty();
 		this.showWelcome();
-		if (this.moreBtnEl) this.moreBtnEl.style.display = "none";
+		this.updateMoreButtonVisibility();
 	}
 
 	private updateHistoryOverlayInset(): void {
@@ -3706,7 +3726,7 @@ export class ChatView extends ItemView {
 		this.messagesEl.empty();
 		const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
 		if (welcome) welcome.remove();
-		if (this.moreBtnEl) this.moreBtnEl.style.display = "";
+		this.updateMoreButtonVisibility();
 
 		if (this.harnessContext) {
 			const ctx = this.harnessContext;

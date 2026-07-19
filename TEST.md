@@ -60,6 +60,7 @@ npm run test:watch # 监听模式
 |------|---------|
 | `src/anthropic-sse.test.ts` | SSE 解析与 ApiResponse 组装 |
 | `proxy-server/src/codex-app-server.test.ts` | Codex 原生历史 item 映射与 JSON-RPC 请求序列化 |
+| `src/chat-view.test.ts` | Chat View 头部更多菜单显示条件 |
 | `src/feeds.test.ts` | timeDecay, socialBoost, detectBursts, scoreRelevance |
 | `src/chat-session.test.ts` | newSessionId, titleFromMessages, isValidChatSession, shouldPruneToday |
 | `src/markdown-normalize.test.ts` | Codex LaTeX 分隔符转 Obsidian MathJax，代码区域保持原样 |
@@ -69,6 +70,13 @@ npm run test:watch # 监听模式
 | `src/auto-tagger.test.ts` | parseTaggingResponse（JSON 解析、容错、字段过滤） |
 
 ## 手动测试清单（UX 功能）
+
+### 对话头部菜单
+- [ ] 欢迎页初始状态下右上角“更多”按钮隐藏
+- [ ] 普通自由对话发送首条消息后右上角“更多”按钮显示
+- [ ] 从 Workspace Studio 或 Harness 模式开始新对话、尚未发送消息时右上角“更多”按钮显示
+- [ ] 重新加载历史对话后右上角“更多”按钮显示
+- [ ] 点击新对话回到欢迎页后右上角“更多”按钮再次隐藏
 
 ### Prompt 模板
 - [ ] 输入 `/` 弹出模板列表

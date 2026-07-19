@@ -6489,6 +6489,9 @@ function handleCodexStreamEvent(event, callbacks, appendText) {
 // src/chat-view.ts
 var VIEW_TYPE = "ai-daily-chat";
 var STREAM_MARKDOWN_RENDER_INTERVAL_MS = 120;
+function shouldShowChatMoreButton(state) {
+  return state.messageCount > 0 || state.hasSession || state.hasHarnessContext;
+}
 var TOOL_DISPLAY_NAMES = {
   read_note: "\u8BFB\u53D6\u7B14\u8BB0",
   search_vault: "\u641C\u7D22\u7B14\u8BB0",
@@ -6767,7 +6770,7 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
       cls: "ai-daily-header-btn",
       attr: { "aria-label": "\u66F4\u591A", title: "\u66F4\u591A" }
     });
-    this.moreBtnEl.style.display = "none";
+    this.updateMoreButtonVisibility();
     (0, import_obsidian13.setIcon)(this.moreBtnEl, "more-vertical");
     this.moreBtnEl.addEventListener("click", (e) => {
       const menu = new import_obsidian13.Menu();
@@ -6801,6 +6804,14 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
       );
       menu.showAtMouseEvent(e);
     });
+  }
+  updateMoreButtonVisibility() {
+    if (!this.moreBtnEl) return;
+    this.moreBtnEl.style.display = shouldShowChatMoreButton({
+      messageCount: this.messages.length,
+      hasSession: !!this.sessionId,
+      hasHarnessContext: !!this.harnessContext
+    }) ? "" : "none";
   }
   buildInputArea(container) {
     this.inputAreaEl = container.createDiv({ cls: "ai-daily-input-area" });
@@ -8311,9 +8322,9 @@ ${filesList}` : "",
     const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
     if (welcome) {
       welcome.remove();
-      if (this.moreBtnEl) this.moreBtnEl.style.display = "";
     }
     this.messages.push({ role, content, source });
+    this.updateMoreButtonVisibility();
     this.cachedTokenCount += estimateTextTokens(content);
     const msgEl = this.messagesEl.createDiv({
       cls: `ai-daily-msg ai-daily-msg-${role}`
@@ -8530,6 +8541,7 @@ ${filesList}` : "",
   startWithContext(context) {
     this.clearChat();
     this.harnessContext = context;
+    this.updateMoreButtonVisibility();
     if (context) {
       const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
       if (welcome) welcome.remove();
@@ -9464,7 +9476,7 @@ ${m.content}`);
     this.renderAttachBar();
     this.messagesEl.empty();
     this.showWelcome();
-    if (this.moreBtnEl) this.moreBtnEl.style.display = "none";
+    this.updateMoreButtonVisibility();
   }
   updateHistoryOverlayInset() {
     var _a, _b, _c, _d, _e, _f;
@@ -9816,7 +9828,7 @@ ${m.content}`);
     this.messagesEl.empty();
     const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
     if (welcome) welcome.remove();
-    if (this.moreBtnEl) this.moreBtnEl.style.display = "";
+    this.updateMoreButtonVisibility();
     if (this.harnessContext) {
       const ctx = this.harnessContext;
       const banner = this.messagesEl.createDiv({ cls: "ai-daily-ctx-header" });

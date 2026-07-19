@@ -795,24 +795,29 @@ export class ChatView extends ItemView {
 			gif: "image/gif",
 		};
 		const mediaType = MEDIA_MAP[ext] || (file.type as PreparedImage["mediaType"]) || "image/png";
+		const inferredExt = mediaType.split("/")[1] === "jpeg" ? "jpg" : mediaType.split("/")[1];
 
 		const reader = new FileReader();
 		reader.onload = () => {
-			const base64 = (reader.result as string).split(",")[1];
+			const dataUrl = reader.result as string;
+			const base64 = dataUrl.split(",")[1];
 			if (!base64) return;
-			const img: PreparedImage = {
-				ref: { raw: file.name, path: file.name },
-				mediaType,
-				base64,
-			};
 			const maxImages = this.plugin.settings.maxImagesPerMessage || 3;
 			if (this.pendingImages.length >= maxImages) {
 				new Notice(`最多附带 ${maxImages} 张图片`);
 				return;
 			}
+			const filename = file.name && file.name !== "image" && file.name.includes(".")
+				? file.name
+				: `paste-${Date.now()}.${inferredExt}`;
+			const img: PreparedImage = {
+				ref: { raw: filename, path: filename },
+				mediaType,
+				base64,
+			};
 			this.pendingImages.push(img);
 			this.renderAttachBar();
-			new Notice(`已添加图片: ${file.name}`);
+			new Notice(`已添加图片: ${filename}`);
 		};
 		reader.readAsDataURL(file);
 	}
@@ -837,6 +842,26 @@ export class ChatView extends ItemView {
 				this.renderAttachBar();
 			});
 		}
+	}
+
+	private async savePendingImagesToTemp(): Promise<string[]> {
+		if (this.pendingImages.length === 0) return [];
+		const { writeFileSync, mkdirSync } = require("fs") as typeof import("fs");
+		const { join } = require("path") as typeof import("path");
+		const tmpDir = join(process.env.TMPDIR || "/tmp", "ai-daily-images");
+		try { mkdirSync(tmpDir, { recursive: true }); } catch { /* exists */ }
+
+		const paths: string[] = [];
+		for (const img of this.pendingImages) {
+			const filename = `${Date.now()}-${img.ref.path}`;
+			const filepath = join(tmpDir, filename);
+			const buf = Buffer.from(img.base64, "base64");
+			writeFileSync(filepath, buf);
+			paths.push(filepath);
+		}
+		this.pendingImages = [];
+		this.renderAttachBar();
+		return paths;
 	}
 
 	// ── Post-processing: wiki-links & code copy buttons ───
@@ -1448,12 +1473,8 @@ export class ChatView extends ItemView {
 		this.lastMode = currentMode;
 
 		if (useCodex) {
-			if (this.pendingImages.length > 0) {
-				this.pendingImages = [];
-				this.renderAttachBar();
-				new Notice("Codex 模式不支持图片，已忽略");
-			}
-			this.handleSendViaCodex(text).catch((e) => {
+			const imagePaths = await this.savePendingImagesToTemp();
+			this.handleSendViaCodex(text, imagePaths).catch((e) => {
 				console.error("[ai-daily] Codex error:", e);
 				this.addMessage("assistant", `Codex 出错: ${e instanceof Error ? e.message : String(e)}`, "codex");
 				this.isLoading = false;
@@ -1463,12 +1484,8 @@ export class ChatView extends ItemView {
 		}
 
 		if (useClaudeCode) {
-			if (this.pendingImages.length > 0) {
-				this.pendingImages = [];
-				this.renderAttachBar();
-				new Notice("Claude Code 模式不支持图片，已忽略");
-			}
-			this.handleSendViaClaudeCode(text).catch((e) => {
+			const imagePaths = await this.savePendingImagesToTemp();
+			this.handleSendViaClaudeCode(text, imagePaths).catch((e) => {
 				console.error("[ai-daily] Claude Code error:", e);
 				this.addMessage("assistant", `Claude Code 出错: ${e instanceof Error ? e.message : String(e)}`, "claude-code");
 				this.isLoading = false;
@@ -1482,11 +1499,7 @@ export class ChatView extends ItemView {
 			? attachedContent + "\n\n" + text
 			: text;
 
-		const pendingImageCount = this.pendingImages.length;
-		const displayText = pendingImageCount > 0
-			? `${text}\n[📷 ${pendingImageCount} 张图片]`
-			: text;
-		this.addMessage("user", displayText);
+		this.addMessage("user", text);
 
 		if (!this.sessionId) {
 			this.sessionId = newSessionId();
@@ -1584,7 +1597,7 @@ export class ChatView extends ItemView {
 				}
 			}
 			if (this.pendingImages.length > 0) {
-				preparedImages = [...(preparedImages || []), ...this.pendingImages];
+				new Notice("API 模式下请使用 ![[图片]] 引用 vault 内图片");
 				this.pendingImages = [];
 				this.renderAttachBar();
 			}
@@ -1801,13 +1814,20 @@ export class ChatView extends ItemView {
 		return { vaultPath, mcpServerPath, knowledgeFolders, ...(enableWeRead && wereadApiKey ? { wereadApiKey } : {}) };
 	}
 
-	private async handleSendViaClaudeCode(text: string): Promise<void> {
-		this.addMessage("user", text, "claude-code");
+	private async handleSendViaClaudeCode(text: string, imagePaths: string[] = []): Promise<void> {
+		const displayText = imagePaths.length > 0
+			? `${text}\n[📷 ${imagePaths.length} 张图片]`
+			: text;
+		this.addMessage("user", displayText, "claude-code");
 		if (!this.sessionId) this.sessionId = newSessionId();
 
 		const isFirstMessage = !this.claudeCodeSessionId;
 		const attachedContent = await this.consumeAttachedFiles();
 		let prompt = text;
+		if (imagePaths.length > 0) {
+			const imageList = imagePaths.map((p) => `- ${p}`).join("\n");
+			prompt += `\n\n用户提供了以下参考图片，请先用 Read 工具查看：\n${imageList}`;
+		}
 
 		if (isFirstMessage && this.messages.length > 1) {
 			const adapter = this.app.vault.adapter as { basePath?: string };
@@ -1848,13 +1868,20 @@ export class ChatView extends ItemView {
 		this.runClaudeCodeStream(prompt, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.model);
 	}
 
-	private async handleSendViaCodex(text: string): Promise<void> {
-		this.addMessage("user", text, "codex");
+	private async handleSendViaCodex(text: string, imagePaths: string[] = []): Promise<void> {
+		const displayText = imagePaths.length > 0
+			? `${text}\n[📷 ${imagePaths.length} 张图片]`
+			: text;
+		this.addMessage("user", displayText, "codex");
 		if (!this.sessionId) this.sessionId = newSessionId();
 
 		const isFirstMessage = !this.codexSessionId;
 		const attachedContent = await this.consumeAttachedFiles();
 		let prompt = text;
+		if (imagePaths.length > 0) {
+			const imageList = imagePaths.map((p) => `- ${p}`).join("\n");
+			prompt += `\n\n用户提供了以下参考图片，请先用 Read 工具查看：\n${imageList}`;
+		}
 
 		if (isFirstMessage) {
 			const adapter = this.app.vault.adapter as { basePath?: string };

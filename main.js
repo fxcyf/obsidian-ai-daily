@@ -7154,23 +7154,26 @@ ${content}`);
       gif: "image/gif"
     };
     const mediaType = MEDIA_MAP[ext] || file.type || "image/png";
+    const inferredExt = mediaType.split("/")[1] === "jpeg" ? "jpg" : mediaType.split("/")[1];
     const reader = new FileReader();
     reader.onload = () => {
-      const base64 = reader.result.split(",")[1];
+      const dataUrl = reader.result;
+      const base64 = dataUrl.split(",")[1];
       if (!base64) return;
-      const img = {
-        ref: { raw: file.name, path: file.name },
-        mediaType,
-        base64
-      };
       const maxImages = this.plugin.settings.maxImagesPerMessage || 3;
       if (this.pendingImages.length >= maxImages) {
         new import_obsidian13.Notice(`\u6700\u591A\u9644\u5E26 ${maxImages} \u5F20\u56FE\u7247`);
         return;
       }
+      const filename = file.name && file.name !== "image" && file.name.includes(".") ? file.name : `paste-${Date.now()}.${inferredExt}`;
+      const img = {
+        ref: { raw: filename, path: filename },
+        mediaType,
+        base64
+      };
       this.pendingImages.push(img);
       this.renderAttachBar();
-      new import_obsidian13.Notice(`\u5DF2\u6DFB\u52A0\u56FE\u7247: ${file.name}`);
+      new import_obsidian13.Notice(`\u5DF2\u6DFB\u52A0\u56FE\u7247: ${filename}`);
     };
     reader.readAsDataURL(file);
   }
@@ -7194,6 +7197,27 @@ ${content}`);
         this.renderAttachBar();
       });
     }
+  }
+  async savePendingImagesToTemp() {
+    if (this.pendingImages.length === 0) return [];
+    const { writeFileSync, mkdirSync } = require("fs");
+    const { join } = require("path");
+    const tmpDir = join(process.env.TMPDIR || "/tmp", "ai-daily-images");
+    try {
+      mkdirSync(tmpDir, { recursive: true });
+    } catch (e) {
+    }
+    const paths = [];
+    for (const img of this.pendingImages) {
+      const filename = `${Date.now()}-${img.ref.path}`;
+      const filepath = join(tmpDir, filename);
+      const buf = Buffer.from(img.base64, "base64");
+      writeFileSync(filepath, buf);
+      paths.push(filepath);
+    }
+    this.pendingImages = [];
+    this.renderAttachBar();
+    return paths;
   }
   // ── Post-processing: wiki-links & code copy buttons ───
   postProcessAssistantEl(el) {
@@ -7731,12 +7755,8 @@ ${entry}
     }
     this.lastMode = currentMode;
     if (useCodex) {
-      if (this.pendingImages.length > 0) {
-        this.pendingImages = [];
-        this.renderAttachBar();
-        new import_obsidian13.Notice("Codex \u6A21\u5F0F\u4E0D\u652F\u6301\u56FE\u7247\uFF0C\u5DF2\u5FFD\u7565");
-      }
-      this.handleSendViaCodex(text).catch((e) => {
+      const imagePaths = await this.savePendingImagesToTemp();
+      this.handleSendViaCodex(text, imagePaths).catch((e) => {
         console.error("[ai-daily] Codex error:", e);
         this.addMessage("assistant", `Codex \u51FA\u9519: ${e instanceof Error ? e.message : String(e)}`, "codex");
         this.isLoading = false;
@@ -7745,12 +7765,8 @@ ${entry}
       return;
     }
     if (useClaudeCode) {
-      if (this.pendingImages.length > 0) {
-        this.pendingImages = [];
-        this.renderAttachBar();
-        new import_obsidian13.Notice("Claude Code \u6A21\u5F0F\u4E0D\u652F\u6301\u56FE\u7247\uFF0C\u5DF2\u5FFD\u7565");
-      }
-      this.handleSendViaClaudeCode(text).catch((e) => {
+      const imagePaths = await this.savePendingImagesToTemp();
+      this.handleSendViaClaudeCode(text, imagePaths).catch((e) => {
         console.error("[ai-daily] Claude Code error:", e);
         this.addMessage("assistant", `Claude Code \u51FA\u9519: ${e instanceof Error ? e.message : String(e)}`, "claude-code");
         this.isLoading = false;
@@ -7760,10 +7776,7 @@ ${entry}
     }
     const attachedContent = await this.consumeAttachedFiles();
     const userMessage = attachedContent ? attachedContent + "\n\n" + text : text;
-    const pendingImageCount = this.pendingImages.length;
-    const displayText = pendingImageCount > 0 ? `${text}
-[\u{1F4F7} ${pendingImageCount} \u5F20\u56FE\u7247]` : text;
-    this.addMessage("user", displayText);
+    this.addMessage("user", text);
     if (!this.sessionId) {
       this.sessionId = newSessionId();
     }
@@ -7851,7 +7864,7 @@ ${entry}
         }
       }
       if (this.pendingImages.length > 0) {
-        preparedImages = [...preparedImages || [], ...this.pendingImages];
+        new import_obsidian13.Notice("API \u6A21\u5F0F\u4E0B\u8BF7\u4F7F\u7528 ![[\u56FE\u7247]] \u5F15\u7528 vault \u5185\u56FE\u7247");
         this.pendingImages = [];
         this.renderAttachBar();
       }
@@ -8055,12 +8068,21 @@ ${filesList}` : "",
     const mcpServerPath = getMcpServerPath();
     return { vaultPath, mcpServerPath, knowledgeFolders, ...enableWeRead && wereadApiKey ? { wereadApiKey } : {} };
   }
-  async handleSendViaClaudeCode(text) {
-    this.addMessage("user", text, "claude-code");
+  async handleSendViaClaudeCode(text, imagePaths = []) {
+    const displayText = imagePaths.length > 0 ? `${text}
+[\u{1F4F7} ${imagePaths.length} \u5F20\u56FE\u7247]` : text;
+    this.addMessage("user", displayText, "claude-code");
     if (!this.sessionId) this.sessionId = newSessionId();
     const isFirstMessage = !this.claudeCodeSessionId;
     const attachedContent = await this.consumeAttachedFiles();
     let prompt = text;
+    if (imagePaths.length > 0) {
+      const imageList = imagePaths.map((p) => `- ${p}`).join("\n");
+      prompt += `
+
+\u7528\u6237\u63D0\u4F9B\u4E86\u4EE5\u4E0B\u53C2\u8003\u56FE\u7247\uFF0C\u8BF7\u5148\u7528 Read \u5DE5\u5177\u67E5\u770B\uFF1A
+${imageList}`;
+    }
     if (isFirstMessage && this.messages.length > 1) {
       const adapter = this.app.vault.adapter;
       const vaultAbsPath = adapter.basePath || "";
@@ -8095,12 +8117,21 @@ ${filesList}` : "",
     }
     this.runClaudeCodeStream(prompt, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.model);
   }
-  async handleSendViaCodex(text) {
-    this.addMessage("user", text, "codex");
+  async handleSendViaCodex(text, imagePaths = []) {
+    const displayText = imagePaths.length > 0 ? `${text}
+[\u{1F4F7} ${imagePaths.length} \u5F20\u56FE\u7247]` : text;
+    this.addMessage("user", displayText, "codex");
     if (!this.sessionId) this.sessionId = newSessionId();
     const isFirstMessage = !this.codexSessionId;
     const attachedContent = await this.consumeAttachedFiles();
     let prompt = text;
+    if (imagePaths.length > 0) {
+      const imageList = imagePaths.map((p) => `- ${p}`).join("\n");
+      prompt += `
+
+\u7528\u6237\u63D0\u4F9B\u4E86\u4EE5\u4E0B\u53C2\u8003\u56FE\u7247\uFF0C\u8BF7\u5148\u7528 Read \u5DE5\u5177\u67E5\u770B\uFF1A
+${imageList}`;
+    }
     if (isFirstMessage) {
       const adapter = this.app.vault.adapter;
       const vaultAbsPath = adapter.basePath || "";

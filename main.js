@@ -6675,6 +6675,7 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     this.sessionId = null;
     this.lastMode = null;
     this.attachedFiles = [];
+    this.pendingImages = [];
     this.attachBarEl = null;
     this.harnessContext = null;
     this.mentionPopupEl = null;
@@ -6894,6 +6895,18 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
         }
       }
     });
+    this.inputEl.addEventListener("paste", (e) => {
+      this.handleImagePaste(e);
+    });
+    this.inputEl.addEventListener("dragover", (e) => {
+      var _a;
+      if ((_a = e.dataTransfer) == null ? void 0 : _a.types.includes("Files")) {
+        e.preventDefault();
+      }
+    });
+    this.inputEl.addEventListener("drop", (e) => {
+      this.handleImageDrop(e);
+    });
   }
   // ── Prompt template popup ──────────────────────────────
   handleTemplateInput() {
@@ -7065,7 +7078,7 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
   renderAttachBar() {
     if (!this.attachBarEl) return;
     this.attachBarEl.empty();
-    if (this.attachedFiles.length === 0) {
+    if (this.attachedFiles.length === 0 && this.pendingImages.length === 0) {
       this.attachBarEl.style.display = "none";
       return;
     }
@@ -7082,6 +7095,7 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
         this.renderAttachBar();
       });
     }
+    this.renderImageChips();
   }
   async consumeAttachedFiles() {
     if (this.attachedFiles.length === 0) return "";
@@ -7101,6 +7115,85 @@ ${content}`);
     this.attachedFiles = [];
     this.renderAttachBar();
     return parts.join("\n\n---\n\n");
+  }
+  // ── Image paste / drop ───────────────────────────────
+  handleImagePaste(e) {
+    var _a;
+    const items = (_a = e.clipboardData) == null ? void 0 : _a.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) this.addImageFromBlob(file);
+        return;
+      }
+    }
+  }
+  handleImageDrop(e) {
+    var _a;
+    const files = (_a = e.dataTransfer) == null ? void 0 : _a.files;
+    if (!files) return;
+    for (let i = 0; i < files.length; i++) {
+      if (files[i].type.startsWith("image/")) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.addImageFromBlob(files[i]);
+      }
+    }
+  }
+  addImageFromBlob(file) {
+    var _a, _b;
+    const ext = (_b = (_a = file.name.split(".").pop()) == null ? void 0 : _a.toLowerCase()) != null ? _b : "";
+    const MEDIA_MAP = {
+      png: "image/png",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      webp: "image/webp",
+      gif: "image/gif"
+    };
+    const mediaType = MEDIA_MAP[ext] || file.type || "image/png";
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result.split(",")[1];
+      if (!base64) return;
+      const img = {
+        ref: { raw: file.name, path: file.name },
+        mediaType,
+        base64
+      };
+      const maxImages = this.plugin.settings.maxImagesPerMessage || 3;
+      if (this.pendingImages.length >= maxImages) {
+        new import_obsidian13.Notice(`\u6700\u591A\u9644\u5E26 ${maxImages} \u5F20\u56FE\u7247`);
+        return;
+      }
+      this.pendingImages.push(img);
+      this.renderAttachBar();
+      new import_obsidian13.Notice(`\u5DF2\u6DFB\u52A0\u56FE\u7247: ${file.name}`);
+    };
+    reader.readAsDataURL(file);
+  }
+  renderImageChips() {
+    if (!this.attachBarEl || this.pendingImages.length === 0) return;
+    for (let i = 0; i < this.pendingImages.length; i++) {
+      const img = this.pendingImages[i];
+      const chip = this.attachBarEl.createDiv({ cls: "ai-daily-attach-chip ai-daily-attach-chip-image" });
+      const thumb = chip.createEl("img", {
+        cls: "ai-daily-attach-thumb",
+        attr: { src: `data:${img.mediaType};base64,${img.base64}` }
+      });
+      thumb.style.height = "20px";
+      thumb.style.borderRadius = "3px";
+      chip.createSpan({ cls: "ai-daily-attach-chip-name", text: img.ref.path });
+      const removeBtn = chip.createSpan({ cls: "ai-daily-attach-chip-remove" });
+      (0, import_obsidian13.setIcon)(removeBtn, "x");
+      const idx = i;
+      removeBtn.addEventListener("click", () => {
+        this.pendingImages.splice(idx, 1);
+        this.renderAttachBar();
+      });
+    }
   }
   // ── Post-processing: wiki-links & code copy buttons ───
   postProcessAssistantEl(el) {
@@ -7638,6 +7731,11 @@ ${entry}
     }
     this.lastMode = currentMode;
     if (useCodex) {
+      if (this.pendingImages.length > 0) {
+        this.pendingImages = [];
+        this.renderAttachBar();
+        new import_obsidian13.Notice("Codex \u6A21\u5F0F\u4E0D\u652F\u6301\u56FE\u7247\uFF0C\u5DF2\u5FFD\u7565");
+      }
       this.handleSendViaCodex(text).catch((e) => {
         console.error("[ai-daily] Codex error:", e);
         this.addMessage("assistant", `Codex \u51FA\u9519: ${e instanceof Error ? e.message : String(e)}`, "codex");
@@ -7647,6 +7745,11 @@ ${entry}
       return;
     }
     if (useClaudeCode) {
+      if (this.pendingImages.length > 0) {
+        this.pendingImages = [];
+        this.renderAttachBar();
+        new import_obsidian13.Notice("Claude Code \u6A21\u5F0F\u4E0D\u652F\u6301\u56FE\u7247\uFF0C\u5DF2\u5FFD\u7565");
+      }
       this.handleSendViaClaudeCode(text).catch((e) => {
         console.error("[ai-daily] Claude Code error:", e);
         this.addMessage("assistant", `Claude Code \u51FA\u9519: ${e instanceof Error ? e.message : String(e)}`, "claude-code");
@@ -7657,7 +7760,10 @@ ${entry}
     }
     const attachedContent = await this.consumeAttachedFiles();
     const userMessage = attachedContent ? attachedContent + "\n\n" + text : text;
-    this.addMessage("user", text);
+    const pendingImageCount = this.pendingImages.length;
+    const displayText = pendingImageCount > 0 ? `${text}
+[\u{1F4F7} ${pendingImageCount} \u5F20\u56FE\u7247]` : text;
+    this.addMessage("user", displayText);
     if (!this.sessionId) {
       this.sessionId = newSessionId();
     }
@@ -9290,6 +9396,7 @@ ${m.content}`);
     this.restoredProxyTaskIds = {};
     this.lastMode = null;
     this.attachedFiles = [];
+    this.pendingImages = [];
     this.renderAttachBar();
     this.messagesEl.empty();
     this.showWelcome();

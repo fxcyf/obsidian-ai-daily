@@ -267,6 +267,7 @@ export class ChatView extends ItemView {
 	private sessionId: string | null = null;
 	private lastMode: MessageSource | null = null;
 	private attachedFiles: TFile[] = [];
+	private pendingImages: PreparedImage[] = [];
 	private attachBarEl: HTMLElement | null = null;
 	private harnessContext: HarnessContext | null = null;
 	private mentionPopupEl: HTMLElement | null = null;
@@ -515,6 +516,17 @@ export class ChatView extends ItemView {
 				}
 			}
 		});
+		this.inputEl.addEventListener("paste", (e) => {
+			this.handleImagePaste(e);
+		});
+		this.inputEl.addEventListener("dragover", (e) => {
+			if (e.dataTransfer?.types.includes("Files")) {
+				e.preventDefault();
+			}
+		});
+		this.inputEl.addEventListener("drop", (e) => {
+			this.handleImageDrop(e);
+		});
 	}
 
 	// ── Prompt template popup ──────────────────────────────
@@ -709,7 +721,7 @@ export class ChatView extends ItemView {
 	private renderAttachBar(): void {
 		if (!this.attachBarEl) return;
 		this.attachBarEl.empty();
-		if (this.attachedFiles.length === 0) {
+		if (this.attachedFiles.length === 0 && this.pendingImages.length === 0) {
 			this.attachBarEl.style.display = "none";
 			return;
 		}
@@ -726,6 +738,7 @@ export class ChatView extends ItemView {
 				this.renderAttachBar();
 			});
 		}
+		this.renderImageChips();
 	}
 
 	private async consumeAttachedFiles(): Promise<string> {
@@ -742,6 +755,88 @@ export class ChatView extends ItemView {
 		this.attachedFiles = [];
 		this.renderAttachBar();
 		return parts.join("\n\n---\n\n");
+	}
+
+	// ── Image paste / drop ───────────────────────────────
+
+	private handleImagePaste(e: ClipboardEvent): void {
+		const items = e.clipboardData?.items;
+		if (!items) return;
+		for (let i = 0; i < items.length; i++) {
+			const item = items[i];
+			if (item.type.startsWith("image/")) {
+				e.preventDefault();
+				const file = item.getAsFile();
+				if (file) this.addImageFromBlob(file);
+				return;
+			}
+		}
+	}
+
+	private handleImageDrop(e: DragEvent): void {
+		const files = e.dataTransfer?.files;
+		if (!files) return;
+		for (let i = 0; i < files.length; i++) {
+			if (files[i].type.startsWith("image/")) {
+				e.preventDefault();
+				e.stopPropagation();
+				this.addImageFromBlob(files[i]);
+			}
+		}
+	}
+
+	private addImageFromBlob(file: File): void {
+		const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+		const MEDIA_MAP: Record<string, PreparedImage["mediaType"]> = {
+			png: "image/png",
+			jpg: "image/jpeg",
+			jpeg: "image/jpeg",
+			webp: "image/webp",
+			gif: "image/gif",
+		};
+		const mediaType = MEDIA_MAP[ext] || (file.type as PreparedImage["mediaType"]) || "image/png";
+
+		const reader = new FileReader();
+		reader.onload = () => {
+			const base64 = (reader.result as string).split(",")[1];
+			if (!base64) return;
+			const img: PreparedImage = {
+				ref: { raw: file.name, path: file.name },
+				mediaType,
+				base64,
+			};
+			const maxImages = this.plugin.settings.maxImagesPerMessage || 3;
+			if (this.pendingImages.length >= maxImages) {
+				new Notice(`最多附带 ${maxImages} 张图片`);
+				return;
+			}
+			this.pendingImages.push(img);
+			this.renderAttachBar();
+			new Notice(`已添加图片: ${file.name}`);
+		};
+		reader.readAsDataURL(file);
+	}
+
+	private renderImageChips(): void {
+		if (!this.attachBarEl || this.pendingImages.length === 0) return;
+		for (let i = 0; i < this.pendingImages.length; i++) {
+			const img = this.pendingImages[i];
+			const chip = this.attachBarEl.createDiv({ cls: "ai-daily-attach-chip ai-daily-attach-chip-image" });
+			const thumb = chip.createEl("img", {
+				cls: "ai-daily-attach-thumb",
+				attr: { src: `data:${img.mediaType};base64,${img.base64}` },
+			});
+			thumb.style.height = "20px";
+			thumb.style.borderRadius = "3px";
+			chip.createSpan({ cls: "ai-daily-attach-chip-name", text: img.ref.path });
+			const removeBtn = chip.createSpan({ cls: "ai-daily-attach-chip-remove" });
+			setIcon(removeBtn, "x");
+			const idx = i;
+			removeBtn.addEventListener("click", () => {
+				this.pendingImages.splice(idx, 1);
+				this.renderAttachBar();
+			});
+		}
 	}
 
 	// ── Post-processing: wiki-links & code copy buttons ───
@@ -1353,6 +1448,11 @@ export class ChatView extends ItemView {
 		this.lastMode = currentMode;
 
 		if (useCodex) {
+			if (this.pendingImages.length > 0) {
+				this.pendingImages = [];
+				this.renderAttachBar();
+				new Notice("Codex 模式不支持图片，已忽略");
+			}
 			this.handleSendViaCodex(text).catch((e) => {
 				console.error("[ai-daily] Codex error:", e);
 				this.addMessage("assistant", `Codex 出错: ${e instanceof Error ? e.message : String(e)}`, "codex");
@@ -1363,6 +1463,11 @@ export class ChatView extends ItemView {
 		}
 
 		if (useClaudeCode) {
+			if (this.pendingImages.length > 0) {
+				this.pendingImages = [];
+				this.renderAttachBar();
+				new Notice("Claude Code 模式不支持图片，已忽略");
+			}
 			this.handleSendViaClaudeCode(text).catch((e) => {
 				console.error("[ai-daily] Claude Code error:", e);
 				this.addMessage("assistant", `Claude Code 出错: ${e instanceof Error ? e.message : String(e)}`, "claude-code");
@@ -1377,7 +1482,11 @@ export class ChatView extends ItemView {
 			? attachedContent + "\n\n" + text
 			: text;
 
-		this.addMessage("user", text);
+		const pendingImageCount = this.pendingImages.length;
+		const displayText = pendingImageCount > 0
+			? `${text}\n[📷 ${pendingImageCount} 张图片]`
+			: text;
+		this.addMessage("user", displayText);
 
 		if (!this.sessionId) {
 			this.sessionId = newSessionId();

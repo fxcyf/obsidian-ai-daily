@@ -64,6 +64,7 @@ npm run test:watch # 监听模式
 | `src/feeds.test.ts` | timeDecay, socialBoost, detectBursts, scoreRelevance |
 | `src/chat-session.test.ts` | newSessionId, titleFromMessages, isValidChatSession, shouldPruneToday |
 | `src/markdown-normalize.test.ts` | Codex LaTeX 分隔符转 Obsidian MathJax，代码区域保持原样 |
+| `src/vault-guide.test.ts` | Vault 参考模板生成共享 `CLAUDE.md` 与 Codex `AGENTS.md` 入口 |
 | `src/vault-tools.test.ts` | parseFrontmatter, serializeFrontmatter, findHeadingRange |
 | `mcp-server/src/knowledge-path.test.ts` | 单一逻辑知识库根路径映射、完整路径兼容与多根目录防歧义 |
 | `src/image-tools.test.ts` | extractLocalImageRefs（wikilink/markdown 图片解析、去重、过滤） |

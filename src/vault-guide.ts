@@ -68,7 +68,8 @@ Cortex 插件依赖 vault 中的特定文件和格式来驱动 AI 功能。
 
 | 模板文件 | 复制到 | 说明 |
 |----------|--------|------|
-| \`CLAUDE.md\` | vault 根目录 | Claude Code agent 指南（全文可自由修改） |
+| \`CLAUDE.md\` | vault 根目录 | 共享 agent 指南（Claude Code/Codex 均使用，全文可自由修改） |
+| \`AGENTS.md\` | vault 根目录 | Codex 自动发现入口，指向 \`CLAUDE.md\` |
 | \`_INDEX.md\` | \`${harnessProjectsFolder}/_INDEX.md\` | 项目索引（**格式有严格要求**，见文件内注释） |
 | \`modes.md\` | \`${harnessProjectsFolder}/{项目名}/modes.md\` | 模式定义（**YAML 块格式有严格要求**） |
 | \`PROGRESS.md\` | \`${harnessProjectsFolder}/{项目名}/PROGRESS.md\` | 项目进展（格式影响状态栏显示） |
@@ -84,7 +85,7 @@ Cortex 插件依赖 vault 中的特定文件和格式来驱动 AI 功能。
 <!--
   使用说明：
   - 将本文件复制到 vault 根目录，命名为 CLAUDE.md
-  - Claude Code agent 会自动读取此文件来理解你的 vault 结构
+  - Claude Code agent 会自动读取此文件；Codex 通过 AGENTS.md 入口读取同一份规范
   - 本文件的内容全部可以自由修改，它是指导 AI 的 prompt，不是代码依赖
   - 但请注意：下方提到的 frontmatter 字段名和格式是代码硬依赖的，不可随意改名
 
@@ -193,6 +194,22 @@ Feed 功能生成的文件遵循固定命名：
 
 插件通过这个命名规则来做跨日去重（检查最近 3 天的 Feed 内容避免重复推荐）。
 如果你手动创建 Feed 笔记，建议也遵循这个命名格式。
+`,
+	});
+
+	// ── AGENTS.md template ──────────────────────────────────────────
+	files.push({
+		path: `${GUIDE_FOLDER}/AGENTS.md`,
+		content: `# Cortex Vault — Codex 入口
+
+本 vault 的 agent 规范单一来源是 \`CLAUDE.md\`。
+
+Codex 开始处理 vault 任务前必须先阅读根目录 \`CLAUDE.md\`，并遵守其中的文件夹结构、frontmatter、Harness/Workspace 和工具使用规范。
+
+维护规则：
+- 修改 vault 级 agent 指令时，优先更新 \`CLAUDE.md\`
+- \`AGENTS.md\` 只作为 Codex 自动发现入口，保持简短
+- 如果 \`CLAUDE.md\` 的文件名、位置或维护策略变化，必须同步更新本文件
 `,
 	});
 

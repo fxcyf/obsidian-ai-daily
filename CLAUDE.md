@@ -1,6 +1,6 @@
 # obsidian-ai-daily — 项目指南
 
-> **重要：Claude 必须自主维护本文件。** 架构或约定变化时更新，保持简洁。
+> **重要：Claude Code 与 Codex 必须共同维护本文件。** 架构或约定变化时更新，保持简洁。
 
 ## Git 信息
 
@@ -9,7 +9,7 @@
 
 ## 任务生命周期
 
-你收到任务后，按以下 9 步流程自主完成：
+你收到任务后，按以下 10 步流程自主完成：
 
 1. **领取任务** — 你已被分配任务，阅读本文件和项目代码理解上下文
 2. **创建工作区**:
@@ -53,11 +53,21 @@ rebase 发生冲突时：
 - 有 remote → 必须完成步骤 6（merge + push）
 - 无 remote → 跳过步骤 5 的 fetch、步骤 6 和步骤 8 的远程分支删除
 
+## Agent 上下文同步
+
+- **`CLAUDE.md` 是项目级 agent 规范单一来源**，包含架构、约定、测试要求和 git 流程。
+- **`AGENTS.md` 是 Codex 自动发现入口**，只保留指向 `CLAUDE.md` 的轻量说明，避免复制两份长期漂移。
+- **`.claude/settings.json` 是 Claude Code 专属权限配置**；Codex 权限由 Codex 运行参数和 `agent-tool-policy.json` 控制。
+- **`.agents/skills/` 是 Codex skill 源目录**；需要给 Claude Code 使用的 skill 由部署流程同步到 Vault 的 `.claude/skills`。
+- **Harness/Workspace 上下文不属于某个 CLI**：`_INDEX.md`、`modes.md`、`PROGRESS.md` 由插件读取后通过 `src/system-prompt.ts` 注入 Claude Code、Codex、Proxy 和 API 模式。
+- 新增 agent 指令时，优先放到共享 system prompt、`agent-tool-policy.json` 或 `CLAUDE.md`；只有确实是某个工具的启动/权限机制时，才放到 `.claude/`、`.agents/` 或 `AGENTS.md`。
+
 ## 文件维护规则
 
-> **以下文件都由 Claude Code 自主维护，每次功能变更后必须同步更新。**
+> **以下文件都由 agent 自主维护，每次功能变更后必须同步更新。**
 
 - **CLAUDE.md**（本文件）：架构、约定、关键路径变化时更新，只改变化的部分，保持简洁
+- **AGENTS.md**：Codex 自动发现入口，只指向 `CLAUDE.md`；当 agent 规范入口策略变化时同步更新
 - **README.md**：面向用户的文档，功能、使用流程变化时同步更新，保持与实际代码一致
 - **TEST.md**：测试指南，新增功能时同步添加测试用例和文档
 - **PROGRESS.md**：见下方「经验教训沉淀」
@@ -93,6 +103,7 @@ rebase 发生冲突时：
 
 - `src/main.ts` — 插件入口，注册视图、命令、设置；桌面端启动 Plugin API Server
 - `src/plugin-api-server.ts` — 桌面端 localhost HTTP API（127.0.0.1:27080），桥接 MCP Server → Obsidian API
+- `AGENTS.md` — Codex 自动发现入口，指向 `CLAUDE.md` 以避免项目级 agent 指令漂移
 - `src/tool-definitions.ts` — 工具 schema 单一来源（TOOL_DEFS/PODCAST_TOOL_DEFS 等），含 Anthropic API 格式和 Claude Code 文本描述转换器
 - `agent-tool-policy.json` — Agent 工具权限策略单一来源（Claude Code 内置工具、Codex MCP 只读/可写白名单）；桌面端与 Proxy 共同读取
 - `.agents/skills/weread-library/` — 微信读书 skill 单一来源；部署到 Vault 的 `.agents/skills`（Codex）与 `.claude/skills`（Claude Code）

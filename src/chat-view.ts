@@ -846,10 +846,21 @@ export class ChatView extends ItemView {
 
 	private async savePendingImagesToTemp(): Promise<string[]> {
 		if (this.pendingImages.length === 0) return [];
-		const { writeFileSync, mkdirSync } = require("fs") as typeof import("fs");
+		const { writeFileSync, mkdirSync, readdirSync, unlinkSync, statSync } = require("fs") as typeof import("fs");
 		const { join } = require("path") as typeof import("path");
 		const tmpDir = join(process.env.TMPDIR || "/tmp", "ai-daily-images");
 		try { mkdirSync(tmpDir, { recursive: true }); } catch { /* exists */ }
+
+		// Clean up files older than 1 hour
+		try {
+			const now = Date.now();
+			for (const f of readdirSync(tmpDir)) {
+				const fp = join(tmpDir, f);
+				try {
+					if (now - statSync(fp).mtimeMs > 3600_000) unlinkSync(fp);
+				} catch { /* ignore */ }
+			}
+		} catch { /* ignore */ }
 
 		const paths: string[] = [];
 		for (const img of this.pendingImages) {
@@ -1494,12 +1505,16 @@ export class ChatView extends ItemView {
 			return;
 		}
 
+		const pendingImageCount = this.pendingImages.length;
 		const attachedContent = await this.consumeAttachedFiles();
 		const userMessage = attachedContent
 			? attachedContent + "\n\n" + text
 			: text;
 
-		this.addMessage("user", text);
+		const displayText = pendingImageCount > 0
+			? `${text}\n[📷 ${pendingImageCount} 张图片]`
+			: text;
+		this.addMessage("user", displayText);
 
 		if (!this.sessionId) {
 			this.sessionId = newSessionId();
@@ -1596,10 +1611,21 @@ export class ChatView extends ItemView {
 					}
 				}
 			}
+			let proxyImages: { name: string; base64: string; mediaType: string }[] | undefined;
 			if (this.pendingImages.length > 0) {
-				new Notice("API 模式下请使用 ![[图片]] 引用 vault 内图片");
-				this.pendingImages = [];
-				this.renderAttachBar();
+				if (this.client?.isProxyMode()) {
+					proxyImages = this.pendingImages.map((img) => ({
+						name: img.ref.path,
+						base64: img.base64,
+						mediaType: img.mediaType,
+					}));
+					this.pendingImages = [];
+					this.renderAttachBar();
+				} else {
+					new Notice("API 模式下请使用 ![[图片]] 引用 vault 内图片");
+					this.pendingImages = [];
+					this.renderAttachBar();
+				}
 			}
 
 			let toolCallsEl: HTMLElement | null = null;
@@ -1739,6 +1765,7 @@ export class ChatView extends ItemView {
 						this.plugin.settings.cliBackend === "codex" ? this.plugin.settings.codexModel : this.plugin.settings.model,
 						this.plugin.settings.codexPermissionMode,
 						(message) => loadingTextEl.setText(message),
+						proxyImages,
 					);
 					actualSource = "proxy";
 				} catch (proxyErr) {

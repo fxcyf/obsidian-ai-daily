@@ -2589,7 +2589,7 @@ var ClaudeClient = class {
     }
     return collectedText.join("");
   }
-  async proxyChat(userMessage, onAssistantDelta, onToolCall, seedHistory, proxyBackend, proxyModel, codexPermissionMode, onStatus) {
+  async proxyChat(userMessage, onAssistantDelta, onToolCall, seedHistory, proxyBackend, proxyModel, codexPermissionMode, onStatus, images) {
     var _a;
     if (!this.proxyUrl || !this.proxyToken) {
       throw new Error("Proxy mode not configured");
@@ -2608,6 +2608,9 @@ var ClaudeClient = class {
       }
       if (proxyBackend === "codex" && codexPermissionMode) {
         body.codexPermissionMode = codexPermissionMode;
+      }
+      if (images == null ? void 0 : images.length) {
+        body.images = images;
       }
       if (this.proxySessionIds[backend]) {
         body.sessionId = this.proxySessionIds[backend];
@@ -7200,11 +7203,22 @@ ${content}`);
   }
   async savePendingImagesToTemp() {
     if (this.pendingImages.length === 0) return [];
-    const { writeFileSync, mkdirSync } = require("fs");
+    const { writeFileSync, mkdirSync, readdirSync, unlinkSync, statSync } = require("fs");
     const { join } = require("path");
     const tmpDir = join(process.env.TMPDIR || "/tmp", "ai-daily-images");
     try {
       mkdirSync(tmpDir, { recursive: true });
+    } catch (e) {
+    }
+    try {
+      const now = Date.now();
+      for (const f of readdirSync(tmpDir)) {
+        const fp = join(tmpDir, f);
+        try {
+          if (now - statSync(fp).mtimeMs > 36e5) unlinkSync(fp);
+        } catch (e) {
+        }
+      }
     } catch (e) {
     }
     const paths = [];
@@ -7706,7 +7720,7 @@ ${entry}
     this.sendBtn.setAttribute("title", loading ? "\u505C\u6B62\u751F\u6210" : "\u53D1\u9001");
   }
   async handleSend() {
-    var _a;
+    var _a, _b;
     this.closeTemplatePopup();
     const text = this.inputEl.value.trim();
     if (!text || this.isLoading) return;
@@ -7774,9 +7788,12 @@ ${entry}
       });
       return;
     }
+    const pendingImageCount = this.pendingImages.length;
     const attachedContent = await this.consumeAttachedFiles();
     const userMessage = attachedContent ? attachedContent + "\n\n" + text : text;
-    this.addMessage("user", text);
+    const displayText = pendingImageCount > 0 ? `${text}
+[\u{1F4F7} ${pendingImageCount} \u5F20\u56FE\u7247]` : text;
+    this.addMessage("user", displayText);
     if (!this.sessionId) {
       this.sessionId = newSessionId();
     }
@@ -7863,10 +7880,21 @@ ${entry}
           }
         }
       }
+      let proxyImages;
       if (this.pendingImages.length > 0) {
-        new import_obsidian13.Notice("API \u6A21\u5F0F\u4E0B\u8BF7\u4F7F\u7528 ![[\u56FE\u7247]] \u5F15\u7528 vault \u5185\u56FE\u7247");
-        this.pendingImages = [];
-        this.renderAttachBar();
+        if ((_b = this.client) == null ? void 0 : _b.isProxyMode()) {
+          proxyImages = this.pendingImages.map((img) => ({
+            name: img.ref.path,
+            base64: img.base64,
+            mediaType: img.mediaType
+          }));
+          this.pendingImages = [];
+          this.renderAttachBar();
+        } else {
+          new import_obsidian13.Notice("API \u6A21\u5F0F\u4E0B\u8BF7\u4F7F\u7528 ![[\u56FE\u7247]] \u5F15\u7528 vault \u5185\u56FE\u7247");
+          this.pendingImages = [];
+          this.renderAttachBar();
+        }
       }
       let toolCallsEl = null;
       let toolCallsSummaryEl = null;
@@ -7999,7 +8027,8 @@ ${filesList}` : "",
             proxyBackend,
             this.plugin.settings.cliBackend === "codex" ? this.plugin.settings.codexModel : this.plugin.settings.model,
             this.plugin.settings.codexPermissionMode,
-            (message) => loadingTextEl.setText(message)
+            (message) => loadingTextEl.setText(message),
+            proxyImages
           );
           actualSource = "proxy";
         } catch (proxyErr) {

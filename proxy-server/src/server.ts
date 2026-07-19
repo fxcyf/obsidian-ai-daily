@@ -3,8 +3,8 @@ import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-import { readFile, writeFile, mkdir } from "fs/promises";
-import { readFileSync } from "fs";
+import { readFile, writeFile, mkdir, unlink, rm } from "fs/promises";
+import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { randomUUID } from "crypto";
 import { appServerRequest, buildCodexHistoryItems } from "./codex-app-server.js";
 
@@ -39,6 +39,12 @@ if (!AUTH_TOKEN) {
 
 // ── Types ──────────────────────────────────────────────────────────
 
+interface ChatImage {
+	name: string;
+	base64: string;
+	mediaType: string;
+}
+
 interface ChatRequest {
 	message: string;
 	sessionId?: string;
@@ -47,6 +53,7 @@ interface ChatRequest {
 	backend?: "claude-code" | "codex";
 	model?: string;
 	codexPermissionMode?: "read-only" | "vault-write";
+	images?: ChatImage[];
 }
 
 interface ClaudeStreamEvent {
@@ -520,6 +527,28 @@ async function seedSession(
 	console.log(`[Proxy] Seeded session ${sessionId} with ${history.length} messages`);
 }
 
+// ── Image temp file helpers ────────────────────────────────────────
+
+const IMAGE_TMP_DIR = resolve(process.env.TMPDIR || "/tmp", "ai-daily-proxy-images");
+
+function saveImagesToTemp(images: ChatImage[]): string[] {
+	mkdirSync(IMAGE_TMP_DIR, { recursive: true });
+	const paths: string[] = [];
+	for (const img of images) {
+		const filename = `${Date.now()}-${img.name}`;
+		const filepath = resolve(IMAGE_TMP_DIR, filename);
+		writeFileSync(filepath, Buffer.from(img.base64, "base64"));
+		paths.push(filepath);
+	}
+	return paths;
+}
+
+function cleanupImageFiles(paths: string[]): void {
+	for (const p of paths) {
+		unlink(p).catch(() => {});
+	}
+}
+
 // ── Chat handler ───────────────────────────────────────────────────
 
 async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -538,6 +567,13 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 		res.setHeader("Content-Type", "application/json");
 		res.end(JSON.stringify({ error: "message is required" }));
 		return;
+	}
+
+	let imageTempPaths: string[] = [];
+	if (body.images?.length) {
+		imageTempPaths = saveImagesToTemp(body.images);
+		const imageList = imageTempPaths.map((p) => `- ${p}`).join("\n");
+		body.message += `\n\n用户提供了以下参考图片，请先用 Read 工具查看：\n${imageList}`;
 	}
 
 	const useCodex = body.backend === "codex";
@@ -815,6 +851,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 	proc.on("close", (code) => {
 		clearTimeout(timeout);
 		clearInterval(heartbeat);
+		if (imageTempPaths.length > 0) cleanupImageFiles(imageTempPaths);
 		const wasRunning = task.status === "running";
 		if (task.status === "running") {
 			task.status = "error";

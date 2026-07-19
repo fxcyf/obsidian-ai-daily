@@ -523,6 +523,7 @@ export class ClaudeClient {
 		proxyModel?: string,
 		codexPermissionMode?: "read-only" | "vault-write",
 		onStatus?: (message: string) => void,
+		images?: { name: string; base64: string; mediaType: string }[],
 	): Promise<string> {
 		if (!this.proxyUrl || !this.proxyToken) {
 			throw new Error("Proxy mode not configured");
@@ -543,6 +544,9 @@ export class ClaudeClient {
 			}
 			if (proxyBackend === "codex" && codexPermissionMode) {
 				body.codexPermissionMode = codexPermissionMode;
+			}
+			if (images?.length) {
+				body.images = images;
 			}
 			if (this.proxySessionIds[backend]) {
 				body.sessionId = this.proxySessionIds[backend];

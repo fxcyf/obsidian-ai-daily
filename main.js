@@ -8385,12 +8385,16 @@ ${filesList}` : "",
         detail.createDiv({ cls: "ai-daily-ctx-detail-label", text: `\u5DF2\u6CE8\u5165 ${context.injectedFiles.length} \u4E2A\u6587\u4EF6` });
         const pills = detail.createDiv({ cls: "ai-daily-ctx-pills" });
         for (const f of context.injectedFiles) {
-          const pill = pills.createSpan({ cls: "ai-daily-ctx-pill" });
+          const pill = pills.createSpan({ cls: "ai-daily-ctx-pill clickable" });
           const fIcon = pill.createSpan({ cls: "ai-daily-ctx-pill-icon" });
           (0, import_obsidian13.setIcon)(fIcon, "file-text");
           const displayName = f.path.replace(/^.*\//, "").replace(/\.md$/, "");
           pill.createSpan({ text: displayName });
           pill.setAttribute("title", f.path);
+          pill.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            this.app.workspace.openLinkText(f.path, "", false);
+          });
         }
       }
       this.inputEl.focus();
@@ -9664,12 +9668,16 @@ ${m.content}`);
         detail.createDiv({ cls: "ai-daily-ctx-detail-label", text: `\u5DF2\u6CE8\u5165 ${ctx.injectedFiles.length} \u4E2A\u6587\u4EF6` });
         const pills = detail.createDiv({ cls: "ai-daily-ctx-pills" });
         for (const f of ctx.injectedFiles) {
-          const pill = pills.createSpan({ cls: "ai-daily-ctx-pill" });
+          const pill = pills.createSpan({ cls: "ai-daily-ctx-pill clickable" });
           const fIcon = pill.createSpan({ cls: "ai-daily-ctx-pill-icon" });
           (0, import_obsidian13.setIcon)(fIcon, "file-text");
           const displayName = f.path.replace(/^.*\//, "").replace(/\.md$/, "");
           pill.createSpan({ text: displayName });
           pill.setAttribute("title", f.path);
+          pill.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            this.app.workspace.openLinkText(f.path, "", false);
+          });
         }
       }
     }

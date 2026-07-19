@@ -2120,6 +2120,14 @@
 	border: 1px solid var(--background-modifier-border);
 	padding: 5px 9px;
 	border-radius: 7px;
+	cursor: pointer;
+	transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.ai-daily-ctx-pill:hover {
+	background: rgba(var(--mono-rgb-100), 0.15);
+	border-color: var(--interactive-accent);
+	color: var(--text-normal);
 }
 
 .ai-daily-ctx-pill-icon {

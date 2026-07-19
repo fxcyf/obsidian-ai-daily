@@ -2179,12 +2179,16 @@ export class ChatView extends ItemView {
 				detail.createDiv({ cls: "ai-daily-ctx-detail-label", text: `已注入 ${context.injectedFiles.length} 个文件` });
 				const pills = detail.createDiv({ cls: "ai-daily-ctx-pills" });
 				for (const f of context.injectedFiles) {
-					const pill = pills.createSpan({ cls: "ai-daily-ctx-pill" });
+					const pill = pills.createSpan({ cls: "ai-daily-ctx-pill clickable" });
 					const fIcon = pill.createSpan({ cls: "ai-daily-ctx-pill-icon" });
 					setIcon(fIcon, "file-text");
 					const displayName = f.path.replace(/^.*\//, "").replace(/\.md$/, "");
 					pill.createSpan({ text: displayName });
 					pill.setAttribute("title", f.path);
+					pill.addEventListener("click", (ev) => {
+						ev.stopPropagation();
+						this.app.workspace.openLinkText(f.path, "", false);
+					});
 				}
 			}
 
@@ -3551,12 +3555,16 @@ export class ChatView extends ItemView {
 				detail.createDiv({ cls: "ai-daily-ctx-detail-label", text: `已注入 ${ctx.injectedFiles.length} 个文件` });
 				const pills = detail.createDiv({ cls: "ai-daily-ctx-pills" });
 				for (const f of ctx.injectedFiles) {
-					const pill = pills.createSpan({ cls: "ai-daily-ctx-pill" });
+					const pill = pills.createSpan({ cls: "ai-daily-ctx-pill clickable" });
 					const fIcon = pill.createSpan({ cls: "ai-daily-ctx-pill-icon" });
 					setIcon(fIcon, "file-text");
 					const displayName = f.path.replace(/^.*\//, "").replace(/\.md$/, "");
 					pill.createSpan({ text: displayName });
 					pill.setAttribute("title", f.path);
+					pill.addEventListener("click", (ev) => {
+						ev.stopPropagation();
+						this.app.workspace.openLinkText(f.path, "", false);
+					});
 				}
 			}
 		}

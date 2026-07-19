@@ -913,7 +913,7 @@ export class ChatView extends ItemView {
 	private processCodeBlocks(el: HTMLElement): void {
 		el.querySelectorAll("pre > code").forEach((codeEl) => {
 			const pre = codeEl.parentElement!;
-			if (pre.querySelector(".ai-daily-copy-btn")) return;
+			if (pre.querySelector(".ai-daily-copy-btn") || pre.querySelector(".copy-code-button")) return;
 
 			const btn = pre.createDiv({ cls: "ai-daily-copy-btn" });
 			setIcon(btn, "copy");
@@ -1473,6 +1473,11 @@ export class ChatView extends ItemView {
 						);
 					}
 				}
+			}
+			if (this.pendingImages.length > 0) {
+				preparedImages = [...(preparedImages || []), ...this.pendingImages];
+				this.pendingImages = [];
+				this.renderAttachBar();
 			}
 
 			let toolCallsEl: HTMLElement | null = null;
@@ -3137,6 +3142,7 @@ export class ChatView extends ItemView {
 		this.restoredProxyTaskIds = {};
 		this.lastMode = null;
 		this.attachedFiles = [];
+		this.pendingImages = [];
 		this.renderAttachBar();
 		this.messagesEl.empty();
 		this.showWelcome();

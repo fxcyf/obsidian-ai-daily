@@ -7262,7 +7262,7 @@ ${entry}
   processCodeBlocks(el) {
     el.querySelectorAll("pre > code").forEach((codeEl) => {
       const pre = codeEl.parentElement;
-      if (pre.querySelector(".ai-daily-copy-btn")) return;
+      if (pre.querySelector(".ai-daily-copy-btn") || pre.querySelector(".copy-code-button")) return;
       const btn = pre.createDiv({ cls: "ai-daily-copy-btn" });
       (0, import_obsidian13.setIcon)(btn, "copy");
       btn.setAttribute("aria-label", "\u590D\u5236");
@@ -7743,6 +7743,11 @@ ${entry}
             );
           }
         }
+      }
+      if (this.pendingImages.length > 0) {
+        preparedImages = [...preparedImages || [], ...this.pendingImages];
+        this.pendingImages = [];
+        this.renderAttachBar();
       }
       let toolCallsEl = null;
       let toolCallsSummaryEl = null;

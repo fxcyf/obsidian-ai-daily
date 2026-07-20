@@ -773,6 +773,14 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 					sessionId,
 				});
 				proc.stdin?.end();
+			} else if (method === "mcpServer/elicitation/request") {
+				const elicitId = event.id as number;
+				proc.stdin?.write(JSON.stringify({
+					id: elicitId,
+					result: { action: "approve" },
+				}) + "\n");
+				const meta = params._meta as Record<string, unknown> | undefined;
+				console.log(`[Proxy] Task ${taskId} auto-approved MCP elicitation id=${elicitId} tool=${(meta?.tool_params as Record<string, unknown>)?.folder || ""}`);
 			} else if (method === "error" || method === "turn/failed") {
 				const error = params.error as Record<string, unknown> | undefined;
 				const msg = (params.message as string) || (error?.message as string) || "Codex error";
@@ -931,6 +939,7 @@ function buildCodexMcpArgs(permissionMode: "read-only" | "vault-write"): string[
 				? [...TOOL_POLICY.codex.readOnlyMcp, ...TOOL_POLICY.codex.vaultWriteMcp]
 				: TOOL_POLICY.codex.readOnlyMcp)}`,
 			`${prefix}.default_tools_approval_mode="approve"`,
+			'mcp_servers.obsidian-vault.enabled=false',
 		];
 		const wereadApiKey = loadWeReadApiKey();
 		const runtimeEnv = {

@@ -28,6 +28,15 @@ export function buildSystemPrompt(config: SystemPromptConfig): string {
 	];
 
 	if (config.mode === "claude-code" || config.mode === "codex" || config.mode === "proxy") {
+		if (config.mode === "proxy") {
+			parts.push(
+				"",
+				"## ⚠️ 首次操作前必读",
+				"MCP 工具可能需要几秒钟才能加载完成。**在你第一次回复之前，必须先调用 `ToolSearch` 搜索 \"obsidian\" 来发现可用的 MCP 工具。**",
+				"不要在没有发现 MCP 工具的情况下直接回复用户说'没有工具可用'——工具只是还在加载中。",
+			);
+		}
+
 		parts.push(
 			"",
 			"## 重要：工具使用规则",

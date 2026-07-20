@@ -3820,6 +3820,14 @@ function buildSystemPrompt(config) {
     `- \u77E5\u8BC6\u6574\u7406\u76EE\u6807\u6587\u4EF6\u5939: ${config.distillTargetFolder}`
   ];
   if (config.mode === "claude-code" || config.mode === "codex" || config.mode === "proxy") {
+    if (config.mode === "proxy") {
+      parts.push(
+        "",
+        "## \u26A0\uFE0F \u9996\u6B21\u64CD\u4F5C\u524D\u5FC5\u8BFB",
+        'MCP \u5DE5\u5177\u53EF\u80FD\u9700\u8981\u51E0\u79D2\u949F\u624D\u80FD\u52A0\u8F7D\u5B8C\u6210\u3002**\u5728\u4F60\u7B2C\u4E00\u6B21\u56DE\u590D\u4E4B\u524D\uFF0C\u5FC5\u987B\u5148\u8C03\u7528 `ToolSearch` \u641C\u7D22 "obsidian" \u6765\u53D1\u73B0\u53EF\u7528\u7684 MCP \u5DE5\u5177\u3002**',
+        "\u4E0D\u8981\u5728\u6CA1\u6709\u53D1\u73B0 MCP \u5DE5\u5177\u7684\u60C5\u51B5\u4E0B\u76F4\u63A5\u56DE\u590D\u7528\u6237\u8BF4'\u6CA1\u6709\u5DE5\u5177\u53EF\u7528'\u2014\u2014\u5DE5\u5177\u53EA\u662F\u8FD8\u5728\u52A0\u8F7D\u4E2D\u3002"
+      );
+    }
     parts.push(
       "",
       "## \u91CD\u8981\uFF1A\u5DE5\u5177\u4F7F\u7528\u89C4\u5219",
@@ -5668,7 +5676,7 @@ var import_obsidian11 = require("obsidian");
 var agent_tool_policy_default = {
   claudeCode: {
     desktopBuiltins: ["Read", "Grep", "Glob", "WebSearch", "WebFetch", "TodoWrite"],
-    proxyBuiltins: ["WebSearch", "WebFetch", "TodoWrite"]
+    proxyBuiltins: ["WebSearch", "WebFetch", "TodoWrite", "ToolSearch"]
   },
   codex: {
     readOnlyMcp: [

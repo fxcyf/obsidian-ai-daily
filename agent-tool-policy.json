@@ -1,7 +1,7 @@
 {
 	"claudeCode": {
 		"desktopBuiltins": ["Read", "Grep", "Glob", "WebSearch", "WebFetch", "TodoWrite"],
-		"proxyBuiltins": ["WebSearch", "WebFetch", "TodoWrite"]
+		"proxyBuiltins": ["WebSearch", "WebFetch", "TodoWrite", "ToolSearch"]
 	},
 	"codex": {
 		"readOnlyMcp": [

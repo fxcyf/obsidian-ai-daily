@@ -528,7 +528,7 @@ export class ChatView extends ItemView {
 
 		this.inputAreaEl.addEventListener("pointerdown", (e) => {
 			const target = e.target as HTMLElement;
-			if (target !== this.inputEl && !target.closest("button") && !target.closest(".ai-daily-attach-chip") && !target.closest(".ai-daily-context-btn")) {
+			if (target !== this.inputEl && !target.closest("button") && !target.closest(".ai-daily-attach-chip") && !target.closest(".ai-daily-context-btn") && !target.closest(".ai-daily-mention-popup")) {
 				e.preventDefault();
 				this.inputEl.focus();
 			}

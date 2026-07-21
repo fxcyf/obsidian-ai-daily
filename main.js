@@ -6977,7 +6977,7 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     });
     this.inputAreaEl.addEventListener("pointerdown", (e) => {
       const target = e.target;
-      if (target !== this.inputEl && !target.closest("button") && !target.closest(".ai-daily-attach-chip") && !target.closest(".ai-daily-context-btn")) {
+      if (target !== this.inputEl && !target.closest("button") && !target.closest(".ai-daily-attach-chip") && !target.closest(".ai-daily-context-btn") && !target.closest(".ai-daily-mention-popup")) {
         e.preventDefault();
         this.inputEl.focus();
       }

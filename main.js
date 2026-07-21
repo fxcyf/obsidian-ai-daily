@@ -7568,15 +7568,29 @@ ${entry}
         }
       });
       this.register(() => killObsidianPadding.disconnect());
-      this.inputEl.addEventListener("focus", () => {
-        this.inputAreaEl.style.setProperty("padding-bottom", "8px", "important");
+      let focusCount = 0;
+      container.addEventListener("focusin", (e) => {
+        const t = e.target;
+        if (!(t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement)) return;
+        focusCount++;
         container.style.setProperty("padding-bottom", "0", "important");
         killObsidianPadding.observe(container, { attributes: true, attributeFilter: ["style"] });
       });
+      container.addEventListener("focusout", (e) => {
+        const t = e.target;
+        if (!(t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement)) return;
+        focusCount--;
+        if (focusCount <= 0) {
+          focusCount = 0;
+          killObsidianPadding.disconnect();
+          container.style.removeProperty("padding-bottom");
+        }
+      });
+      this.inputEl.addEventListener("focus", () => {
+        this.inputAreaEl.style.setProperty("padding-bottom", "8px", "important");
+      });
       this.inputEl.addEventListener("blur", () => {
-        killObsidianPadding.disconnect();
         this.inputAreaEl.style.setProperty("padding-bottom", navbarH + "px", "important");
-        container.style.removeProperty("padding-bottom");
       });
     } else {
       const initialPb = parseFloat(getComputedStyle(container).paddingBottom) || 0;
@@ -7608,21 +7622,37 @@ ${entry}
       });
       resizeObs.observe(container.parentElement);
       this.register(() => resizeObs.disconnect());
+      let focusCount = 0;
+      container.addEventListener("focusin", (e) => {
+        const t = e.target;
+        if (!(t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement)) return;
+        focusCount++;
+        if (!keyboardOpen) {
+          keyboardOpen = true;
+          container.addClass("ai-daily-keyboard-open");
+          scheduleRecalc();
+        }
+      });
+      container.addEventListener("focusout", (e) => {
+        const t = e.target;
+        if (!(t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement)) return;
+        focusCount--;
+        if (focusCount <= 0) {
+          focusCount = 0;
+          keyboardOpen = false;
+          if (recalcTimer) {
+            clearTimeout(recalcTimer);
+            recalcTimer = null;
+          }
+          container.removeClass("ai-daily-keyboard-open");
+          container.style.setProperty("padding-bottom", "0", "important");
+        }
+      });
       this.inputEl.addEventListener("focus", () => {
-        keyboardOpen = true;
-        container.addClass("ai-daily-keyboard-open");
         this.inputAreaEl.style.setProperty("padding-bottom", "8px", "important");
-        scheduleRecalc();
       });
       this.inputEl.addEventListener("blur", () => {
-        keyboardOpen = false;
-        if (recalcTimer) {
-          clearTimeout(recalcTimer);
-          recalcTimer = null;
-        }
-        container.removeClass("ai-daily-keyboard-open");
         this.inputAreaEl.style.setProperty("padding-bottom", navbarH + "px", "important");
-        container.style.setProperty("padding-bottom", "0", "important");
       });
     }
   }

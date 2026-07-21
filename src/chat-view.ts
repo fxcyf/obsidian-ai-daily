@@ -63,6 +63,17 @@ export function shouldShowChatMoreButton(state: {
 	return state.messageCount > 0 || state.hasSession || state.hasHarnessContext;
 }
 
+type TextSelection = Pick<Selection, "anchorNode" | "focusNode" | "isCollapsed" | "toString">;
+
+export function getSelectedTextWithinElement(
+	element: Pick<HTMLElement, "contains">,
+	selection: TextSelection | null
+): string {
+	if (!selection || selection.isCollapsed || !selection.anchorNode || !selection.focusNode) return "";
+	if (!element.contains(selection.anchorNode) || !element.contains(selection.focusNode)) return "";
+	return selection.toString().trim();
+}
+
 const TOOL_DISPLAY_NAMES: Record<string, string> = {
 	read_note: "读取笔记",
 	search_vault: "搜索笔记",
@@ -937,11 +948,20 @@ export class ChatView extends ItemView {
 		const toolbar = this.getOrCreateToolbar(el);
 		const btn = toolbar.createDiv({ cls: "ai-daily-save-inbox-btn" });
 		setIcon(btn, "pin");
-		btn.setAttribute("aria-label", "保存到 Inbox");
-		btn.setAttribute("title", "保存到 Inbox");
+		btn.setAttribute("aria-label", "保存到 Inbox（有选区时仅保存选中文字）");
+		btn.setAttribute("title", "保存到 Inbox（有选区时仅保存选中文字）");
+
+		// Capture before the toolbar interaction can collapse a text selection,
+		// especially on mobile browsers.
+		let selectedTextAtPress = "";
+		btn.addEventListener("pointerdown", () => {
+			selectedTextAtPress = getSelectedTextWithinElement(el, window.getSelection());
+		});
 
 		btn.addEventListener("click", async () => {
-			const text = el.textContent?.trim() ?? "";
+			const selectedText = selectedTextAtPress || getSelectedTextWithinElement(el, window.getSelection());
+			selectedTextAtPress = "";
+			const text = selectedText || el.textContent?.trim() || "";
 			if (!text) return;
 
 			const today = new Date().toISOString().slice(0, 10);
@@ -972,7 +992,7 @@ export class ChatView extends ItemView {
 			btn.empty();
 			setIcon(btn, "check");
 			btn.addClass("ai-daily-save-inbox-done");
-			new Notice("已保存到 Inbox", 2000);
+			new Notice(selectedText ? "已保存选中内容到 Inbox" : "已保存到 Inbox", 2000);
 			setTimeout(() => {
 				btn.empty();
 				setIcon(btn, "pin");

@@ -6515,6 +6515,11 @@ var STREAM_MARKDOWN_RENDER_INTERVAL_MS = 120;
 function shouldShowChatMoreButton(state) {
   return state.messageCount > 0 || state.hasSession || state.hasHarnessContext;
 }
+function getSelectedTextWithinElement(element, selection) {
+  if (!selection || selection.isCollapsed || !selection.anchorNode || !selection.focusNode) return "";
+  if (!element.contains(selection.anchorNode) || !element.contains(selection.focusNode)) return "";
+  return selection.toString().trim();
+}
 var TOOL_DISPLAY_NAMES = {
   read_note: "\u8BFB\u53D6\u7B14\u8BB0",
   search_vault: "\u641C\u7D22\u7B14\u8BB0",
@@ -7306,11 +7311,17 @@ ${imageList}`;
     const toolbar = this.getOrCreateToolbar(el);
     const btn = toolbar.createDiv({ cls: "ai-daily-save-inbox-btn" });
     (0, import_obsidian13.setIcon)(btn, "pin");
-    btn.setAttribute("aria-label", "\u4FDD\u5B58\u5230 Inbox");
-    btn.setAttribute("title", "\u4FDD\u5B58\u5230 Inbox");
+    btn.setAttribute("aria-label", "\u4FDD\u5B58\u5230 Inbox\uFF08\u6709\u9009\u533A\u65F6\u4EC5\u4FDD\u5B58\u9009\u4E2D\u6587\u5B57\uFF09");
+    btn.setAttribute("title", "\u4FDD\u5B58\u5230 Inbox\uFF08\u6709\u9009\u533A\u65F6\u4EC5\u4FDD\u5B58\u9009\u4E2D\u6587\u5B57\uFF09");
+    let selectedTextAtPress = "";
+    btn.addEventListener("pointerdown", () => {
+      selectedTextAtPress = getSelectedTextWithinElement(el, window.getSelection());
+    });
     btn.addEventListener("click", async () => {
-      var _a, _b;
-      const text = (_b = (_a = el.textContent) == null ? void 0 : _a.trim()) != null ? _b : "";
+      var _a;
+      const selectedText = selectedTextAtPress || getSelectedTextWithinElement(el, window.getSelection());
+      selectedTextAtPress = "";
+      const text = selectedText || ((_a = el.textContent) == null ? void 0 : _a.trim()) || "";
       if (!text) return;
       const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
       const snippet = text.length > 200 ? text.slice(0, 200) + "\u2026" : text;
@@ -7348,7 +7359,7 @@ ${entry}
       btn.empty();
       (0, import_obsidian13.setIcon)(btn, "check");
       btn.addClass("ai-daily-save-inbox-done");
-      new import_obsidian13.Notice("\u5DF2\u4FDD\u5B58\u5230 Inbox", 2e3);
+      new import_obsidian13.Notice(selectedText ? "\u5DF2\u4FDD\u5B58\u9009\u4E2D\u5185\u5BB9\u5230 Inbox" : "\u5DF2\u4FDD\u5B58\u5230 Inbox", 2e3);
       setTimeout(() => {
         btn.empty();
         (0, import_obsidian13.setIcon)(btn, "pin");

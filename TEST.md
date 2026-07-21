@@ -20,8 +20,9 @@
 ## Claude Code 模型与推理强度
 
 1. 将 CLI 后端设为 Claude Code，确认不显示 Codex 模型、推理强度和权限。
-2. 配置 Claude Code 模型别名和一个受支持的推理强度，分别通过桌面端和 Proxy 发送消息。
-3. 确认两端 Claude CLI 均收到 `--model` 和 `--effort`；选择“CLI 默认”时不传 `--effort`。
+2. 确认模型为下拉框，包含 CLI 默认、Sonnet/Opus/Haiku 最新别名和指定版本；旧的自定义模型 ID 应保留为额外选项。
+3. 配置 Claude Code 模型和一个受支持的推理强度，分别通过桌面端和 Proxy 发送消息。
+4. 确认两端 Claude CLI 均收到 `--model` 和 `--effort`；模型或推理强度选择“CLI 默认”时不传对应参数。
 
 ## Codex Proxy 历史与续问
 
@@ -69,6 +70,7 @@ npm run test:watch # 监听模式
 | `src/anthropic-sse.test.ts` | SSE 解析与 ApiResponse 组装 |
 | `proxy-server/src/codex-app-server.test.ts` | Codex 原生历史 item 映射与 JSON-RPC 请求序列化 |
 | `src/reasoning-effort.test.ts` | 桌面 Claude/Codex 推理强度 CLI 参数 |
+| `src/model-options.test.ts` | Claude Code 模型下拉选项与旧自定义模型兼容 |
 | `proxy-server/src/reasoning.test.ts` | Proxy Claude 参数与 Codex app-server config 映射 |
 | `src/chat-view.test.ts` | Chat View 头部更多菜单显示条件 |
 | `src/feeds.test.ts` | timeDecay, socialBoost, detectBursts, scoreRelevance |

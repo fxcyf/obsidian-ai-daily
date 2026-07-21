@@ -1258,6 +1258,23 @@ active_work_context: ""
   return files;
 }
 
+// src/model-options.ts
+var CLAUDE_CODE_MODELS = [
+  ["", "CLI \u9ED8\u8BA4\uFF08\u63A8\u8350\uFF09"],
+  ["sonnet", "Sonnet\uFF08\u6700\u65B0\uFF09"],
+  ["opus", "Opus\uFF08\u6700\u65B0\uFF09"],
+  ["haiku", "Haiku\uFF08\u6700\u65B0\uFF09"],
+  ["claude-sonnet-5", "Claude Sonnet 5"],
+  ["claude-sonnet-4-6", "Claude Sonnet 4.6"],
+  ["claude-opus-4-8", "Claude Opus 4.8"],
+  ["claude-opus-4-6", "Claude Opus 4.6"],
+  ["claude-haiku-4-5", "Claude Haiku 4.5"]
+];
+function getClaudeCodeModelOptions(current) {
+  if (!current || CLAUDE_CODE_MODELS.some(([value]) => value === current)) return CLAUDE_CODE_MODELS;
+  return [...CLAUDE_CODE_MODELS, [current, `\u5DF2\u6709\u81EA\u5B9A\u4E49\u6A21\u578B\uFF08${current}\uFF09`]];
+}
+
 // src/settings.ts
 var DEFAULT_PROMPT_TEMPLATES = [
   { name: "\u603B\u7ED3\u8981\u70B9", prompt: "\u603B\u7ED3\u8FD9\u7BC7\u6587\u7AE0\u7684\u8981\u70B9" },
@@ -1394,12 +1411,14 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
       })
     );
     if (this.plugin.settings.cliBackend === "claude-code") {
-      new import_obsidian3.Setting(el).setName("Claude Code \u6A21\u578B").setDesc("\u684C\u9762\u7AEF\u548C Proxy \u4F7F\u7528\uFF1B\u53EF\u586B\u5199\u522B\u540D\u6216\u5B8C\u6574\u6A21\u578B ID").addText(
-        (text) => text.setPlaceholder("sonnet").setValue(this.plugin.settings.claudeCodeModel).onChange(async (value) => {
-          this.plugin.settings.claudeCodeModel = value.trim();
+      new import_obsidian3.Setting(el).setName("Claude Code \u6A21\u578B").setDesc("\u684C\u9762\u7AEF\u548C Proxy \u4F7F\u7528\uFF1B\u7A33\u5B9A\u522B\u540D\u4F1A\u81EA\u52A8\u8DDF\u968F Claude Code \u7684\u6700\u65B0\u6A21\u578B").addDropdown((dropdown) => {
+        const current = this.plugin.settings.claudeCodeModel;
+        for (const [value, label] of getClaudeCodeModelOptions(current)) dropdown.addOption(value, label);
+        return dropdown.setValue(current).onChange(async (value) => {
+          this.plugin.settings.claudeCodeModel = value;
           await this.plugin.saveSettings();
-        })
-      );
+        });
+      });
       new import_obsidian3.Setting(el).setName("Claude Code \u63A8\u7406\u5F3A\u5EA6").setDesc("\u684C\u9762\u7AEF\u548C Proxy \u4F7F\u7528\uFF1B\u53EF\u7528\u7EA7\u522B\u53D6\u51B3\u4E8E\u6240\u9009\u6A21\u578B").addDropdown(
         (dropdown) => dropdown.addOption("", "CLI \u9ED8\u8BA4\uFF08\u63A8\u8350\uFF09").addOption("low", "Low").addOption("medium", "Medium").addOption("high", "High").addOption("xhigh", "XHigh").addOption("max", "Max").setValue(this.plugin.settings.claudeCodeEffort).onChange(async (value) => {
           this.plugin.settings.claudeCodeEffort = value;

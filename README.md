@@ -79,7 +79,7 @@ Obsidian → 设置 → 第三方插件 → 启用 Cortex。
 | 上下文天数 | 自动加载最近几天的日报 | 7 |
 | Anthropic API 模型 | API 功能使用的 Claude Haiku/Sonnet/Opus，与 CLI Agent 独立 | Haiku 4.5 |
 | CLI 后端 | 桌面端和 Proxy 使用 Claude Code 或 Codex；仅显示当前后端的模型配置 | Claude Code |
-| Claude Code 模型/推理强度 | 支持模型别名或完整 ID；effort 支持默认、Low、Medium、High、XHigh、Max | Sonnet / CLI 默认 |
+| Claude Code 模型/推理强度 | 下拉选择 CLI 默认、Sonnet/Opus/Haiku 最新别名或指定版本；effort 支持默认、Low、Medium、High、XHigh、Max | Sonnet / CLI 默认 |
 | Codex 模型/推理强度 | 账户默认或 GPT-5.6/Codex 模型；effort 支持默认、None、Low、Medium、High、XHigh、Max | 账户默认 |
 | 对话存档目录 | 会话 JSON 保存路径 | `.ai-chat` |
 | 历史保留天数 | 超过天数未更新的会话会被自动删除；`0` 表示不清理 | `30` |

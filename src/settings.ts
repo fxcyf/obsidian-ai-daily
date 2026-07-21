@@ -3,6 +3,7 @@ import type AIDailyChat from "./main";
 import { DEFAULT_FEEDS, type FeedSource } from "./feeds";
 import type { StreamMode } from "./claude";
 import { generateGuideFiles, getGuideFolderPath } from "./vault-guide";
+import { getClaudeCodeModelOptions } from "./model-options";
 
 export interface HarnessModeAction {
 	label: string;
@@ -257,13 +258,15 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 		if (this.plugin.settings.cliBackend === "claude-code") {
 			new Setting(el)
 				.setName("Claude Code 模型")
-				.setDesc("桌面端和 Proxy 使用；可填写别名或完整模型 ID")
-				.addText((text) =>
-					text.setPlaceholder("sonnet").setValue(this.plugin.settings.claudeCodeModel).onChange(async (value) => {
-						this.plugin.settings.claudeCodeModel = value.trim();
+				.setDesc("桌面端和 Proxy 使用；稳定别名会自动跟随 Claude Code 的最新模型")
+				.addDropdown((dropdown) => {
+					const current = this.plugin.settings.claudeCodeModel;
+					for (const [value, label] of getClaudeCodeModelOptions(current)) dropdown.addOption(value, label);
+					return dropdown.setValue(current).onChange(async (value) => {
+						this.plugin.settings.claudeCodeModel = value;
 						await this.plugin.saveSettings();
-					})
-				);
+					});
+				});
 
 			new Setting(el)
 				.setName("Claude Code 推理强度")

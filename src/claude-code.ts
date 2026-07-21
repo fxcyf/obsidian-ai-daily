@@ -1,6 +1,7 @@
 import { Platform } from "obsidian";
 import toolPolicy from "../agent-tool-policy.json";
 import { ChildProcess } from "child_process";
+import { appendClaudeEffortArg } from "./reasoning-effort";
 
 declare const __MCP_SERVER_CODE__: string | undefined;
 
@@ -329,6 +330,8 @@ export interface ClaudeCodeOptions {
 	mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[]; wereadApiKey?: string };
 	sessionId?: string;
 	model?: string;
+	effort?: "low" | "medium" | "high" | "xhigh" | "max" | "";
+	codexReasoningEffort?: "none" | "low" | "medium" | "high" | "xhigh" | "max" | "";
 	codexPermissionMode?: "read-only" | "vault-write";
 }
 
@@ -342,7 +345,7 @@ export function spawnClaudeCode(
 	callbacks: ClaudeCodeStreamCallbacks
 ): { abort: () => void } {
 	const { spawn } = require("child_process") as typeof import("child_process");
-	const { mcpConfig, sessionId, model } = options;
+	const { mcpConfig, sessionId, model, effort } = options;
 	const home = process.env.HOME || process.env.USERPROFILE || "";
 
 	// Resolve node to absolute path for MCP server command
@@ -392,6 +395,7 @@ export function spawnClaudeCode(
 	if (model) {
 		args.push("--model", model);
 	}
+	appendClaudeEffortArg(args, effort);
 	if (sessionId) {
 		args.push("--resume", sessionId);
 	}

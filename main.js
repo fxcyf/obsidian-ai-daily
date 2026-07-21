@@ -1273,7 +1273,10 @@ var DEFAULT_SETTINGS = {
   knowledgeFolders: ["Raw", "Wiki"],
   model: "claude-haiku-4-5",
   cliBackend: "claude-code",
+  claudeCodeModel: "sonnet",
+  claudeCodeEffort: "",
   codexModel: "",
+  codexReasoningEffort: "",
   codexPermissionMode: "vault-write",
   chatHistoryFolder: ".ai-chat",
   chatHistoryRetentionDays: 30,
@@ -1350,7 +1353,7 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
     this.renderAdvancedTab(panes["advanced"]);
   }
   renderGeneralTab(el) {
-    el.createEl("h3", { text: "API \u4E0E\u6A21\u578B" });
+    el.createEl("h3", { text: "Anthropic API" });
     new import_obsidian3.Setting(el).setName("Anthropic API Key").setDesc("\u7528\u4E8E\u8C03\u7528 Claude API").addText((text) => {
       text.setPlaceholder("sk-ant-...").setValue(this.plugin.settings.apiKey).onChange(async (value) => {
         this.plugin.settings.apiKey = value;
@@ -1376,12 +1379,13 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian3.Setting(el).setName("\u6A21\u578B").setDesc("Claude \u6A21\u578B").addDropdown(
+    new import_obsidian3.Setting(el).setName("API \u6A21\u578B").setDesc("\u4EC5\u7528\u4E8E Anthropic API \u529F\u80FD\uFF0C\u4E0D\u5F71\u54CD\u684C\u9762\u7AEF\u6216 Proxy \u7684 CLI Agent").addDropdown(
       (dropdown) => dropdown.addOption("claude-haiku-4-5", "Haiku 4.5 (\u5FEB\u901F/\u4FBF\u5B9C)").addOption("claude-sonnet-4-6", "Sonnet 4.6 (\u5747\u8861)").addOption("claude-sonnet-5", "Sonnet 5 (\u5747\u8861/\u65B0)").addOption("claude-opus-4-6", "Opus 4.6").addOption("claude-opus-4-8", "Opus 4.8 (\u6700\u5F3A)").setValue(this.plugin.settings.model).onChange(async (value) => {
         this.plugin.settings.model = value;
         await this.plugin.saveSettings();
       })
     );
+    el.createEl("h3", { text: "Agent \u540E\u7AEF" });
     new import_obsidian3.Setting(el).setName("CLI \u540E\u7AEF").setDesc("\u684C\u9762\u7AEF\u548C\u4EE3\u7406\u6A21\u5F0F\u4F7F\u7528\u7684 Agent CLI \u5DE5\u5177").addDropdown(
       (dropdown) => dropdown.addOption("claude-code", "Claude Code").addOption("codex", "Codex (OpenAI)").setValue(this.plugin.settings.cliBackend).onChange(async (value) => {
         this.plugin.settings.cliBackend = value;
@@ -1389,10 +1393,29 @@ var AIDailyChatSettingTab = class extends import_obsidian3.PluginSettingTab {
         this.display();
       })
     );
-    if (this.plugin.settings.cliBackend === "codex") {
+    if (this.plugin.settings.cliBackend === "claude-code") {
+      new import_obsidian3.Setting(el).setName("Claude Code \u6A21\u578B").setDesc("\u684C\u9762\u7AEF\u548C Proxy \u4F7F\u7528\uFF1B\u53EF\u586B\u5199\u522B\u540D\u6216\u5B8C\u6574\u6A21\u578B ID").addText(
+        (text) => text.setPlaceholder("sonnet").setValue(this.plugin.settings.claudeCodeModel).onChange(async (value) => {
+          this.plugin.settings.claudeCodeModel = value.trim();
+          await this.plugin.saveSettings();
+        })
+      );
+      new import_obsidian3.Setting(el).setName("Claude Code \u63A8\u7406\u5F3A\u5EA6").setDesc("\u684C\u9762\u7AEF\u548C Proxy \u4F7F\u7528\uFF1B\u53EF\u7528\u7EA7\u522B\u53D6\u51B3\u4E8E\u6240\u9009\u6A21\u578B").addDropdown(
+        (dropdown) => dropdown.addOption("", "CLI \u9ED8\u8BA4\uFF08\u63A8\u8350\uFF09").addOption("low", "Low").addOption("medium", "Medium").addOption("high", "High").addOption("xhigh", "XHigh").addOption("max", "Max").setValue(this.plugin.settings.claudeCodeEffort).onChange(async (value) => {
+          this.plugin.settings.claudeCodeEffort = value;
+          await this.plugin.saveSettings();
+        })
+      );
+    } else {
       new import_obsidian3.Setting(el).setName("Codex \u6A21\u578B").setDesc("Codex CLI \u4F7F\u7528\u7684\u6A21\u578B").addDropdown(
         (dropdown) => dropdown.addOption("", "\u8D26\u6237\u9ED8\u8BA4\uFF08\u63A8\u8350\uFF09").addOption("gpt-5.6-sol", "GPT-5.6 Sol\uFF08\u6700\u5F3A\uFF09").addOption("gpt-5.6-terra", "GPT-5.6 Terra\uFF08\u5747\u8861\uFF09").addOption("gpt-5.6-luna", "GPT-5.6 Luna\uFF08\u7ECF\u6D4E\uFF09").addOption("gpt-5.3-codex", "GPT-5.3 Codex\uFF08Agent \u7F16\u7801\uFF09").setValue(this.plugin.settings.codexModel).onChange(async (value) => {
           this.plugin.settings.codexModel = value;
+          await this.plugin.saveSettings();
+        })
+      );
+      new import_obsidian3.Setting(el).setName("Codex \u63A8\u7406\u5F3A\u5EA6").setDesc("\u684C\u9762\u7AEF\u548C Proxy \u4F7F\u7528\uFF1B\u53EF\u7528\u7EA7\u522B\u53D6\u51B3\u4E8E\u6240\u9009\u6A21\u578B").addDropdown(
+        (dropdown) => dropdown.addOption("", "\u8D26\u6237/CLI \u9ED8\u8BA4\uFF08\u63A8\u8350\uFF09").addOption("none", "None").addOption("low", "Low").addOption("medium", "Medium").addOption("high", "High").addOption("xhigh", "XHigh").addOption("max", "Max").setValue(this.plugin.settings.codexReasoningEffort).onChange(async (value) => {
+          this.plugin.settings.codexReasoningEffort = value;
           await this.plugin.saveSettings();
         })
       );
@@ -2604,7 +2627,7 @@ var ClaudeClient = class {
     }
     return collectedText.join("");
   }
-  async proxyChat(userMessage, onAssistantDelta, onToolCall, seedHistory, proxyBackend, proxyModel, codexPermissionMode, onStatus, images) {
+  async proxyChat(userMessage, onAssistantDelta, onToolCall, seedHistory, proxyBackend, proxyModel, codexPermissionMode, reasoningEffort, onStatus, images) {
     var _a;
     if (!this.proxyUrl || !this.proxyToken) {
       throw new Error("Proxy mode not configured");
@@ -2623,6 +2646,9 @@ var ClaudeClient = class {
       }
       if (proxyBackend === "codex" && codexPermissionMode) {
         body.codexPermissionMode = codexPermissionMode;
+      }
+      if (reasoningEffort) {
+        body.reasoningEffort = reasoningEffort;
       }
       if (images == null ? void 0 : images.length) {
         body.images = images;
@@ -5697,6 +5723,14 @@ var agent_tool_policy_default = {
   }
 };
 
+// src/reasoning-effort.ts
+function appendClaudeEffortArg(args, effort) {
+  if (effort) args.push("--effort", effort);
+}
+function appendCodexReasoningEffortArg(args, effort) {
+  if (effort) args.push("-c", `model_reasoning_effort=${JSON.stringify(effort)}`);
+}
+
 // src/claude-code.ts
 var cachedClaudePath = null;
 var cachedNodePath = null;
@@ -5937,7 +5971,7 @@ function getClaudePath() {
 function spawnClaudeCode(prompt, options, callbacks) {
   var _a, _b;
   const { spawn } = require("child_process");
-  const { mcpConfig, sessionId, model } = options;
+  const { mcpConfig, sessionId, model, effort } = options;
   const home = process.env.HOME || process.env.USERPROFILE || "";
   const nodeBin = findNodeExecutable(home) || "node";
   const { writeFileSync, mkdirSync, unlinkSync } = require("fs");
@@ -5988,6 +6022,7 @@ function spawnClaudeCode(prompt, options, callbacks) {
   if (model) {
     args.push("--model", model);
   }
+  appendClaudeEffortArg(args, effort);
   if (sessionId) {
     args.push("--resume", sessionId);
   }
@@ -6331,7 +6366,7 @@ function findNodeBin() {
 function spawnCodex(prompt, options, callbacks) {
   var _a, _b;
   const { spawn } = require("child_process");
-  const { mcpConfig, sessionId, model, codexPermissionMode = "vault-write" } = options;
+  const { mcpConfig, sessionId, model, codexPermissionMode = "vault-write", codexReasoningEffort } = options;
   const nodeBin = findNodeBin();
   ensureCodexMcp({
     mcpServerPath: mcpConfig.mcpServerPath,
@@ -6372,6 +6407,7 @@ function spawnCodex(prompt, options, callbacks) {
   if (model) {
     args.push("-m", model);
   }
+  appendCodexReasoningEffortArg(args, codexReasoningEffort);
   const codexBin = getCodexPath();
   console.log("[ai-daily] spawn codex:", codexBin, args.filter((a) => a !== prompt).join(" "));
   let child;
@@ -8106,8 +8142,9 @@ ${filesList}` : "",
             onToolCall,
             seedHistory,
             proxyBackend,
-            this.plugin.settings.cliBackend === "codex" ? this.plugin.settings.codexModel : this.plugin.settings.model,
+            this.plugin.settings.cliBackend === "codex" ? this.plugin.settings.codexModel : this.plugin.settings.claudeCodeModel,
             this.plugin.settings.codexPermissionMode,
+            this.plugin.settings.cliBackend === "codex" ? this.plugin.settings.codexReasoningEffort : this.plugin.settings.claudeCodeEffort,
             (message) => loadingTextEl.setText(message),
             proxyImages
           );
@@ -8195,7 +8232,7 @@ ${filesList}` : "",
         content: m.content
       }));
       try {
-        const seededId = await seedClaudeCodeSession(history, vaultAbsPath, this.plugin.settings.model);
+        const seededId = await seedClaudeCodeSession(history, vaultAbsPath, this.plugin.settings.claudeCodeModel);
         this.claudeCodeSessionId = seededId;
       } catch (e) {
         console.error("[ai-daily] Failed to seed claude-code session:", e);
@@ -8219,7 +8256,7 @@ ${filesList}` : "",
     } else if (attachedContent) {
       prompt = attachedContent + "\n\n" + text;
     }
-    this.runClaudeCodeStream(prompt, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.model);
+    this.runClaudeCodeStream(prompt, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.claudeCodeModel);
   }
   async handleSendViaCodex(text, images = []) {
     const displayText = images.length > 0 ? `${text}
@@ -8655,7 +8692,7 @@ ${filesList}` : "",
     if (source === "codex") {
       this.runCodexStream(userText, this.getMcpConfig(), this.codexSessionId, this.plugin.settings.codexModel);
     } else {
-      this.runClaudeCodeStream(userText, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.model);
+      this.runClaudeCodeStream(userText, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.claudeCodeModel);
     }
   }
   runClaudeCodeStream(prompt, mcpConfig, sessionId, model) {
@@ -8708,7 +8745,7 @@ ${filesList}` : "",
       }
       if (streamTextEl) streamTextEl.removeClass("ai-daily-stream-text");
     };
-    const handle = spawnClaudeCode(prompt, { mcpConfig, sessionId, model }, {
+    const handle = spawnClaudeCode(prompt, { mcpConfig, sessionId, model, effort: this.plugin.settings.claudeCodeEffort }, {
       onText: (delta) => {
         if (this.closed) return;
         loadingEl.remove();
@@ -8892,7 +8929,8 @@ ${filesList}` : "",
       mcpConfig,
       sessionId,
       model,
-      codexPermissionMode: this.plugin.settings.codexPermissionMode
+      codexPermissionMode: this.plugin.settings.codexPermissionMode,
+      codexReasoningEffort: this.plugin.settings.codexReasoningEffort
     }, {
       onText: (delta) => {
         if (this.closed) return;

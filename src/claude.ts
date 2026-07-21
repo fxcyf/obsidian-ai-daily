@@ -522,6 +522,7 @@ export class ClaudeClient {
 		proxyBackend?: "claude-code" | "codex",
 		proxyModel?: string,
 		codexPermissionMode?: "read-only" | "vault-write",
+		reasoningEffort?: string,
 		onStatus?: (message: string) => void,
 		images?: { name: string; base64: string; mediaType: string }[],
 	): Promise<string> {
@@ -544,6 +545,9 @@ export class ClaudeClient {
 			}
 			if (proxyBackend === "codex" && codexPermissionMode) {
 				body.codexPermissionMode = codexPermissionMode;
+			}
+			if (reasoningEffort) {
+				body.reasoningEffort = reasoningEffort;
 			}
 			if (images?.length) {
 				body.images = images;

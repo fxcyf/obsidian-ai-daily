@@ -3,6 +3,7 @@ import { ChildProcess } from "child_process";
 import { getMcpServerPath } from "./claude-code";
 import type { ClaudeCodeStreamCallbacks, ClaudeCodeOptions } from "./claude-code";
 import toolPolicy from "../agent-tool-policy.json";
+import { appendCodexReasoningEffortArg } from "./reasoning-effort";
 
 let cachedCodexPath: string | false | null = null;
 
@@ -130,7 +131,7 @@ export function spawnCodex(
 	callbacks: ClaudeCodeStreamCallbacks
 ): { abort: () => void } {
 	const { spawn } = require("child_process") as typeof import("child_process");
-	const { mcpConfig, sessionId, model, codexPermissionMode = "vault-write" } = options;
+	const { mcpConfig, sessionId, model, codexPermissionMode = "vault-write", codexReasoningEffort } = options;
 
 	const nodeBin = findNodeBin();
 	ensureCodexMcp({
@@ -168,6 +169,7 @@ export function spawnCodex(
 	if (model) {
 		args.push("-m", model);
 	}
+	appendCodexReasoningEffortArg(args, codexReasoningEffort);
 
 	const codexBin = getCodexPath();
 	console.log("[ai-daily] spawn codex:", codexBin, args.filter(a => a !== prompt).join(" "));

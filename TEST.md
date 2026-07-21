@@ -11,9 +11,17 @@
 
 ## Codex 模型选择
 
-1. 将 CLI 后端设为 Codex，确认模型列表包含账户默认、GPT-5.6 Sol/Terra/Luna 和 GPT-5.3 Codex。
-2. 分别选择账户默认和一个 GPT-5.6 模型发送新消息。
-3. 在 Proxy 日志确认 task 的 `model=` 与选择一致，并确认回复完成。
+1. 将 CLI 后端设为 Codex，确认不显示 Claude Code 模型和推理强度，只显示 Codex 模型、推理强度和权限。
+2. 确认模型列表包含账户默认、GPT-5.6 Sol/Terra/Luna 和 GPT-5.3 Codex。
+3. 分别选择账户默认和一个 GPT-5.6 模型发送新消息。
+4. 分别在桌面端和 Proxy 选择一个模型支持的推理强度，确认请求成功；Proxy 的 Codex `thread/start`/`thread/resume` 参数应包含 `config.model_reasoning_effort`。
+5. 在 Proxy 日志确认 task 的 `model=` 与选择一致，并确认回复完成。
+
+## Claude Code 模型与推理强度
+
+1. 将 CLI 后端设为 Claude Code，确认不显示 Codex 模型、推理强度和权限。
+2. 配置 Claude Code 模型别名和一个受支持的推理强度，分别通过桌面端和 Proxy 发送消息。
+3. 确认两端 Claude CLI 均收到 `--model` 和 `--effort`；选择“CLI 默认”时不传 `--effort`。
 
 ## Codex Proxy 历史与续问
 
@@ -60,6 +68,8 @@ npm run test:watch # 监听模式
 |------|---------|
 | `src/anthropic-sse.test.ts` | SSE 解析与 ApiResponse 组装 |
 | `proxy-server/src/codex-app-server.test.ts` | Codex 原生历史 item 映射与 JSON-RPC 请求序列化 |
+| `src/reasoning-effort.test.ts` | 桌面 Claude/Codex 推理强度 CLI 参数 |
+| `proxy-server/src/reasoning.test.ts` | Proxy Claude 参数与 Codex app-server config 映射 |
 | `src/chat-view.test.ts` | Chat View 头部更多菜单显示条件 |
 | `src/feeds.test.ts` | timeDecay, socialBoost, detectBursts, scoreRelevance |
 | `src/chat-session.test.ts` | newSessionId, titleFromMessages, isValidChatSession, shouldPruneToday |

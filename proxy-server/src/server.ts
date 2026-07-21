@@ -7,6 +7,7 @@ import { readFile, writeFile, mkdir, unlink, rm } from "fs/promises";
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { randomUUID } from "crypto";
 import { appServerRequest, buildCodexHistoryItems } from "./codex-app-server.js";
+import { claudeEffortArgs, codexReasoningConfig } from "./reasoning.js";
 
 // ── Config ─────────────────────────────────────────────────────────
 
@@ -52,6 +53,7 @@ interface ChatRequest {
 	history?: { role: string; content: string }[];
 	backend?: "claude-code" | "codex";
 	model?: string;
+	reasoningEffort?: string;
 	codexPermissionMode?: "read-only" | "vault-write";
 	images?: ChatImage[];
 }
@@ -694,6 +696,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 						approvalPolicy: "never",
 						sandbox: "read-only",
 						...(body.model || CODEX_MODEL ? { model: body.model || CODEX_MODEL } : {}),
+						...(codexReasoningConfig(body.reasoningEffort) ? { config: codexReasoningConfig(body.reasoningEffort) } : {}),
 					});
 				} else {
 					writeRequest(2, "thread/start", {
@@ -703,6 +706,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 						ephemeral: false,
 						...(body.systemPrompt ? { developerInstructions: body.systemPrompt } : {}),
 						...(body.model || CODEX_MODEL ? { model: body.model || CODEX_MODEL } : {}),
+						...(codexReasoningConfig(body.reasoningEffort) ? { config: codexReasoningConfig(body.reasoningEffort) } : {}),
 					});
 				}
 			} else if (requestId === 2 && event.result) {
@@ -901,6 +905,7 @@ function buildClaudeArgs(body: ChatRequest): string[] {
 		"--mcp-config", MCP_CONFIG,
 		"--model", body.model || CLAUDE_MODEL,
 	];
+	args.push(...claudeEffortArgs(body.reasoningEffort));
 
 	if (body.sessionId) {
 		args.push("--resume", body.sessionId);

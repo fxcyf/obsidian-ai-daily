@@ -1846,8 +1846,9 @@ export class ChatView extends ItemView {
 						onToolCall,
 						seedHistory,
 						proxyBackend,
-						this.plugin.settings.cliBackend === "codex" ? this.plugin.settings.codexModel : this.plugin.settings.model,
+						this.plugin.settings.cliBackend === "codex" ? this.plugin.settings.codexModel : this.plugin.settings.claudeCodeModel,
 						this.plugin.settings.codexPermissionMode,
+						this.plugin.settings.cliBackend === "codex" ? this.plugin.settings.codexReasoningEffort : this.plugin.settings.claudeCodeEffort,
 						(message) => loadingTextEl.setText(message),
 						proxyImages,
 					);
@@ -1945,7 +1946,7 @@ export class ChatView extends ItemView {
 				content: m.content,
 			}));
 			try {
-				const seededId = await seedClaudeCodeSession(history, vaultAbsPath, this.plugin.settings.model);
+				const seededId = await seedClaudeCodeSession(history, vaultAbsPath, this.plugin.settings.claudeCodeModel);
 				this.claudeCodeSessionId = seededId;
 			} catch (e) {
 				console.error("[ai-daily] Failed to seed claude-code session:", e);
@@ -1973,7 +1974,7 @@ export class ChatView extends ItemView {
 			prompt = attachedContent + "\n\n" + text;
 		}
 
-		this.runClaudeCodeStream(prompt, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.model);
+		this.runClaudeCodeStream(prompt, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.claudeCodeModel);
 	}
 
 	private async handleSendViaCodex(text: string, images: PreparedImage[] = []): Promise<void> {
@@ -2458,7 +2459,7 @@ export class ChatView extends ItemView {
 		if (source === "codex") {
 			this.runCodexStream(userText, this.getMcpConfig(), this.codexSessionId, this.plugin.settings.codexModel);
 		} else {
-			this.runClaudeCodeStream(userText, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.model);
+			this.runClaudeCodeStream(userText, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.claudeCodeModel);
 		}
 	}
 
@@ -2518,7 +2519,7 @@ export class ChatView extends ItemView {
 			if (streamTextEl) streamTextEl.removeClass("ai-daily-stream-text");
 		};
 
-		const handle = spawnClaudeCode(prompt, { mcpConfig, sessionId, model }, {
+		const handle = spawnClaudeCode(prompt, { mcpConfig, sessionId, model, effort: this.plugin.settings.claudeCodeEffort }, {
 			onText: (delta) => {
 				if (this.closed) return;
 				loadingEl.remove();
@@ -2705,6 +2706,7 @@ export class ChatView extends ItemView {
 			sessionId,
 			model,
 			codexPermissionMode: this.plugin.settings.codexPermissionMode,
+			codexReasoningEffort: this.plugin.settings.codexReasoningEffort,
 		}, {
 			onText: (delta) => {
 				if (this.closed) return;

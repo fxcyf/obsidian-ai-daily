@@ -35,6 +35,8 @@ export const DEFAULT_PROMPT_TEMPLATES: PromptTemplate[] = [
 
 export type CliBackend = "claude-code" | "codex";
 export type CodexPermissionMode = "read-only" | "vault-write";
+export type ClaudeCodeEffort = "" | "low" | "medium" | "high" | "xhigh" | "max";
+export type CodexReasoningEffort = "" | "none" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface AIDailyChatSettings {
 	apiKey: string;
@@ -42,7 +44,10 @@ export interface AIDailyChatSettings {
 	knowledgeFolders: string[];
 	model: string;
 	cliBackend: CliBackend;
+	claudeCodeModel: string;
+	claudeCodeEffort: ClaudeCodeEffort;
 	codexModel: string;
+	codexReasoningEffort: CodexReasoningEffort;
 	codexPermissionMode: CodexPermissionMode;
 	chatHistoryFolder: string;
 	chatHistoryRetentionDays: number;
@@ -84,7 +89,10 @@ export const DEFAULT_SETTINGS: AIDailyChatSettings = {
 	knowledgeFolders: ["Raw", "Wiki"],
 	model: "claude-haiku-4-5",
 	cliBackend: "claude-code",
+	claudeCodeModel: "sonnet",
+	claudeCodeEffort: "",
 	codexModel: "",
+	codexReasoningEffort: "",
 	codexPermissionMode: "vault-write",
 	chatHistoryFolder: ".ai-chat",
 	chatHistoryRetentionDays: 30,
@@ -171,7 +179,7 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 	}
 
 	private renderGeneralTab(el: HTMLElement): void {
-		el.createEl("h3", { text: "API 与模型" });
+		el.createEl("h3", { text: "Anthropic API" });
 
 		new Setting(el)
 			.setName("Anthropic API Key")
@@ -213,8 +221,8 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(el)
-			.setName("模型")
-			.setDesc("Claude 模型")
+			.setName("API 模型")
+			.setDesc("仅用于 Anthropic API 功能，不影响桌面端或 Proxy 的 CLI Agent")
 			.addDropdown((dropdown) =>
 				dropdown
 					.addOption("claude-haiku-4-5", "Haiku 4.5 (快速/便宜)")
@@ -228,6 +236,8 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+
+		el.createEl("h3", { text: "Agent 后端" });
 
 		new Setting(el)
 			.setName("CLI 后端")
@@ -244,7 +254,29 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 					})
 			);
 
-		if (this.plugin.settings.cliBackend === "codex") {
+		if (this.plugin.settings.cliBackend === "claude-code") {
+			new Setting(el)
+				.setName("Claude Code 模型")
+				.setDesc("桌面端和 Proxy 使用；可填写别名或完整模型 ID")
+				.addText((text) =>
+					text.setPlaceholder("sonnet").setValue(this.plugin.settings.claudeCodeModel).onChange(async (value) => {
+						this.plugin.settings.claudeCodeModel = value.trim();
+						await this.plugin.saveSettings();
+					})
+				);
+
+			new Setting(el)
+				.setName("Claude Code 推理强度")
+				.setDesc("桌面端和 Proxy 使用；可用级别取决于所选模型")
+				.addDropdown((dropdown) =>
+					dropdown.addOption("", "CLI 默认（推荐）").addOption("low", "Low").addOption("medium", "Medium")
+						.addOption("high", "High").addOption("xhigh", "XHigh").addOption("max", "Max")
+						.setValue(this.plugin.settings.claudeCodeEffort).onChange(async (value) => {
+							this.plugin.settings.claudeCodeEffort = value as ClaudeCodeEffort;
+							await this.plugin.saveSettings();
+						})
+				);
+		} else {
 			new Setting(el)
 				.setName("Codex 模型")
 				.setDesc("Codex CLI 使用的模型")
@@ -258,6 +290,18 @@ export class AIDailyChatSettingTab extends PluginSettingTab {
 						.setValue(this.plugin.settings.codexModel)
 						.onChange(async (value) => {
 							this.plugin.settings.codexModel = value;
+							await this.plugin.saveSettings();
+						})
+				);
+
+			new Setting(el)
+				.setName("Codex 推理强度")
+				.setDesc("桌面端和 Proxy 使用；可用级别取决于所选模型")
+				.addDropdown((dropdown) =>
+					dropdown.addOption("", "账户/CLI 默认（推荐）").addOption("none", "None").addOption("low", "Low")
+						.addOption("medium", "Medium").addOption("high", "High").addOption("xhigh", "XHigh").addOption("max", "Max")
+						.setValue(this.plugin.settings.codexReasoningEffort).onChange(async (value) => {
+							this.plugin.settings.codexReasoningEffort = value as CodexReasoningEffort;
 							await this.plugin.saveSettings();
 						})
 				);

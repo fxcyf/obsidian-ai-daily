@@ -88,10 +88,9 @@ export class WorkspaceStudio {
 
 	private renderHome(): void {
 		const head = this.container.createDiv({ cls: "ws-studio-head" });
-		const backBtn = head.createEl("button", { cls: "ws-studio-back" });
+		const backBtn = head.createEl("button", { cls: "ws-studio-back", attr: { "aria-label": "返回" } });
 		const backIcon = backBtn.createSpan({ cls: "ws-studio-back-icon" });
 		setIcon(backIcon, "chevron-left");
-		backBtn.createSpan({ text: "Studio" });
 		backBtn.addEventListener("click", () => this.callbacks.onClose());
 
 		const addBtn = head.createEl("button", { cls: "ws-studio-head-action" });
@@ -229,10 +228,9 @@ export class WorkspaceStudio {
 
 		// Header
 		const head = this.container.createDiv({ cls: "ws-studio-head" });
-		const backBtn = head.createEl("button", { cls: "ws-studio-back" });
+		const backBtn = head.createEl("button", { cls: "ws-studio-back", attr: { "aria-label": "返回" } });
 		const backIcon = backBtn.createSpan({ cls: "ws-studio-back-icon" });
 		setIcon(backIcon, "chevron-left");
-		backBtn.createSpan({ text: "Studio" });
 		backBtn.addEventListener("click", () => this.navigateTo("home"));
 
 		const addBtn = head.createEl("button", { cls: "ws-studio-head-action" });
@@ -378,8 +376,6 @@ export class WorkspaceStudio {
 		const nameSection = this.container.createDiv({ cls: "ws-studio-editor-section" });
 		nameSection.createDiv({ cls: "ws-studio-editor-label", text: "模式名称" });
 		const nameRow = nameSection.createDiv({ cls: "ws-studio-identity-name-row" });
-		const modeIconEl = nameRow.createDiv({ cls: "ws-studio-mode-icon ws-studio-mode-icon--accent" });
-		modeIconEl.textContent = mode.emoji;
 		const nameInput = nameRow.createEl("input", {
 			cls: "ws-studio-identity-input",
 			attr: { value: mode.label },
@@ -389,7 +385,7 @@ export class WorkspaceStudio {
 			this.dirty = true;
 		});
 
-		// Hidden ID / emoji inputs
+		// ID / emoji meta row
 		const metaRow = nameSection.createDiv({ cls: "ws-studio-mode-meta-row" });
 		const idWrap = metaRow.createDiv({ cls: "ws-studio-mode-meta-field" });
 		idWrap.createSpan({ cls: "ws-studio-mode-meta-label", text: "ID" });
@@ -410,7 +406,6 @@ export class WorkspaceStudio {
 		});
 		emojiInput.addEventListener("input", () => {
 			mode.emoji = emojiInput.value;
-			modeIconEl.textContent = mode.emoji;
 			this.dirty = true;
 		});
 

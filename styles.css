@@ -10,13 +10,68 @@
 
 /* ── Messages ──────────────────────────────────────────── */
 
-.ai-daily-messages {
-	position: relative;
+.ai-daily-messages-wrap {
 	flex: 1;
+	position: relative;
+	min-height: 0;
+}
+
+.ai-daily-messages {
+	position: absolute;
+	inset: 0;
 	overflow-y: auto;
 	padding: 8px;
 	-webkit-overflow-scrolling: touch;
 	scroll-behavior: smooth;
+}
+
+/* Scroll FABs */
+
+.ai-daily-scroll-fabs {
+	position: absolute;
+	right: 14px;
+	bottom: 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	z-index: 5;
+	pointer-events: none;
+}
+
+.ai-daily-scroll-fab {
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	color: var(--text-muted);
+	transition: opacity 0.2s ease, background 0.15s, color 0.15s;
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.theme-dark .ai-daily-scroll-fab {
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.ai-daily-scroll-fab:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.ai-daily-scroll-fab svg {
+	width: 16px;
+	height: 16px;
+}
+
+.ai-daily-scroll-fab--hidden {
+	opacity: 0;
+	pointer-events: none;
 }
 
 .ai-daily-msg {
@@ -107,7 +162,7 @@
 .ai-daily-input-row {
 	display: flex;
 	align-items: flex-end;
-	gap: 8px;
+	gap: 0;
 }
 
 .ai-daily-attach-bar {
@@ -242,21 +297,29 @@
 	flex: 1;
 	position: relative;
 	min-width: 0;
+	display: flex;
+	align-items: flex-end;
+	gap: 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 22px;
+	background: var(--background-secondary);
+	padding: 2px 4px 2px 2px;
 }
 
 .ai-daily-input {
-	width: 100%;
+	flex: 1;
+	min-width: 0;
 	box-sizing: border-box;
 	resize: none;
 	overflow-y: auto;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 18px;
-	padding: 8px 14px;
+	border: none;
+	border-radius: 0;
+	padding: 7px 4px 7px 0;
 	font-size: 14px;
 	font-family: inherit;
-	background: var(--background-secondary);
+	background: transparent;
 	color: var(--text-normal);
-	min-height: 36px;
+	min-height: 34px;
 	max-height: 200px;
 	-webkit-user-select: text;
 	user-select: text;
@@ -271,7 +334,7 @@
 	-webkit-appearance: none;
 	appearance: none;
 	position: absolute;
-	right: 6px;
+	right: 40px;
 	bottom: 4px;
 	background: var(--background-secondary-alt, var(--background-secondary));
 	border: 1px solid var(--background-modifier-border);
@@ -297,33 +360,33 @@
 }
 
 .ai-daily-input:focus {
-	border-color: var(--interactive-accent);
 	outline: none;
+}
+
+.ai-daily-input-wrap:focus-within {
+	border-color: var(--interactive-accent);
 }
 
 .ai-daily-attach-btn {
 	-webkit-appearance: none;
 	appearance: none;
 	padding: 0;
-	width: 36px;
-	height: 36px;
+	width: 32px;
+	height: 32px;
 	border-radius: 50%;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	background: transparent;
 	color: var(--text-muted);
-	border: 1px solid var(--background-modifier-border);
+	border: none;
 	cursor: pointer;
 	flex-shrink: 0;
-	min-width: 36px;
-	min-height: 36px;
 	align-self: flex-end;
 }
 
 .ai-daily-attach-btn:hover {
 	color: var(--text-normal);
-	border-color: var(--interactive-accent);
 }
 
 .ai-daily-attach-btn svg {
@@ -336,9 +399,9 @@
 	-webkit-appearance: none;
 	appearance: none;
 	padding: 0;
-	width: 36px;
-	height: 36px;
-	border-radius: 50%;
+	width: 30px;
+	height: 30px;
+	border-radius: 8px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -347,8 +410,6 @@
 	border: none;
 	cursor: pointer;
 	flex-shrink: 0;
-	min-width: 36px;
-	min-height: 36px;
 	align-self: flex-end;
 }
 
@@ -666,8 +727,8 @@
 }
 
 .ai-daily-welcome-chip-bolt svg {
-	width: 13px;
-	height: 13px;
+	width: 15px;
+	height: 15px;
 }
 
 /* ── Bottom toolbar ── */
@@ -2978,8 +3039,8 @@
 }
 
 .ws-studio-editor-bolt svg {
-	width: 13px;
-	height: 13px;
+	width: 16px;
+	height: 16px;
 }
 
 .ws-studio-editor-actions-list {

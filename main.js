@@ -4637,10 +4637,9 @@ var WorkspaceStudio = class {
   renderHome() {
     var _a, _b;
     const head = this.container.createDiv({ cls: "ws-studio-head" });
-    const backBtn = head.createEl("button", { cls: "ws-studio-back" });
+    const backBtn = head.createEl("button", { cls: "ws-studio-back", attr: { "aria-label": "\u8FD4\u56DE" } });
     const backIcon = backBtn.createSpan({ cls: "ws-studio-back-icon" });
     (0, import_obsidian10.setIcon)(backIcon, "chevron-left");
-    backBtn.createSpan({ text: "Studio" });
     backBtn.addEventListener("click", () => this.callbacks.onClose());
     const addBtn = head.createEl("button", { cls: "ws-studio-head-action" });
     const addIcon = addBtn.createSpan({ cls: "ws-studio-head-action-icon" });
@@ -4757,10 +4756,9 @@ var WorkspaceStudio = class {
       this.dirty = false;
     }
     const head = this.container.createDiv({ cls: "ws-studio-head" });
-    const backBtn = head.createEl("button", { cls: "ws-studio-back" });
+    const backBtn = head.createEl("button", { cls: "ws-studio-back", attr: { "aria-label": "\u8FD4\u56DE" } });
     const backIcon = backBtn.createSpan({ cls: "ws-studio-back-icon" });
     (0, import_obsidian10.setIcon)(backIcon, "chevron-left");
-    backBtn.createSpan({ text: "Studio" });
     backBtn.addEventListener("click", () => this.navigateTo("home"));
     const addBtn = head.createEl("button", { cls: "ws-studio-head-action" });
     const addIcon = addBtn.createSpan({ cls: "ws-studio-head-action-icon" });
@@ -4876,8 +4874,6 @@ var WorkspaceStudio = class {
     const nameSection = this.container.createDiv({ cls: "ws-studio-editor-section" });
     nameSection.createDiv({ cls: "ws-studio-editor-label", text: "\u6A21\u5F0F\u540D\u79F0" });
     const nameRow = nameSection.createDiv({ cls: "ws-studio-identity-name-row" });
-    const modeIconEl = nameRow.createDiv({ cls: "ws-studio-mode-icon ws-studio-mode-icon--accent" });
-    modeIconEl.textContent = mode.emoji;
     const nameInput = nameRow.createEl("input", {
       cls: "ws-studio-identity-input",
       attr: { value: mode.label }
@@ -4905,7 +4901,6 @@ var WorkspaceStudio = class {
     });
     emojiInput.addEventListener("input", () => {
       mode.emoji = emojiInput.value;
-      modeIconEl.textContent = mode.emoji;
       this.dirty = true;
     });
     const promptSection = this.container.createDiv({ cls: "ws-studio-editor-section" });
@@ -6773,6 +6768,8 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     this.studioEl = null;
     this.moreBtnEl = null;
     this.studio = null;
+    this.scrollFabTopEl = null;
+    this.scrollFabBottomEl = null;
     this.readImageCount = 0;
     this.claudeCodeAbort = null;
     this.codexAbort = null;
@@ -6810,11 +6807,14 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     container.addClass("ai-daily-chat-container");
     this.chatContainerEl = container;
     this.buildHeader(container);
-    this.messagesEl = container.createDiv({ cls: "ai-daily-messages" });
+    const messagesWrap = container.createDiv({ cls: "ai-daily-messages-wrap" });
+    this.messagesEl = messagesWrap.createDiv({ cls: "ai-daily-messages" });
     this.messagesEl.addEventListener("scroll", () => {
       const el = this.messagesEl;
       this.userScrolledUp = el.scrollHeight - el.scrollTop - el.clientHeight > 50;
+      this.updateScrollFabs();
     });
+    this.buildScrollFabs(messagesWrap);
     this.tokenBarEl = container.createDiv({ cls: "ai-daily-token-bar" });
     this.updateTokenBar();
     this.buildInputArea(container);
@@ -6901,7 +6901,8 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     this.attachBarEl = this.inputAreaEl.createDiv({ cls: "ai-daily-attach-bar" });
     this.attachBarEl.style.display = "none";
     const inputRow = this.inputAreaEl.createDiv({ cls: "ai-daily-input-row" });
-    const attachBtn = inputRow.createEl("button", {
+    const inputWrap = inputRow.createDiv({ cls: "ai-daily-input-wrap" });
+    const attachBtn = inputWrap.createEl("button", {
       cls: "ai-daily-attach-btn",
       attr: { "aria-label": "\u6DFB\u52A0\u7B14\u8BB0" }
     });
@@ -6910,20 +6911,19 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
       e.preventDefault();
       this.openFilePicker();
     });
-    const inputWrap = inputRow.createDiv({ cls: "ai-daily-input-wrap" });
     this.inputEl = inputWrap.createEl("textarea", {
       cls: "ai-daily-input",
-      attr: { placeholder: "\u95EE\u70B9\u4EC0\u4E48\u2026 @ \u5F15\u7528\u7B14\u8BB0\uFF0C/ \u9009\u62E9\u6A21\u677F", rows: "1" }
+      attr: { placeholder: "\u56DE\u590D\u2026", rows: "1" }
     });
+    this.sendBtn = inputWrap.createEl("button", {
+      cls: "ai-daily-send-btn"
+    });
+    (0, import_obsidian13.setIcon)(this.sendBtn, "arrow-up");
     this.expandBtn = inputWrap.createEl("button", {
       cls: "ai-daily-expand-btn",
       attr: { "aria-label": "\u5C55\u5F00/\u6536\u8D77\u8F93\u5165\u6846" }
     });
     this.expandBtn.textContent = "\u5C55\u5F00 \u2191";
-    this.sendBtn = inputRow.createEl("button", {
-      cls: "ai-daily-send-btn"
-    });
-    (0, import_obsidian13.setIcon)(this.sendBtn, "send");
     this.expandBtn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       const isExpanded = this.inputEl.classList.toggle("expanded");
@@ -7842,7 +7842,7 @@ ${entry}
     }
   }
   setSendButtonState(loading) {
-    (0, import_obsidian13.setIcon)(this.sendBtn, loading ? "square" : "send");
+    (0, import_obsidian13.setIcon)(this.sendBtn, loading ? "square" : "arrow-up");
     this.sendBtn.toggleClass("ai-daily-send-btn-stop", loading);
     this.sendBtn.setAttribute("aria-label", loading ? "\u505C\u6B62\u751F\u6210" : "\u53D1\u9001");
     this.sendBtn.setAttribute("title", loading ? "\u505C\u6B62\u751F\u6210" : "\u53D1\u9001");
@@ -8407,6 +8407,28 @@ ${filesList}` : "",
     if (!this.userScrolledUp) {
       this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
     }
+  }
+  buildScrollFabs(parent) {
+    const group = parent.createDiv({ cls: "ai-daily-scroll-fabs" });
+    this.scrollFabTopEl = group.createDiv({ cls: "ai-daily-scroll-fab ai-daily-scroll-fab--hidden" });
+    (0, import_obsidian13.setIcon)(this.scrollFabTopEl, "chevron-up");
+    this.scrollFabTopEl.addEventListener("click", () => {
+      this.messagesEl.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    this.scrollFabBottomEl = group.createDiv({ cls: "ai-daily-scroll-fab ai-daily-scroll-fab--hidden" });
+    (0, import_obsidian13.setIcon)(this.scrollFabBottomEl, "chevron-down");
+    this.scrollFabBottomEl.addEventListener("click", () => {
+      this.userScrolledUp = false;
+      this.messagesEl.scrollTo({ top: this.messagesEl.scrollHeight, behavior: "smooth" });
+    });
+  }
+  updateScrollFabs() {
+    var _a, _b;
+    const el = this.messagesEl;
+    const atTop = el.scrollTop < 50;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+    (_a = this.scrollFabTopEl) == null ? void 0 : _a.toggleClass("ai-daily-scroll-fab--hidden", atTop);
+    (_b = this.scrollFabBottomEl) == null ? void 0 : _b.toggleClass("ai-daily-scroll-fab--hidden", atBottom);
   }
   addMessage(role, content, source) {
     const welcome = this.messagesEl.querySelector(".ai-daily-welcome");

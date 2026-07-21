@@ -295,6 +295,8 @@ export class ChatView extends ItemView {
 	private studioEl: HTMLElement | null = null;
 	private moreBtnEl: HTMLElement | null = null;
 	private studio: WorkspaceStudio | null = null;
+	private scrollFabTopEl: HTMLElement | null = null;
+	private scrollFabBottomEl: HTMLElement | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AIDailyChat) {
 		super(leaf);
@@ -335,11 +337,14 @@ export class ChatView extends ItemView {
 
 		this.buildHeader(container);
 
-		this.messagesEl = container.createDiv({ cls: "ai-daily-messages" });
+		const messagesWrap = container.createDiv({ cls: "ai-daily-messages-wrap" });
+		this.messagesEl = messagesWrap.createDiv({ cls: "ai-daily-messages" });
 		this.messagesEl.addEventListener("scroll", () => {
 			const el = this.messagesEl;
 			this.userScrolledUp = el.scrollHeight - el.scrollTop - el.clientHeight > 50;
+			this.updateScrollFabs();
 		});
+		this.buildScrollFabs(messagesWrap);
 
 		this.tokenBarEl = container.createDiv({ cls: "ai-daily-token-bar" });
 		this.updateTokenBar();
@@ -450,7 +455,9 @@ export class ChatView extends ItemView {
 
 		const inputRow = this.inputAreaEl.createDiv({ cls: "ai-daily-input-row" });
 
-		const attachBtn = inputRow.createEl("button", {
+		const inputWrap = inputRow.createDiv({ cls: "ai-daily-input-wrap" });
+
+		const attachBtn = inputWrap.createEl("button", {
 			cls: "ai-daily-attach-btn",
 			attr: { "aria-label": "添加笔记" },
 		});
@@ -460,23 +467,21 @@ export class ChatView extends ItemView {
 			this.openFilePicker();
 		});
 
-		const inputWrap = inputRow.createDiv({ cls: "ai-daily-input-wrap" });
-
 		this.inputEl = inputWrap.createEl("textarea", {
 			cls: "ai-daily-input",
-			attr: { placeholder: "问点什么… @ 引用笔记，/ 选择模板", rows: "1" },
+			attr: { placeholder: "回复…", rows: "1" },
 		});
+
+		this.sendBtn = inputWrap.createEl("button", {
+			cls: "ai-daily-send-btn",
+		});
+		setIcon(this.sendBtn, "arrow-up");
 
 		this.expandBtn = inputWrap.createEl("button", {
 			cls: "ai-daily-expand-btn",
 			attr: { "aria-label": "展开/收起输入框" },
 		});
 		this.expandBtn.textContent = "展开 ↑";
-
-		this.sendBtn = inputRow.createEl("button", {
-			cls: "ai-daily-send-btn",
-		});
-		setIcon(this.sendBtn, "send");
 		this.expandBtn.addEventListener("pointerdown", (e) => {
 			e.preventDefault();
 			const isExpanded = this.inputEl.classList.toggle("expanded");
@@ -1485,7 +1490,7 @@ export class ChatView extends ItemView {
 	}
 
 	private setSendButtonState(loading: boolean): void {
-		setIcon(this.sendBtn, loading ? "square" : "send");
+		setIcon(this.sendBtn, loading ? "square" : "arrow-up");
 		this.sendBtn.toggleClass("ai-daily-send-btn-stop", loading);
 		this.sendBtn.setAttribute("aria-label", loading ? "停止生成" : "发送");
 		this.sendBtn.setAttribute("title", loading ? "停止生成" : "发送");
@@ -2122,6 +2127,29 @@ export class ChatView extends ItemView {
 		if (!this.userScrolledUp) {
 			this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
 		}
+	}
+
+	private buildScrollFabs(parent: HTMLElement): void {
+		const group = parent.createDiv({ cls: "ai-daily-scroll-fabs" });
+		this.scrollFabTopEl = group.createDiv({ cls: "ai-daily-scroll-fab ai-daily-scroll-fab--hidden" });
+		setIcon(this.scrollFabTopEl, "chevron-up");
+		this.scrollFabTopEl.addEventListener("click", () => {
+			this.messagesEl.scrollTo({ top: 0, behavior: "smooth" });
+		});
+		this.scrollFabBottomEl = group.createDiv({ cls: "ai-daily-scroll-fab ai-daily-scroll-fab--hidden" });
+		setIcon(this.scrollFabBottomEl, "chevron-down");
+		this.scrollFabBottomEl.addEventListener("click", () => {
+			this.userScrolledUp = false;
+			this.messagesEl.scrollTo({ top: this.messagesEl.scrollHeight, behavior: "smooth" });
+		});
+	}
+
+	private updateScrollFabs(): void {
+		const el = this.messagesEl;
+		const atTop = el.scrollTop < 50;
+		const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+		this.scrollFabTopEl?.toggleClass("ai-daily-scroll-fab--hidden", atTop);
+		this.scrollFabBottomEl?.toggleClass("ai-daily-scroll-fab--hidden", atBottom);
 	}
 
 	private addMessage(role: "user" | "assistant", content: string, source?: MessageSource): void {

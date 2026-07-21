@@ -302,6 +302,8 @@ export class WorkspaceStudio {
 
 		const deleteBtn = footer.createEl("button", { cls: "ws-studio-delete-btn" });
 		setIcon(deleteBtn, "trash-2");
+		const delSvg = deleteBtn.querySelector("svg");
+		if (delSvg) { delSvg.style.width = "20px"; delSvg.style.height = "20px"; }
 		deleteBtn.addEventListener("click", async () => {
 			await this.archiveWorkspace(name);
 			this.navigateTo("home");
@@ -480,6 +482,8 @@ export class WorkspaceStudio {
 		const actHead = actSection.createDiv({ cls: "ws-studio-editor-label-row ws-studio-editor-actions-head" });
 		const boltIcon = actHead.createSpan({ cls: "ws-studio-editor-bolt" });
 		setIcon(boltIcon, "zap");
+		const boltSvg = boltIcon.querySelector("svg");
+		if (boltSvg) { boltSvg.style.width = "14px"; boltSvg.style.height = "14px"; }
 		actHead.createSpan({
 			cls: "ws-studio-editor-label ws-studio-editor-label--accent",
 			text: `一键 Action · ${mode.actions.length}`,
@@ -541,6 +545,8 @@ export class WorkspaceStudio {
 		const dangerSection = this.container.createDiv({ cls: "ws-studio-editor-danger" });
 		const deleteBtn = dangerSection.createEl("button", { cls: "ws-studio-editor-delete-mode" });
 		setIcon(deleteBtn, "trash-2");
+		const delModeSvg = deleteBtn.querySelector("svg");
+		if (delModeSvg) { delModeSvg.style.width = "15px"; delModeSvg.style.height = "15px"; }
 		deleteBtn.createSpan({ text: "删除此模式" });
 		deleteBtn.addEventListener("click", () => {
 			this.editingModes.splice(this.selectedModeIndex, 1);

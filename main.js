@@ -4816,6 +4816,11 @@ var WorkspaceStudio = class {
     });
     const deleteBtn = footer.createEl("button", { cls: "ws-studio-delete-btn" });
     (0, import_obsidian10.setIcon)(deleteBtn, "trash-2");
+    const delSvg = deleteBtn.querySelector("svg");
+    if (delSvg) {
+      delSvg.style.width = "20px";
+      delSvg.style.height = "20px";
+    }
     deleteBtn.addEventListener("click", async () => {
       await this.archiveWorkspace(name);
       this.navigateTo("home");
@@ -4966,6 +4971,11 @@ var WorkspaceStudio = class {
     const actHead = actSection.createDiv({ cls: "ws-studio-editor-label-row ws-studio-editor-actions-head" });
     const boltIcon = actHead.createSpan({ cls: "ws-studio-editor-bolt" });
     (0, import_obsidian10.setIcon)(boltIcon, "zap");
+    const boltSvg = boltIcon.querySelector("svg");
+    if (boltSvg) {
+      boltSvg.style.width = "14px";
+      boltSvg.style.height = "14px";
+    }
     actHead.createSpan({
       cls: "ws-studio-editor-label ws-studio-editor-label--accent",
       text: `\u4E00\u952E Action \xB7 ${mode.actions.length}`
@@ -5020,6 +5030,11 @@ var WorkspaceStudio = class {
     const dangerSection = this.container.createDiv({ cls: "ws-studio-editor-danger" });
     const deleteBtn = dangerSection.createEl("button", { cls: "ws-studio-editor-delete-mode" });
     (0, import_obsidian10.setIcon)(deleteBtn, "trash-2");
+    const delModeSvg = deleteBtn.querySelector("svg");
+    if (delModeSvg) {
+      delModeSvg.style.width = "15px";
+      delModeSvg.style.height = "15px";
+    }
     deleteBtn.createSpan({ text: "\u5220\u9664\u6B64\u6A21\u5F0F" });
     deleteBtn.addEventListener("click", () => {
       this.editingModes.splice(this.selectedModeIndex, 1);

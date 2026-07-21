@@ -364,7 +364,7 @@
 }
 
 .ai-daily-input-wrap:focus-within {
-	border-color: var(--interactive-accent);
+	border-color: var(--background-modifier-border);
 }
 
 .ai-daily-attach-btn {

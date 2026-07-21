@@ -7179,6 +7179,10 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     (_c = items[next]) == null ? void 0 : _c.scrollIntoView({ block: "nearest" });
   }
   openFilePicker() {
+    if (this.mentionPopupEl) {
+      this.closeMentionPopup();
+      return;
+    }
     const allFiles = this.app.vault.getMarkdownFiles().sort((a, b) => b.stat.mtime - a.stat.mtime).slice(0, 20);
     if (allFiles.length > 0) {
       this.mentionStartPos = null;

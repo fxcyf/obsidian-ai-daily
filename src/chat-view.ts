@@ -744,6 +744,10 @@ export class ChatView extends ItemView {
 	}
 
 	private openFilePicker(): void {
+		if (this.mentionPopupEl) {
+			this.closeMentionPopup();
+			return;
+		}
 		const allFiles = this.app.vault.getMarkdownFiles()
 			.sort((a, b) => b.stat.mtime - a.stat.mtime)
 			.slice(0, 20);

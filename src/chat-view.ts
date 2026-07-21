@@ -277,7 +277,6 @@ export class ChatView extends ItemView {
 	private sendBtn!: HTMLButtonElement;
 	private sendHintEl!: HTMLElement;
 	private expandBtn!: HTMLButtonElement;
-	private contextBtnEl: HTMLElement | null = null;
 	private tokenBarEl!: HTMLElement;
 	private historyOverlay: HTMLElement | null = null;
 	private historyOverlayResizeCleanup: (() => void) | null = null;
@@ -492,20 +491,6 @@ export class ChatView extends ItemView {
 			this.openFilePicker();
 		});
 
-		this.contextBtnEl = toolbar.createEl("button", {
-			cls: "ai-daily-context-btn",
-			attr: { "aria-label": "上下文文件" },
-		});
-		const ctxIcon = this.contextBtnEl.createSpan({ cls: "ai-daily-context-btn-icon" });
-		setIcon(ctxIcon, "file-text");
-		this.contextBtnEl.createSpan({ cls: "ai-daily-context-btn-label", text: "上下文" });
-		this.contextBtnEl.createSpan({ cls: "ai-daily-context-btn-badge" });
-		this.contextBtnEl.style.display = "none";
-		this.contextBtnEl.addEventListener("pointerdown", (e) => {
-			e.preventDefault();
-			this.openFilePicker();
-		});
-
 		const toolbarSpacer = toolbar.createDiv({ cls: "ai-daily-input-toolbar-spacer" });
 
 		this.sendHintEl = toolbar.createDiv({ cls: "ai-daily-send-hint" });
@@ -527,7 +512,7 @@ export class ChatView extends ItemView {
 
 		this.inputAreaEl.addEventListener("pointerdown", (e) => {
 			const target = e.target as HTMLElement;
-			if (target !== this.inputEl && !target.closest("button") && !target.closest(".ai-daily-attach-chip") && !target.closest(".ai-daily-context-btn") && !target.closest(".ai-daily-mention-popup")) {
+			if (target !== this.inputEl && !target.closest("button") && !target.closest(".ai-daily-attach-chip") && !target.closest(".ai-daily-mention-popup")) {
 				e.preventDefault();
 				this.inputEl.focus();
 			}
@@ -606,17 +591,6 @@ export class ChatView extends ItemView {
 		this.sendBtn.toggleClass("ai-daily-send-btn-active", hasContent);
 	}
 
-	private updateContextBtn(): void {
-		if (!this.contextBtnEl) return;
-		const count = this.attachedFiles.length + this.pendingImages.length;
-		const badge = this.contextBtnEl.querySelector(".ai-daily-context-btn-badge") as HTMLElement;
-		if (count > 0) {
-			this.contextBtnEl.style.display = "";
-			if (badge) badge.textContent = String(count);
-		} else {
-			this.contextBtnEl.style.display = "none";
-		}
-	}
 
 	// ── Prompt template popup ──────────────────────────────
 
@@ -816,7 +790,7 @@ export class ChatView extends ItemView {
 		this.attachBarEl.empty();
 		if (this.attachedFiles.length === 0 && this.pendingImages.length === 0) {
 			this.attachBarEl.style.display = "none";
-			this.updateContextBtn();
+	
 			return;
 		}
 		this.attachBarEl.style.display = "";
@@ -833,7 +807,7 @@ export class ChatView extends ItemView {
 			});
 		}
 		this.renderImageChips();
-		this.updateContextBtn();
+
 	}
 
 	private async consumeAttachedFiles(): Promise<string> {
@@ -3484,7 +3458,7 @@ export class ChatView extends ItemView {
 		this.messagesEl.empty();
 		this.showWelcome();
 		this.updateMoreButtonVisibility();
-		this.updateContextBtn();
+
 		this.updateSendBtnActive();
 	}
 

@@ -6765,7 +6765,6 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     this.wereadTools = null;
     this.podcastTools = null;
     this.feedTools = null;
-    this.contextBtnEl = null;
     this.historyOverlay = null;
     this.historyOverlayResizeCleanup = null;
     this.templatePopupEl = null;
@@ -6946,19 +6945,6 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
       e.preventDefault();
       this.openFilePicker();
     });
-    this.contextBtnEl = toolbar.createEl("button", {
-      cls: "ai-daily-context-btn",
-      attr: { "aria-label": "\u4E0A\u4E0B\u6587\u6587\u4EF6" }
-    });
-    const ctxIcon = this.contextBtnEl.createSpan({ cls: "ai-daily-context-btn-icon" });
-    (0, import_obsidian13.setIcon)(ctxIcon, "file-text");
-    this.contextBtnEl.createSpan({ cls: "ai-daily-context-btn-label", text: "\u4E0A\u4E0B\u6587" });
-    this.contextBtnEl.createSpan({ cls: "ai-daily-context-btn-badge" });
-    this.contextBtnEl.style.display = "none";
-    this.contextBtnEl.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      this.openFilePicker();
-    });
     const toolbarSpacer = toolbar.createDiv({ cls: "ai-daily-input-toolbar-spacer" });
     this.sendHintEl = toolbar.createDiv({ cls: "ai-daily-send-hint" });
     this.sendHintEl.createSpan({ text: "\u23CE \u53D1\u9001" });
@@ -6976,7 +6962,7 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     });
     this.inputAreaEl.addEventListener("pointerdown", (e) => {
       const target = e.target;
-      if (target !== this.inputEl && !target.closest("button") && !target.closest(".ai-daily-attach-chip") && !target.closest(".ai-daily-context-btn") && !target.closest(".ai-daily-mention-popup")) {
+      if (target !== this.inputEl && !target.closest("button") && !target.closest(".ai-daily-attach-chip") && !target.closest(".ai-daily-mention-popup")) {
         e.preventDefault();
         this.inputEl.focus();
       }
@@ -7052,17 +7038,6 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
   updateSendBtnActive() {
     const hasContent = this.inputEl.value.trim().length > 0;
     this.sendBtn.toggleClass("ai-daily-send-btn-active", hasContent);
-  }
-  updateContextBtn() {
-    if (!this.contextBtnEl) return;
-    const count = this.attachedFiles.length + this.pendingImages.length;
-    const badge = this.contextBtnEl.querySelector(".ai-daily-context-btn-badge");
-    if (count > 0) {
-      this.contextBtnEl.style.display = "";
-      if (badge) badge.textContent = String(count);
-    } else {
-      this.contextBtnEl.style.display = "none";
-    }
   }
   // ── Prompt template popup ──────────────────────────────
   handleTemplateInput() {
@@ -7240,7 +7215,6 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     this.attachBarEl.empty();
     if (this.attachedFiles.length === 0 && this.pendingImages.length === 0) {
       this.attachBarEl.style.display = "none";
-      this.updateContextBtn();
       return;
     }
     this.attachBarEl.style.display = "";
@@ -7257,7 +7231,6 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
       });
     }
     this.renderImageChips();
-    this.updateContextBtn();
   }
   async consumeAttachedFiles() {
     if (this.attachedFiles.length === 0) return "";
@@ -9686,7 +9659,6 @@ ${m.content}`);
     this.messagesEl.empty();
     this.showWelcome();
     this.updateMoreButtonVisibility();
-    this.updateContextBtn();
     this.updateSendBtnActive();
   }
   updateHistoryOverlayInset() {

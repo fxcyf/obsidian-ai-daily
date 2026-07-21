@@ -225,6 +225,12 @@
 - **历史记录读不到**：根本原因是默认目录 `.ai-chat` 以 `.` 开头，Obsidian vault **不索引隐藏目录**，`vault.getFiles()` / `getAbstractFileByPath()` 永远返回空；彻底改用 `vault.adapter.read/write/list/remove/exists` 直接操作文件系统，绕过索引。
 - **无流式效果**：delta 回调里用了 120ms 防抖 timer，两个 delta 间隔只有 14ms，防抖不断被重置，等所有 delta 发完才渲染一次，看起来整段出现。改为：流式过程中每次 delta 直接 `setText(accumulated)`，结束后做一次完整 Markdown 渲染。
 
+## 2026-07-21 — CLI 后端模型与推理强度解耦 (`e9ab3dc`)
+
+- 将 Anthropic API 模型与 CLI Agent 模型拆分，设置页只展示当前 Claude Code 或 Codex 后端的模型、推理强度及相关选项。
+- Claude Code 桌面端与 Proxy 统一透传 `--effort`；Codex 桌面端与 app-server 统一使用 `model_reasoning_effort`，恢复 session 时也显式覆盖。
+- **经验**：同一个“模型”字段被 API 与多个 CLI 后端复用会让 UI 语义和运行配置一起漂移；应按调用边界分别持久化，并对桌面与 Proxy 使用同一映射测试。
+
 ## 待解决
 
 - [ ] 测试覆盖：目前无任何测试文件

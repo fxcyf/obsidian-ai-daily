@@ -503,11 +503,7 @@ export class ChatView extends ItemView {
 		this.contextBtnEl.style.display = "none";
 		this.contextBtnEl.addEventListener("pointerdown", (e) => {
 			e.preventDefault();
-			const ctxHeader = this.messagesEl.querySelector(".ai-daily-ctx-header");
-			if (ctxHeader) {
-				const toggle = ctxHeader.querySelector(".ai-daily-ctx-toggle") as HTMLElement | null;
-				if (toggle) toggle.click();
-			}
+			this.openFilePicker();
 		});
 
 		const toolbarSpacer = toolbar.createDiv({ cls: "ai-daily-input-toolbar-spacer" });
@@ -612,7 +608,7 @@ export class ChatView extends ItemView {
 
 	private updateContextBtn(): void {
 		if (!this.contextBtnEl) return;
-		const count = this.harnessContext?.injectedFiles?.length ?? 0;
+		const count = this.attachedFiles.length + this.pendingImages.length;
 		const badge = this.contextBtnEl.querySelector(".ai-daily-context-btn-badge") as HTMLElement;
 		if (count > 0) {
 			this.contextBtnEl.style.display = "";
@@ -820,6 +816,7 @@ export class ChatView extends ItemView {
 		this.attachBarEl.empty();
 		if (this.attachedFiles.length === 0 && this.pendingImages.length === 0) {
 			this.attachBarEl.style.display = "none";
+			this.updateContextBtn();
 			return;
 		}
 		this.attachBarEl.style.display = "";
@@ -836,6 +833,7 @@ export class ChatView extends ItemView {
 			});
 		}
 		this.renderImageChips();
+		this.updateContextBtn();
 	}
 
 	private async consumeAttachedFiles(): Promise<string> {
@@ -2484,7 +2482,6 @@ export class ChatView extends ItemView {
 		this.clearChat();
 		this.harnessContext = context;
 		this.updateMoreButtonVisibility();
-		this.updateContextBtn();
 
 		if (context) {
 			const welcome = this.messagesEl.querySelector(".ai-daily-welcome");

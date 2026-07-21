@@ -6957,11 +6957,7 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     this.contextBtnEl.style.display = "none";
     this.contextBtnEl.addEventListener("pointerdown", (e) => {
       e.preventDefault();
-      const ctxHeader = this.messagesEl.querySelector(".ai-daily-ctx-header");
-      if (ctxHeader) {
-        const toggle = ctxHeader.querySelector(".ai-daily-ctx-toggle");
-        if (toggle) toggle.click();
-      }
+      this.openFilePicker();
     });
     const toolbarSpacer = toolbar.createDiv({ cls: "ai-daily-input-toolbar-spacer" });
     this.sendHintEl = toolbar.createDiv({ cls: "ai-daily-send-hint" });
@@ -7058,9 +7054,8 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     this.sendBtn.toggleClass("ai-daily-send-btn-active", hasContent);
   }
   updateContextBtn() {
-    var _a, _b, _c;
     if (!this.contextBtnEl) return;
-    const count = (_c = (_b = (_a = this.harnessContext) == null ? void 0 : _a.injectedFiles) == null ? void 0 : _b.length) != null ? _c : 0;
+    const count = this.attachedFiles.length + this.pendingImages.length;
     const badge = this.contextBtnEl.querySelector(".ai-daily-context-btn-badge");
     if (count > 0) {
       this.contextBtnEl.style.display = "";
@@ -7245,6 +7240,7 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     this.attachBarEl.empty();
     if (this.attachedFiles.length === 0 && this.pendingImages.length === 0) {
       this.attachBarEl.style.display = "none";
+      this.updateContextBtn();
       return;
     }
     this.attachBarEl.style.display = "";
@@ -7261,6 +7257,7 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
       });
     }
     this.renderImageChips();
+    this.updateContextBtn();
   }
   async consumeAttachedFiles() {
     if (this.attachedFiles.length === 0) return "";
@@ -8753,7 +8750,6 @@ ${filesList}` : "",
     this.clearChat();
     this.harnessContext = context;
     this.updateMoreButtonVisibility();
-    this.updateContextBtn();
     if (context) {
       const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
       if (welcome) welcome.remove();

@@ -284,6 +284,7 @@ export class ChatView extends ItemView {
 	private templatePopupEl: HTMLElement | null = null;
 	private isLoading = false;
 	private userScrolledUp = false;
+	private hasUnreadBelow = false;
 	private cachedTokenCount = 0;
 	private sessionId: string | null = null;
 	private lastMode: MessageSource | null = null;
@@ -344,7 +345,9 @@ export class ChatView extends ItemView {
 		this.messagesEl = this.messagesWrapEl.createDiv({ cls: "ai-daily-messages" });
 		this.messagesEl.addEventListener("scroll", () => {
 			const el = this.messagesEl;
-			this.userScrolledUp = el.scrollHeight - el.scrollTop - el.clientHeight > 50;
+			const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+			this.userScrolledUp = !atBottom;
+			if (atBottom) this.hasUnreadBelow = false;
 			this.updateScrollFabs();
 		});
 		this.buildScrollFabs(this.messagesWrapEl);
@@ -2209,6 +2212,9 @@ export class ChatView extends ItemView {
 	private scrollToBottomIfFollowing(): void {
 		if (!this.userScrolledUp) {
 			this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+		} else {
+			this.hasUnreadBelow = true;
+			this.updateScrollFabs();
 		}
 	}
 
@@ -2224,6 +2230,7 @@ export class ChatView extends ItemView {
 		this.scrollFabBottomEl.createDiv({ cls: "ai-daily-scroll-fab-dot" });
 		this.scrollFabBottomEl.addEventListener("click", () => {
 			this.userScrolledUp = false;
+			this.hasUnreadBelow = false;
 			this.messagesEl.scrollTo({ top: this.messagesEl.scrollHeight, behavior: "smooth" });
 		});
 	}
@@ -2234,6 +2241,8 @@ export class ChatView extends ItemView {
 		const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
 		this.scrollFabTopEl?.toggleClass("ai-daily-scroll-fab--hidden", atTop);
 		this.scrollFabBottomEl?.toggleClass("ai-daily-scroll-fab--hidden", atBottom);
+		const dot = this.scrollFabBottomEl?.querySelector(".ai-daily-scroll-fab-dot") as HTMLElement | null;
+		if (dot) dot.style.display = this.hasUnreadBelow ? "" : "none";
 	}
 
 	private addMessage(role: "user" | "assistant", content: string, source?: MessageSource): void {

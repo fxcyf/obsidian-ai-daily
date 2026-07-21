@@ -6771,6 +6771,7 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     this.templatePopupEl = null;
     this.isLoading = false;
     this.userScrolledUp = false;
+    this.hasUnreadBelow = false;
     this.cachedTokenCount = 0;
     this.sessionId = null;
     this.lastMode = null;
@@ -6827,7 +6828,9 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     this.messagesEl = this.messagesWrapEl.createDiv({ cls: "ai-daily-messages" });
     this.messagesEl.addEventListener("scroll", () => {
       const el = this.messagesEl;
-      this.userScrolledUp = el.scrollHeight - el.scrollTop - el.clientHeight > 50;
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+      this.userScrolledUp = !atBottom;
+      if (atBottom) this.hasUnreadBelow = false;
       this.updateScrollFabs();
     });
     this.buildScrollFabs(this.messagesWrapEl);
@@ -8495,6 +8498,9 @@ ${filesList}` : "",
   scrollToBottomIfFollowing() {
     if (!this.userScrolledUp) {
       this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+    } else {
+      this.hasUnreadBelow = true;
+      this.updateScrollFabs();
     }
   }
   buildScrollFabs(parent) {
@@ -8509,16 +8515,19 @@ ${filesList}` : "",
     this.scrollFabBottomEl.createDiv({ cls: "ai-daily-scroll-fab-dot" });
     this.scrollFabBottomEl.addEventListener("click", () => {
       this.userScrolledUp = false;
+      this.hasUnreadBelow = false;
       this.messagesEl.scrollTo({ top: this.messagesEl.scrollHeight, behavior: "smooth" });
     });
   }
   updateScrollFabs() {
-    var _a, _b;
+    var _a, _b, _c;
     const el = this.messagesEl;
     const atTop = el.scrollTop < 50;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
     (_a = this.scrollFabTopEl) == null ? void 0 : _a.toggleClass("ai-daily-scroll-fab--hidden", atTop);
     (_b = this.scrollFabBottomEl) == null ? void 0 : _b.toggleClass("ai-daily-scroll-fab--hidden", atBottom);
+    const dot = (_c = this.scrollFabBottomEl) == null ? void 0 : _c.querySelector(".ai-daily-scroll-fab-dot");
+    if (dot) dot.style.display = this.hasUnreadBelow ? "" : "none";
   }
   addMessage(role, content, source) {
     const welcome = this.messagesEl.querySelector(".ai-daily-welcome");

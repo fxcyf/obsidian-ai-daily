@@ -275,7 +275,9 @@ export class ChatView extends ItemView {
 	private inputAreaEl!: HTMLElement;
 	private inputEl!: HTMLTextAreaElement;
 	private sendBtn!: HTMLButtonElement;
+	private sendHintEl!: HTMLElement;
 	private expandBtn!: HTMLButtonElement;
+	private contextBtnEl: HTMLElement | null = null;
 	private tokenBarEl!: HTMLElement;
 	private historyOverlay: HTMLElement | null = null;
 	private historyOverlayResizeCleanup: (() => void) | null = null;
@@ -458,25 +460,10 @@ export class ChatView extends ItemView {
 
 		const inputWrap = inputRow.createDiv({ cls: "ai-daily-input-wrap" });
 
-		const attachBtn = inputWrap.createEl("button", {
-			cls: "ai-daily-attach-btn",
-			attr: { "aria-label": "添加笔记" },
-		});
-		setIcon(attachBtn, "paperclip");
-		attachBtn.addEventListener("pointerdown", (e) => {
-			e.preventDefault();
-			this.openFilePicker();
-		});
-
 		this.inputEl = inputWrap.createEl("textarea", {
 			cls: "ai-daily-input",
 			attr: { placeholder: "回复…", rows: "1" },
 		});
-
-		this.sendBtn = inputWrap.createEl("button", {
-			cls: "ai-daily-send-btn",
-		});
-		setIcon(this.sendBtn, "arrow-up");
 
 		this.expandBtn = inputWrap.createEl("button", {
 			cls: "ai-daily-expand-btn",
@@ -490,6 +477,46 @@ export class ChatView extends ItemView {
 			this.autoResizeInput();
 		});
 
+		const toolbar = inputWrap.createDiv({ cls: "ai-daily-input-toolbar" });
+
+		const attachBtn = toolbar.createEl("button", {
+			cls: "ai-daily-attach-btn",
+			attr: { "aria-label": "添加笔记" },
+		});
+		setIcon(attachBtn, "paperclip");
+		attachBtn.addEventListener("pointerdown", (e) => {
+			e.preventDefault();
+			this.openFilePicker();
+		});
+
+		this.contextBtnEl = toolbar.createEl("button", {
+			cls: "ai-daily-context-btn",
+			attr: { "aria-label": "上下文文件" },
+		});
+		const ctxIcon = this.contextBtnEl.createSpan({ cls: "ai-daily-context-btn-icon" });
+		setIcon(ctxIcon, "file-text");
+		this.contextBtnEl.createSpan({ cls: "ai-daily-context-btn-label", text: "上下文" });
+		this.contextBtnEl.createSpan({ cls: "ai-daily-context-btn-badge" });
+		this.contextBtnEl.style.display = "none";
+		this.contextBtnEl.addEventListener("pointerdown", (e) => {
+			e.preventDefault();
+			const ctxHeader = this.messagesEl.querySelector(".ai-daily-ctx-header");
+			if (ctxHeader) {
+				const toggle = ctxHeader.querySelector(".ai-daily-ctx-toggle") as HTMLElement | null;
+				if (toggle) toggle.click();
+			}
+		});
+
+		const toolbarSpacer = toolbar.createDiv({ cls: "ai-daily-input-toolbar-spacer" });
+
+		this.sendHintEl = toolbar.createDiv({ cls: "ai-daily-send-hint" });
+		this.sendHintEl.createSpan({ text: "⏎ 发送" });
+
+		this.sendBtn = toolbar.createEl("button", {
+			cls: "ai-daily-send-btn",
+		});
+		setIcon(this.sendBtn, "arrow-up");
+
 		this.sendBtn.addEventListener("pointerdown", (e) => {
 			e.preventDefault();
 			if (this.isLoading) {
@@ -501,7 +528,7 @@ export class ChatView extends ItemView {
 
 		this.inputAreaEl.addEventListener("pointerdown", (e) => {
 			const target = e.target as HTMLElement;
-			if (target !== this.inputEl && !target.closest("button") && !target.closest(".ai-daily-attach-chip")) {
+			if (target !== this.inputEl && !target.closest("button") && !target.closest(".ai-daily-attach-chip") && !target.closest(".ai-daily-context-btn")) {
 				e.preventDefault();
 				this.inputEl.focus();
 			}
@@ -509,6 +536,7 @@ export class ChatView extends ItemView {
 
 		this.inputEl.addEventListener("input", () => {
 			this.autoResizeInput();
+			this.updateSendBtnActive();
 			this.handleTemplateInput();
 			this.handleMentionInput();
 		});
@@ -572,6 +600,23 @@ export class ChatView extends ItemView {
 		this.inputEl.addEventListener("drop", (e) => {
 			this.handleImageDrop(e);
 		});
+	}
+
+	private updateSendBtnActive(): void {
+		const hasContent = this.inputEl.value.trim().length > 0;
+		this.sendBtn.toggleClass("ai-daily-send-btn-active", hasContent);
+	}
+
+	private updateContextBtn(): void {
+		if (!this.contextBtnEl) return;
+		const count = this.harnessContext?.injectedFiles?.length ?? 0;
+		const badge = this.contextBtnEl.querySelector(".ai-daily-context-btn-badge") as HTMLElement;
+		if (count > 0) {
+			this.contextBtnEl.style.display = "";
+			if (badge) badge.textContent = String(count);
+		} else {
+			this.contextBtnEl.style.display = "none";
+		}
 	}
 
 	// ── Prompt template popup ──────────────────────────────
@@ -1529,6 +1574,7 @@ export class ChatView extends ItemView {
 	private setSendButtonState(loading: boolean): void {
 		setIcon(this.sendBtn, loading ? "square" : "arrow-up");
 		this.sendBtn.toggleClass("ai-daily-send-btn-stop", loading);
+		if (!loading) this.updateSendBtnActive();
 		this.sendBtn.setAttribute("aria-label", loading ? "停止生成" : "发送");
 		this.sendBtn.setAttribute("title", loading ? "停止生成" : "发送");
 	}
@@ -2169,12 +2215,13 @@ export class ChatView extends ItemView {
 	private buildScrollFabs(parent: HTMLElement): void {
 		const group = parent.createDiv({ cls: "ai-daily-scroll-fabs" });
 		this.scrollFabTopEl = group.createDiv({ cls: "ai-daily-scroll-fab ai-daily-scroll-fab--hidden" });
-		setIcon(this.scrollFabTopEl, "chevron-up");
+		setIcon(this.scrollFabTopEl, "arrow-up");
 		this.scrollFabTopEl.addEventListener("click", () => {
 			this.messagesEl.scrollTo({ top: 0, behavior: "smooth" });
 		});
 		this.scrollFabBottomEl = group.createDiv({ cls: "ai-daily-scroll-fab ai-daily-scroll-fab--hidden" });
-		setIcon(this.scrollFabBottomEl, "chevron-down");
+		setIcon(this.scrollFabBottomEl, "arrow-down");
+		this.scrollFabBottomEl.createDiv({ cls: "ai-daily-scroll-fab-dot" });
 		this.scrollFabBottomEl.addEventListener("click", () => {
 			this.userScrolledUp = false;
 			this.messagesEl.scrollTo({ top: this.messagesEl.scrollHeight, behavior: "smooth" });
@@ -2428,6 +2475,7 @@ export class ChatView extends ItemView {
 		this.clearChat();
 		this.harnessContext = context;
 		this.updateMoreButtonVisibility();
+		this.updateContextBtn();
 
 		if (context) {
 			const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
@@ -3430,6 +3478,8 @@ export class ChatView extends ItemView {
 		this.messagesEl.empty();
 		this.showWelcome();
 		this.updateMoreButtonVisibility();
+		this.updateContextBtn();
+		this.updateSendBtnActive();
 	}
 
 	private updateHistoryOverlayInset(): void {

@@ -6765,6 +6765,7 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     this.wereadTools = null;
     this.podcastTools = null;
     this.feedTools = null;
+    this.contextBtnEl = null;
     this.historyOverlay = null;
     this.historyOverlayResizeCleanup = null;
     this.templatePopupEl = null;
@@ -6917,23 +6918,10 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     this.attachBarEl.style.display = "none";
     const inputRow = this.inputAreaEl.createDiv({ cls: "ai-daily-input-row" });
     const inputWrap = inputRow.createDiv({ cls: "ai-daily-input-wrap" });
-    const attachBtn = inputWrap.createEl("button", {
-      cls: "ai-daily-attach-btn",
-      attr: { "aria-label": "\u6DFB\u52A0\u7B14\u8BB0" }
-    });
-    (0, import_obsidian13.setIcon)(attachBtn, "paperclip");
-    attachBtn.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      this.openFilePicker();
-    });
     this.inputEl = inputWrap.createEl("textarea", {
       cls: "ai-daily-input",
       attr: { placeholder: "\u56DE\u590D\u2026", rows: "1" }
     });
-    this.sendBtn = inputWrap.createEl("button", {
-      cls: "ai-daily-send-btn"
-    });
-    (0, import_obsidian13.setIcon)(this.sendBtn, "arrow-up");
     this.expandBtn = inputWrap.createEl("button", {
       cls: "ai-daily-expand-btn",
       attr: { "aria-label": "\u5C55\u5F00/\u6536\u8D77\u8F93\u5165\u6846" }
@@ -6945,6 +6933,40 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
       this.expandBtn.textContent = isExpanded ? "\u6536\u8D77 \u2193" : "\u5C55\u5F00 \u2191";
       this.autoResizeInput();
     });
+    const toolbar = inputWrap.createDiv({ cls: "ai-daily-input-toolbar" });
+    const attachBtn = toolbar.createEl("button", {
+      cls: "ai-daily-attach-btn",
+      attr: { "aria-label": "\u6DFB\u52A0\u7B14\u8BB0" }
+    });
+    (0, import_obsidian13.setIcon)(attachBtn, "paperclip");
+    attachBtn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      this.openFilePicker();
+    });
+    this.contextBtnEl = toolbar.createEl("button", {
+      cls: "ai-daily-context-btn",
+      attr: { "aria-label": "\u4E0A\u4E0B\u6587\u6587\u4EF6" }
+    });
+    const ctxIcon = this.contextBtnEl.createSpan({ cls: "ai-daily-context-btn-icon" });
+    (0, import_obsidian13.setIcon)(ctxIcon, "file-text");
+    this.contextBtnEl.createSpan({ cls: "ai-daily-context-btn-label", text: "\u4E0A\u4E0B\u6587" });
+    this.contextBtnEl.createSpan({ cls: "ai-daily-context-btn-badge" });
+    this.contextBtnEl.style.display = "none";
+    this.contextBtnEl.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      const ctxHeader = this.messagesEl.querySelector(".ai-daily-ctx-header");
+      if (ctxHeader) {
+        const toggle = ctxHeader.querySelector(".ai-daily-ctx-toggle");
+        if (toggle) toggle.click();
+      }
+    });
+    const toolbarSpacer = toolbar.createDiv({ cls: "ai-daily-input-toolbar-spacer" });
+    this.sendHintEl = toolbar.createDiv({ cls: "ai-daily-send-hint" });
+    this.sendHintEl.createSpan({ text: "\u23CE \u53D1\u9001" });
+    this.sendBtn = toolbar.createEl("button", {
+      cls: "ai-daily-send-btn"
+    });
+    (0, import_obsidian13.setIcon)(this.sendBtn, "arrow-up");
     this.sendBtn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       if (this.isLoading) {
@@ -6955,13 +6977,14 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     });
     this.inputAreaEl.addEventListener("pointerdown", (e) => {
       const target = e.target;
-      if (target !== this.inputEl && !target.closest("button") && !target.closest(".ai-daily-attach-chip")) {
+      if (target !== this.inputEl && !target.closest("button") && !target.closest(".ai-daily-attach-chip") && !target.closest(".ai-daily-context-btn")) {
         e.preventDefault();
         this.inputEl.focus();
       }
     });
     this.inputEl.addEventListener("input", () => {
       this.autoResizeInput();
+      this.updateSendBtnActive();
       this.handleTemplateInput();
       this.handleMentionInput();
     });
@@ -7026,6 +7049,22 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     this.inputEl.addEventListener("drop", (e) => {
       this.handleImageDrop(e);
     });
+  }
+  updateSendBtnActive() {
+    const hasContent = this.inputEl.value.trim().length > 0;
+    this.sendBtn.toggleClass("ai-daily-send-btn-active", hasContent);
+  }
+  updateContextBtn() {
+    var _a, _b, _c;
+    if (!this.contextBtnEl) return;
+    const count = (_c = (_b = (_a = this.harnessContext) == null ? void 0 : _a.injectedFiles) == null ? void 0 : _b.length) != null ? _c : 0;
+    const badge = this.contextBtnEl.querySelector(".ai-daily-context-btn-badge");
+    if (count > 0) {
+      this.contextBtnEl.style.display = "";
+      if (badge) badge.textContent = String(count);
+    } else {
+      this.contextBtnEl.style.display = "none";
+    }
   }
   // ── Prompt template popup ──────────────────────────────
   handleTemplateInput() {
@@ -7893,6 +7932,7 @@ ${entry}
   setSendButtonState(loading) {
     (0, import_obsidian13.setIcon)(this.sendBtn, loading ? "square" : "arrow-up");
     this.sendBtn.toggleClass("ai-daily-send-btn-stop", loading);
+    if (!loading) this.updateSendBtnActive();
     this.sendBtn.setAttribute("aria-label", loading ? "\u505C\u6B62\u751F\u6210" : "\u53D1\u9001");
     this.sendBtn.setAttribute("title", loading ? "\u505C\u6B62\u751F\u6210" : "\u53D1\u9001");
   }
@@ -8460,12 +8500,13 @@ ${filesList}` : "",
   buildScrollFabs(parent) {
     const group = parent.createDiv({ cls: "ai-daily-scroll-fabs" });
     this.scrollFabTopEl = group.createDiv({ cls: "ai-daily-scroll-fab ai-daily-scroll-fab--hidden" });
-    (0, import_obsidian13.setIcon)(this.scrollFabTopEl, "chevron-up");
+    (0, import_obsidian13.setIcon)(this.scrollFabTopEl, "arrow-up");
     this.scrollFabTopEl.addEventListener("click", () => {
       this.messagesEl.scrollTo({ top: 0, behavior: "smooth" });
     });
     this.scrollFabBottomEl = group.createDiv({ cls: "ai-daily-scroll-fab ai-daily-scroll-fab--hidden" });
-    (0, import_obsidian13.setIcon)(this.scrollFabBottomEl, "chevron-down");
+    (0, import_obsidian13.setIcon)(this.scrollFabBottomEl, "arrow-down");
+    this.scrollFabBottomEl.createDiv({ cls: "ai-daily-scroll-fab-dot" });
     this.scrollFabBottomEl.addEventListener("click", () => {
       this.userScrolledUp = false;
       this.messagesEl.scrollTo({ top: this.messagesEl.scrollHeight, behavior: "smooth" });
@@ -8703,6 +8744,7 @@ ${filesList}` : "",
     this.clearChat();
     this.harnessContext = context;
     this.updateMoreButtonVisibility();
+    this.updateContextBtn();
     if (context) {
       const welcome = this.messagesEl.querySelector(".ai-daily-welcome");
       if (welcome) welcome.remove();
@@ -9639,6 +9681,8 @@ ${m.content}`);
     this.messagesEl.empty();
     this.showWelcome();
     this.updateMoreButtonVisibility();
+    this.updateContextBtn();
+    this.updateSendBtnActive();
   }
   updateHistoryOverlayInset() {
     var _a, _b, _c, _d, _e, _f;

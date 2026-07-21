@@ -295,6 +295,7 @@ export class ChatView extends ItemView {
 	private studioEl: HTMLElement | null = null;
 	private moreBtnEl: HTMLElement | null = null;
 	private studio: WorkspaceStudio | null = null;
+	private messagesWrapEl!: HTMLElement;
 	private scrollFabTopEl: HTMLElement | null = null;
 	private scrollFabBottomEl: HTMLElement | null = null;
 
@@ -337,14 +338,14 @@ export class ChatView extends ItemView {
 
 		this.buildHeader(container);
 
-		const messagesWrap = container.createDiv({ cls: "ai-daily-messages-wrap" });
-		this.messagesEl = messagesWrap.createDiv({ cls: "ai-daily-messages" });
+		this.messagesWrapEl = container.createDiv({ cls: "ai-daily-messages-wrap" });
+		this.messagesEl = this.messagesWrapEl.createDiv({ cls: "ai-daily-messages" });
 		this.messagesEl.addEventListener("scroll", () => {
 			const el = this.messagesEl;
 			this.userScrolledUp = el.scrollHeight - el.scrollTop - el.clientHeight > 50;
 			this.updateScrollFabs();
 		});
-		this.buildScrollFabs(messagesWrap);
+		this.buildScrollFabs(this.messagesWrapEl);
 
 		this.tokenBarEl = container.createDiv({ cls: "ai-daily-token-bar" });
 		this.updateTokenBar();
@@ -1340,7 +1341,7 @@ export class ChatView extends ItemView {
 
 	private async openStudio(): Promise<void> {
 		if (this.studioEl) return;
-		this.messagesEl.style.display = "none";
+		this.messagesWrapEl.style.display = "none";
 		this.inputAreaEl.style.display = "none";
 		this.tokenBarEl.style.display = "none";
 
@@ -1369,7 +1370,7 @@ export class ChatView extends ItemView {
 		this.studio = null;
 		this.studioEl.remove();
 		this.studioEl = null;
-		this.messagesEl.style.display = "";
+		this.messagesWrapEl.style.display = "";
 		this.inputAreaEl.style.display = "";
 		this.tokenBarEl.style.display = "";
 	}

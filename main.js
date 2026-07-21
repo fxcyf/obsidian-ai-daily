@@ -6807,14 +6807,14 @@ var _ChatView = class _ChatView extends import_obsidian13.ItemView {
     container.addClass("ai-daily-chat-container");
     this.chatContainerEl = container;
     this.buildHeader(container);
-    const messagesWrap = container.createDiv({ cls: "ai-daily-messages-wrap" });
-    this.messagesEl = messagesWrap.createDiv({ cls: "ai-daily-messages" });
+    this.messagesWrapEl = container.createDiv({ cls: "ai-daily-messages-wrap" });
+    this.messagesEl = this.messagesWrapEl.createDiv({ cls: "ai-daily-messages" });
     this.messagesEl.addEventListener("scroll", () => {
       const el = this.messagesEl;
       this.userScrolledUp = el.scrollHeight - el.scrollTop - el.clientHeight > 50;
       this.updateScrollFabs();
     });
-    this.buildScrollFabs(messagesWrap);
+    this.buildScrollFabs(this.messagesWrapEl);
     this.tokenBarEl = container.createDiv({ cls: "ai-daily-token-bar" });
     this.updateTokenBar();
     this.buildInputArea(container);
@@ -7712,7 +7712,7 @@ ${entry}
   }
   async openStudio() {
     if (this.studioEl) return;
-    this.messagesEl.style.display = "none";
+    this.messagesWrapEl.style.display = "none";
     this.inputAreaEl.style.display = "none";
     this.tokenBarEl.style.display = "none";
     this.studioEl = this.chatContainerEl.createDiv({ cls: "ai-daily-studio-panel" });
@@ -7740,7 +7740,7 @@ ${entry}
     this.studio = null;
     this.studioEl.remove();
     this.studioEl = null;
-    this.messagesEl.style.display = "";
+    this.messagesWrapEl.style.display = "";
     this.inputAreaEl.style.display = "";
     this.tokenBarEl.style.display = "";
   }

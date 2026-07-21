@@ -303,7 +303,7 @@
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 22px;
 	background: var(--background-secondary);
-	padding: 2px 4px 2px 2px;
+	padding: 3px;
 }
 
 .ai-daily-input {
@@ -314,12 +314,12 @@
 	overflow-y: auto;
 	border: none;
 	border-radius: 0;
-	padding: 7px 4px 7px 0;
+	padding: 6px 4px 6px 2px;
 	font-size: 14px;
 	font-family: inherit;
 	background: transparent;
 	color: var(--text-normal);
-	min-height: 34px;
+	min-height: 32px;
 	max-height: 200px;
 	-webkit-user-select: text;
 	user-select: text;
@@ -377,16 +377,18 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	background: transparent;
+	background: none !important;
 	color: var(--text-muted);
 	border: none;
 	cursor: pointer;
 	flex-shrink: 0;
 	align-self: flex-end;
+	box-shadow: none;
 }
 
 .ai-daily-attach-btn:hover {
 	color: var(--text-normal);
+	background: none !important;
 }
 
 .ai-daily-attach-btn svg {
@@ -2847,8 +2849,8 @@
 }
 
 .ws-studio-delete-btn svg {
-	width: 17px;
-	height: 17px;
+	width: 20px;
+	height: 20px;
 }
 
 /* ── 3b: Editor sections ── */
@@ -3035,7 +3037,10 @@
 
 .ws-studio-editor-bolt {
 	display: flex;
+	align-items: center;
+	justify-content: center;
 	color: var(--interactive-accent);
+	line-height: 0;
 }
 
 .ws-studio-editor-bolt svg {

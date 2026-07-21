@@ -23,7 +23,7 @@
 - **Codex 安全模式** — 桌面端与 Proxy 均使用无需交互审批的只读 Shell；读取型 MCP（Vault、Feed、播客、微信读书）保持可用，可选择仅通过白名单创建和编辑笔记，删除与重命名始终禁用
 - **Harness 面板** — 独立的学习/工作模式管理面板，支持模式切换（学习、Inbox、工作、自由对话）、项目选择、状态摘要展示；点击「开始」自动注入对应文件内容到 Chat View 的 system prompt，AI 直接进入对应角色
 - **对话存档** — 会话自动保存为 vault 内 JSON（默认 `.ai-chat/`），「历史」中可搜索与恢复；切换到远端 Codex 时会把已有消息恢复为原生 Codex thread，并为 Claude Code/Codex 分别保存代理会话
-- **回复摘录** — 在 AI 回复中选中文字后点击图钉，仅将选中内容保存到 Inbox；未选择文字时仍保存整条回复
+- **回复摘录** — 在 AI 回复中选中文字后，可通过桌面端右键菜单或移动端长按菜单保存到 Inbox；也可点击图钉（未选择时保存整条回复）
 - **受限写入** — Codex 默认可通过 Obsidian Vault MCP 创建、追加、编辑笔记和更新 frontmatter；Shell 始终只读，删除与重命名工具不开放，也可在设置中切换为完全只读
 - **微信读书 Skill** — 启用微信读书后，Codex 可自动发现 `weread-library` skill，并通过 Vault MCP 查询书架、进度、划线、想法、统计与推荐
 - **共享 Agent 指南** — Vault 参考模板同时生成 `CLAUDE.md` 与 `AGENTS.md`，用 `CLAUDE.md` 作为 Claude Code/Codex 的共同规范单一来源

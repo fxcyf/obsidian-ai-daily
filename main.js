@@ -7308,6 +7308,23 @@ ${imageList}`;
   }
   addSaveToInboxBtn(el) {
     if (el.querySelector(".ai-daily-save-inbox-btn")) return;
+    el.addEventListener("contextmenu", (event) => {
+      const selectedText = getSelectedTextWithinElement(el, window.getSelection());
+      if (!selectedText) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const menu = new import_obsidian13.Menu();
+      menu.addItem(
+        (item) => item.setTitle("\u4FDD\u5B58\u9009\u4E2D\u5185\u5BB9\u5230 Inbox").setIcon("pin").onClick(() => this.saveTextToInbox(selectedText, true))
+      );
+      menu.addItem(
+        (item) => item.setTitle("\u590D\u5236\u9009\u4E2D\u5185\u5BB9").setIcon("copy").onClick(async () => {
+          await navigator.clipboard.writeText(selectedText);
+          new import_obsidian13.Notice("\u5DF2\u590D\u5236\u9009\u4E2D\u5185\u5BB9", 2e3);
+        })
+      );
+      menu.showAtMouseEvent(event);
+    });
     const toolbar = this.getOrCreateToolbar(el);
     const btn = toolbar.createDiv({ cls: "ai-daily-save-inbox-btn" });
     (0, import_obsidian13.setIcon)(btn, "pin");
@@ -7323,49 +7340,52 @@ ${imageList}`;
       selectedTextAtPress = "";
       const text = selectedText || ((_a = el.textContent) == null ? void 0 : _a.trim()) || "";
       if (!text) return;
-      const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-      const snippet = text.length > 200 ? text.slice(0, 200) + "\u2026" : text;
-      const entry = `- [ ] [AI \u5BF9\u8BDD] ${snippet}`;
-      const inboxPath = this.plugin.settings.harnessInboxFile;
-      const file = this.app.vault.getAbstractFileByPath(inboxPath);
-      const dateHeader = `## ${today}`;
-      if (file instanceof import_obsidian13.TFile) {
-        let content = await this.app.vault.read(file);
-        if (content.includes(dateHeader)) {
-          content = content.replace(dateHeader, `${dateHeader}
-${entry}`);
-        } else {
-          const insertPos = content.indexOf("\n## ");
-          if (insertPos !== -1) {
-            content = content.slice(0, insertPos) + `
-${dateHeader}
-${entry}
-` + content.slice(insertPos);
-          } else {
-            content += `
-
-${dateHeader}
-${entry}`;
-          }
-        }
-        await this.app.vault.modify(file, content);
-      } else {
-        await this.app.vault.create(inboxPath, `# Inbox
-
-${dateHeader}
-${entry}
-`);
-      }
+      await this.saveTextToInbox(text, Boolean(selectedText));
       btn.empty();
       (0, import_obsidian13.setIcon)(btn, "check");
       btn.addClass("ai-daily-save-inbox-done");
-      new import_obsidian13.Notice(selectedText ? "\u5DF2\u4FDD\u5B58\u9009\u4E2D\u5185\u5BB9\u5230 Inbox" : "\u5DF2\u4FDD\u5B58\u5230 Inbox", 2e3);
       setTimeout(() => {
         btn.empty();
         (0, import_obsidian13.setIcon)(btn, "pin");
         btn.removeClass("ai-daily-save-inbox-done");
       }, 2e3);
     });
+  }
+  async saveTextToInbox(text, isSelection) {
+    const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const snippet = text.length > 200 ? text.slice(0, 200) + "\u2026" : text;
+    const entry = `- [ ] [AI \u5BF9\u8BDD] ${snippet}`;
+    const inboxPath = this.plugin.settings.harnessInboxFile;
+    const file = this.app.vault.getAbstractFileByPath(inboxPath);
+    const dateHeader = `## ${today}`;
+    if (file instanceof import_obsidian13.TFile) {
+      let content = await this.app.vault.read(file);
+      if (content.includes(dateHeader)) {
+        content = content.replace(dateHeader, `${dateHeader}
+${entry}`);
+      } else {
+        const insertPos = content.indexOf("\n## ");
+        if (insertPos !== -1) {
+          content = content.slice(0, insertPos) + `
+${dateHeader}
+${entry}
+` + content.slice(insertPos);
+        } else {
+          content += `
+
+${dateHeader}
+${entry}`;
+        }
+      }
+      await this.app.vault.modify(file, content);
+    } else {
+      await this.app.vault.create(inboxPath, `# Inbox
+
+${dateHeader}
+${entry}
+`);
+    }
+    new import_obsidian13.Notice(isSelection ? "\u5DF2\u4FDD\u5B58\u9009\u4E2D\u5185\u5BB9\u5230 Inbox" : "\u5DF2\u4FDD\u5B58\u5230 Inbox", 2e3);
   }
   updateForkButtons() {
     var _a;

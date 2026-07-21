@@ -361,10 +361,14 @@
 
 .ai-daily-input:focus {
 	outline: none;
+	box-shadow: none;
+	border: none;
 }
 
 .ai-daily-input-wrap:focus-within {
 	border-color: var(--background-modifier-border);
+	outline: none;
+	box-shadow: none;
 }
 
 .ai-daily-attach-btn {

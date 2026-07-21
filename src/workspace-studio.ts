@@ -479,7 +479,7 @@ export class WorkspaceStudio {
 		const actSection = this.container.createDiv({ cls: "ws-studio-editor-section ws-studio-editor-actions" });
 		const actHead = actSection.createDiv({ cls: "ws-studio-editor-label-row ws-studio-editor-actions-head" });
 		const boltIcon = actHead.createSpan({ cls: "ws-studio-editor-bolt" });
-		boltIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>';
+		setIcon(boltIcon, "zap");
 		actHead.createSpan({
 			cls: "ws-studio-editor-label ws-studio-editor-label--accent",
 			text: `一键 Action · ${mode.actions.length}`,

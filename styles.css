@@ -401,28 +401,30 @@
 	-webkit-appearance: none;
 	appearance: none;
 	padding: 0;
-	width: 30px;
-	height: 30px;
-	border-radius: 8px;
+	width: 32px;
+	height: 32px;
+	border-radius: 10px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	background: var(--interactive-accent);
-	color: var(--text-on-accent);
+	background: var(--interactive-accent) !important;
+	color: var(--text-on-accent) !important;
 	border: none;
 	cursor: pointer;
 	flex-shrink: 0;
 	align-self: flex-end;
 }
 
-.ai-daily-send-btn svg {
-	width: 18px;
-	height: 18px;
+.ai-daily-send-btn svg,
+.ai-daily-send-btn .svg-icon {
+	width: 20px;
+	height: 20px;
 	flex-shrink: 0;
+	color: inherit;
 }
 
 .ai-daily-send-btn-stop {
-	background: var(--text-error);
+	background: var(--text-error) !important;
 }
 
 .ai-daily-send-btn-stop svg {
@@ -2848,9 +2850,10 @@
 	background: rgba(var(--mono-rgb-100), 0.1);
 }
 
-.ws-studio-delete-btn svg {
+.ws-studio-delete-btn svg.svg-icon {
 	width: 20px;
 	height: 20px;
+	stroke-width: 1.8;
 }
 
 /* ── 3b: Editor sections ── */
@@ -3043,9 +3046,10 @@
 	line-height: 0;
 }
 
-.ws-studio-editor-bolt svg {
-	width: 16px;
-	height: 16px;
+.ws-studio-editor-bolt svg,
+.ws-studio-editor-bolt .svg-icon {
+	width: 14px;
+	height: 14px;
 }
 
 .ws-studio-editor-actions-list {

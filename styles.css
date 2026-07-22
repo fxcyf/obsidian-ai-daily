@@ -2316,17 +2316,20 @@ body:not(.is-mobile) .ai-daily-input {
 	align-items: center;
 	justify-content: center;
 	border-radius: 4px;
+	box-sizing: border-box;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
 	cursor: pointer;
 	color: var(--text-muted);
 }
 
 .ai-daily-msg-toolbar > div:hover {
-	background: var(--background-modifier-hover);
+	background: var(--background-secondary);
 	color: var(--text-normal);
 }
 
 .is-mobile .ai-daily-msg-toolbar {
-	opacity: 0.6;
+	opacity: 1;
 }
 
 /* ── Workspace Studio ─────────────────────────────────── */

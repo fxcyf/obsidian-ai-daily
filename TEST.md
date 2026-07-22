@@ -74,6 +74,7 @@ npm run test:watch # 监听模式
 | `src/model-options.test.ts` | Claude Code 模型下拉选项与旧自定义模型兼容 |
 | `proxy-server/src/reasoning.test.ts` | Proxy Claude 参数与 Codex app-server config 映射 |
 | `src/chat-view.test.ts` | Chat View 头部更多菜单显示条件 |
+| `src/styles.test.ts` | 消息 pin/fork 操作按钮的不透明主题背景 |
 | `src/feeds.test.ts` | timeDecay, socialBoost, detectBursts, scoreRelevance |
 | `src/chat-session.test.ts` | newSessionId, titleFromMessages, isValidChatSession, shouldPruneToday |
 | `src/markdown-normalize.test.ts` | Codex LaTeX 分隔符转 Obsidian MathJax，代码区域保持原样 |
@@ -113,6 +114,7 @@ npm run test:watch # 监听模式
 
 ### 回复保存到 Inbox
 - [ ] 不选择文字时点击回复右上角图钉，整条回复保存到 Inbox
+- [ ] 回复右上角的图钉与分叉按钮均有清晰、不透出正文的主题背景，移动端也保持不透明
 - [ ] 选择同一条回复中的部分文字后点击图钉，仅选中文字保存到 Inbox，并显示“已保存选中内容”提示
 - [ ] 选区跨越多条消息时点击图钉，回退为保存当前整条回复
 - [ ] 在移动端长按选择回复文字后点击图钉，选区不会因点击按钮而丢失

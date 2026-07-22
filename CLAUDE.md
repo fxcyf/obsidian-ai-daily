@@ -134,6 +134,7 @@ rebase 发生冲突时：
 - `src/modes-serializer.ts` — 将 `HarnessMode[]` 序列化回 `modes.md`（YAML block + `## {id}` sections），供 Studio 编辑功能使用
 - `src/codex.ts` — Codex CLI 集成（检测、spawn、JSONL 流解析、MCP 配置管理），与 `claude-code.ts` 对称
 - 桌面端 Codex 的 Vault MCP 配置只通过本次 `codex exec` 的 `-c` 参数注入，禁止调用 `codex mcp add/remove` 修改用户全局配置
+- Claude Code 与 Codex 必须共用 `src/claude-code.ts` 的 Node/PATH 解析逻辑，确保 Electron 中的 NVM/FNM/Volta/asdf 安装可被 MCP 子进程发现
 - `src/reasoning-effort.ts` — Claude Code/Codex 桌面 CLI 推理强度参数映射；Proxy 对应映射位于 `proxy-server/src/reasoning.ts`
 - `src/settings.ts` — 插件设置（含 Feed 配置、微信读书配置、CLI 后端选择）
 - `src/feeds.ts` — 多源抓取（RSS/HN API/Reddit/GitHub Trending）、社交热度评分、时间衰减、爆发检测

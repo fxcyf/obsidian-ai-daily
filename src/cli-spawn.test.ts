@@ -1,6 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { existsSync } from "fs";
 import toolPolicy from "../agent-tool-policy.json";
-import { buildCodexMcpArgs } from "./codex";
+import { buildCodexMcpArgs, spawnCodex } from "./codex";
+import { buildEnhancedPath, findNodeExecutable } from "./claude-code";
 
 vi.mock("child_process", () => ({
 	spawn: vi.fn(() => ({
@@ -28,11 +30,12 @@ vi.mock("path", () => ({
 	basename: (p: string) => p.split("/").pop() || "",
 }));
 
-describe("Claude Code spawn args", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-	});
+beforeEach(() => {
+	vi.clearAllMocks();
+	vi.mocked(existsSync).mockReturnValue(true);
+});
 
+describe("Claude Code spawn args", () => {
 	it("builds --tools flag from policy", () => {
 		const tools = toolPolicy.claudeCode.desktopBuiltins.join(",");
 		expect(tools).toBe("Read,Grep,Glob,WebSearch,WebFetch,TodoWrite,ToolSearch");
@@ -53,6 +56,28 @@ describe("Claude Code spawn args", () => {
 });
 
 describe("Codex spawn args", () => {
+	it("uses the shared enhanced Node path when spawning the MCP server", () => {
+		const home = process.env.HOME || "";
+		const nodeBin = findNodeExecutable(home);
+		expect(nodeBin).not.toBeNull();
+		expect(buildEnhancedPath(home).split(":")).toContain(nodeBin!.replace(/\/node$/, ""));
+	});
+
+	it("fails clearly before spawning when the embedded MCP file is missing", () => {
+		vi.mocked(existsSync).mockImplementation((path) => path !== "/missing/mcp-server.mjs");
+		const onError = vi.fn();
+
+		spawnCodex("prompt", {
+			mcpConfig: {
+				mcpServerPath: "/missing/mcp-server.mjs",
+				vaultPath: "/vault",
+				knowledgeFolders: ["Wiki"],
+			},
+		}, { onText: vi.fn(), onError, onDone: vi.fn() });
+
+		expect(onError).toHaveBeenCalledWith(expect.stringContaining("Obsidian MCP server file not found"));
+	});
+
 	it("injects the Obsidian MCP server without global config writes", () => {
 		const args = buildCodexMcpArgs({
 			mcpServerPath: "/tmp/ai-daily-mcp/mcp-server.mjs",

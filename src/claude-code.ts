@@ -150,7 +150,7 @@ function resolveFnmNodeBin(home: string): string | null {
 // Build enhanced PATH for spawning (Electron's PATH is minimal)
 // ---------------------------------------------------------------------------
 
-function buildEnhancedPath(home: string): string {
+export function buildEnhancedPath(home: string): string {
 	const { existsSync } = require("fs") as typeof import("fs");
 
 	const dirs: string[] = [];
@@ -194,7 +194,7 @@ function buildEnhancedPath(home: string): string {
 // Find node executable (absolute path)
 // ---------------------------------------------------------------------------
 
-function findNodeExecutable(home: string): string | null {
+export function findNodeExecutable(home: string): string | null {
 	const { existsSync } = require("fs") as typeof import("fs");
 
 	if (cachedNodePath) return cachedNodePath;

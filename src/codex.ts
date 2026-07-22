@@ -1,5 +1,6 @@
 import { Platform } from "obsidian";
 import { ChildProcess } from "child_process";
+import { buildEnhancedPath, findNodeExecutable } from "./claude-code";
 import type { ClaudeCodeStreamCallbacks, ClaudeCodeOptions } from "./claude-code";
 import toolPolicy from "../agent-tool-policy.json";
 import { appendCodexReasoningEffortArg } from "./reasoning-effort";
@@ -90,27 +91,6 @@ export function buildCodexMcpArgs(config: {
 }
 
 // ---------------------------------------------------------------------------
-// Find node (reuse logic from claude-code but simpler)
-// ---------------------------------------------------------------------------
-
-function findNodeBin(): string {
-	const { existsSync } = require("fs") as typeof import("fs");
-	const home = process.env.HOME || process.env.USERPROFILE || "";
-
-	const candidates = [
-		`${home}/.nvm/current/bin/node`,
-		`${home}/.volta/bin/node`,
-		"/opt/homebrew/bin/node",
-		"/usr/local/bin/node",
-		"/usr/bin/node",
-	];
-	for (const p of candidates) {
-		if (existsSync(p)) return p;
-	}
-	return "node";
-}
-
-// ---------------------------------------------------------------------------
 // Spawn Codex
 // ---------------------------------------------------------------------------
 
@@ -121,8 +101,14 @@ export function spawnCodex(
 ): { abort: () => void } {
 	const { spawn } = require("child_process") as typeof import("child_process");
 	const { mcpConfig, sessionId, model, codexPermissionMode = "vault-write", codexReasoningEffort } = options;
+	const home = process.env.HOME || process.env.USERPROFILE || "";
 
-	const nodeBin = findNodeBin();
+	const nodeBin = findNodeExecutable(home) || "node";
+	const { existsSync } = require("fs") as typeof import("fs");
+	if (!existsSync(mcpConfig.mcpServerPath)) {
+		callbacks.onError(`Obsidian MCP server file not found: ${mcpConfig.mcpServerPath}. Please reload or reinstall the Cortex plugin.`);
+		return { abort: () => {} };
+	}
 	const mcpArgs = buildCodexMcpArgs({
 		mcpServerPath: mcpConfig.mcpServerPath,
 		vaultPath: mcpConfig.vaultPath,
@@ -168,10 +154,12 @@ export function spawnCodex(
 	console.log("[ai-daily] spawn codex:", codexBin, logArgs.join(" "));
 
 	let child: ChildProcess;
+	const env = { ...process.env };
+	if (home) env.PATH = buildEnhancedPath(home);
 	try {
 		child = spawn(codexBin, args, {
 			stdio: ["ignore", "pipe", "pipe"],
-			env: { ...process.env },
+			env,
 			cwd: mcpConfig.vaultPath || undefined,
 		});
 	} catch (e) {

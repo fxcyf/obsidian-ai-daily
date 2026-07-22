@@ -54,6 +54,7 @@
 4. 切换“Vault 可写”，确认额外暴露 create_note、append_to_note、edit_note、update_frontmatter。
 5. 两种模式均不得暴露 delete_note、rename_note；Feed、播客和微信读书应保持可用。
 6. 发送桌面端 Codex 消息前后运行 `codex mcp list`，确认插件没有新增、删除或覆盖全局 `obsidian-vault` 配置；本次进程仍能调用 Vault MCP。
+7. 在 Node 仅由 NVM/FNM/Volta/asdf 安装、Electron 原始 PATH 不含 Node 的环境发送消息，确认 Codex 仍能调用 `list_notes`；删除临时 MCP 文件后应显示明确的文件缺失错误。
 
 ## 运行测试
 

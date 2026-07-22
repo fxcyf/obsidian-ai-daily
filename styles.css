@@ -319,6 +319,10 @@
 	padding: 4px;
 }
 
+body:not(.is-mobile) .ai-daily-input-wrap {
+	background: transparent;
+}
+
 .ai-daily-input {
 	flex: 1;
 	min-width: 0;

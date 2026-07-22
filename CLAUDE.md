@@ -19,8 +19,8 @@
    - 如果 worktree 创建失败，直接在当前分支工作
 3. **实现功能** — 编写代码，确保可运行
 4. **构建验证** — 修改 `src/` 下源码后必须重新构建，确保产物与源码同步:
-   - `npm run build`（production → `dist/`）
-   - 同时更新根目录 `main.js`：`npx esbuild src/main.ts --bundle --external:obsidian --external:child_process --external:path --external:fs --external:http --external:net --external:os --external:crypto --format=cjs --target=es2018 --outfile=main.js`
+   - `npm run build`（production → `dist/`，并自动同步已嵌入 MCP Server 的根目录 `main.js`）
+   - 禁止再用裸 `esbuild` 覆盖根目录 `main.js`，否则会丢失 `__MCP_SERVER_CODE__` 注入
    - 将构建产物一并提交
 5. **提交代码** — `git add` + `git commit`，commit message 简洁描述改动
 6. **Merge + 测试**:
@@ -133,6 +133,7 @@ rebase 发生冲突时：
 - `src/workspace-studio.ts` — Workspace Studio 面板（Chat View 内部页面，非独立 View）：workspace 选择器 + mode 卡片 + 最近对话 + 创建/编辑/移除 workspace（modal）
 - `src/modes-serializer.ts` — 将 `HarnessMode[]` 序列化回 `modes.md`（YAML block + `## {id}` sections），供 Studio 编辑功能使用
 - `src/codex.ts` — Codex CLI 集成（检测、spawn、JSONL 流解析、MCP 配置管理），与 `claude-code.ts` 对称
+- 桌面端 Codex 的 Vault MCP 配置只通过本次 `codex exec` 的 `-c` 参数注入，禁止调用 `codex mcp add/remove` 修改用户全局配置
 - `src/reasoning-effort.ts` — Claude Code/Codex 桌面 CLI 推理强度参数映射；Proxy 对应映射位于 `proxy-server/src/reasoning.ts`
 - `src/settings.ts` — 插件设置（含 Feed 配置、微信读书配置、CLI 后端选择）
 - `src/feeds.ts` — 多源抓取（RSS/HN API/Reddit/GitHub Trending）、社交热度评分、时间衰减、爆发检测

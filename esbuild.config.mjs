@@ -29,7 +29,8 @@ if (production) {
 			rmSync(mcpOutfile);
 			console.log("  mcp-server embedded");
 		} catch (e) {
-			console.warn("  mcp-server build skipped:", e.message);
+			console.error("  mcp-server build failed:", e.message);
+			throw e;
 		}
 	}
 }
@@ -50,6 +51,7 @@ const buildOptions = {
 
 if (production) {
 	await esbuild.build(buildOptions);
+	cpSync(`${DIST_DIR}/main.js`, "main.js");
 
 	// Copy static assets
 	for (const file of ["manifest.json", "styles.css"]) {

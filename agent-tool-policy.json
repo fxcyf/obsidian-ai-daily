@@ -1,6 +1,6 @@
 {
 	"claudeCode": {
-		"desktopBuiltins": ["Read", "Grep", "Glob", "WebSearch", "WebFetch", "TodoWrite"],
+		"desktopBuiltins": ["Read", "Grep", "Glob", "WebSearch", "WebFetch", "TodoWrite", "ToolSearch"],
 		"proxyBuiltins": ["WebSearch", "WebFetch", "TodoWrite", "ToolSearch"]
 	},
 	"codex": {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import toolPolicy from "../agent-tool-policy.json";
+import { buildCodexMcpArgs } from "./codex";
 
 vi.mock("child_process", () => ({
 	spawn: vi.fn(() => ({
@@ -34,7 +35,7 @@ describe("Claude Code spawn args", () => {
 
 	it("builds --tools flag from policy", () => {
 		const tools = toolPolicy.claudeCode.desktopBuiltins.join(",");
-		expect(tools).toBe("Read,Grep,Glob,WebSearch,WebFetch,TodoWrite");
+		expect(tools).toBe("Read,Grep,Glob,WebSearch,WebFetch,TodoWrite,ToolSearch");
 	});
 
 	it("desktopBuiltins never includes dangerous tools", () => {
@@ -52,6 +53,35 @@ describe("Claude Code spawn args", () => {
 });
 
 describe("Codex spawn args", () => {
+	it("injects the Obsidian MCP server without global config writes", () => {
+		const args = buildCodexMcpArgs({
+			mcpServerPath: "/tmp/ai-daily-mcp/mcp-server.mjs",
+			vaultPath: "/vault/Personal Notes",
+			knowledgeFolders: ["Raw", "Wiki"],
+			wereadApiKey: "secret-key",
+			nodeBin: "/usr/bin/node",
+		});
+		const configValues = args.filter((_, index) => index % 2 === 1);
+
+		expect(args.filter((arg) => arg === "-c")).toHaveLength(6);
+		expect(configValues).toContain('mcp_servers.obsidian-vault.enabled=true');
+		expect(configValues).toContain('mcp_servers.obsidian-vault.command="/usr/bin/node"');
+		expect(configValues).toContain('mcp_servers.obsidian-vault.args=["/tmp/ai-daily-mcp/mcp-server.mjs"]');
+		expect(configValues).toContain('mcp_servers.obsidian-vault.env.VAULT_PATH="/vault/Personal Notes"');
+		expect(configValues).toContain('mcp_servers.obsidian-vault.env.KNOWLEDGE_FOLDERS="Raw,Wiki"');
+		expect(configValues).toContain('mcp_servers.obsidian-vault.env.WEREAD_API_KEY="secret-key"');
+	});
+
+	it("omits the WeRead secret when it is not configured", () => {
+		const args = buildCodexMcpArgs({
+			mcpServerPath: "/tmp/mcp.mjs",
+			vaultPath: "/vault",
+			knowledgeFolders: ["Wiki"],
+			nodeBin: "node",
+		});
+		expect(args.join(" ")).not.toContain("WEREAD_API_KEY");
+	});
+
 	it("vault-write mode includes read + write tools", () => {
 		const enabledTools = [
 			...toolPolicy.codex.readOnlyMcp,

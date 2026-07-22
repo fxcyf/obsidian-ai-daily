@@ -1,6 +1,5 @@
 import { Platform } from "obsidian";
 import { ChildProcess } from "child_process";
-import { getMcpServerPath } from "./claude-code";
 import type { ClaudeCodeStreamCallbacks, ClaudeCodeOptions } from "./claude-code";
 import toolPolicy from "../agent-tool-policy.json";
 import { appendCodexReasoningEffortArg } from "./reasoning-effort";
@@ -66,38 +65,28 @@ export function getCodexPath(): string {
 }
 
 // ---------------------------------------------------------------------------
-// Ensure MCP server is registered in Codex config
+// Build process-scoped MCP configuration for Codex
 // ---------------------------------------------------------------------------
 
-export function ensureCodexMcp(config: {
+export function buildCodexMcpArgs(config: {
 	mcpServerPath: string;
 	vaultPath: string;
 	knowledgeFolders: string[];
 	wereadApiKey?: string;
 	nodeBin: string;
-}): void {
-	const { execFileSync } = require("child_process") as typeof import("child_process");
-	const codexBin = getCodexPath();
-
-	try {
-		execFileSync(codexBin, ["mcp", "remove", "obsidian-vault"], {
-			timeout: 5000,
-			stdio: "ignore",
-		});
-	} catch { /* may not exist yet */ }
-
+}): string[] {
+	const prefix = "mcp_servers.obsidian-vault";
 	const args = [
-		"mcp", "add",
-		"--env", `VAULT_PATH=${config.vaultPath}`,
-		"--env", `KNOWLEDGE_FOLDERS=${config.knowledgeFolders.join(",")}`,
+		"-c", `${prefix}.enabled=true`,
+		"-c", `${prefix}.command=${JSON.stringify(config.nodeBin)}`,
+		"-c", `${prefix}.args=${JSON.stringify([config.mcpServerPath])}`,
+		"-c", `${prefix}.env.VAULT_PATH=${JSON.stringify(config.vaultPath)}`,
+		"-c", `${prefix}.env.KNOWLEDGE_FOLDERS=${JSON.stringify(config.knowledgeFolders.join(","))}`,
 	];
 	if (config.wereadApiKey) {
-		args.push("--env", `WEREAD_API_KEY=${config.wereadApiKey}`);
+		args.push("-c", `${prefix}.env.WEREAD_API_KEY=${JSON.stringify(config.wereadApiKey)}`);
 	}
-	args.push("obsidian-vault", "--", config.nodeBin, config.mcpServerPath);
-
-	execFileSync(codexBin, args, { timeout: 10000, stdio: "ignore" });
-	console.log("[ai-daily] Codex MCP server registered");
+	return args;
 }
 
 // ---------------------------------------------------------------------------
@@ -134,7 +123,7 @@ export function spawnCodex(
 	const { mcpConfig, sessionId, model, codexPermissionMode = "vault-write", codexReasoningEffort } = options;
 
 	const nodeBin = findNodeBin();
-	ensureCodexMcp({
+	const mcpArgs = buildCodexMcpArgs({
 		mcpServerPath: mcpConfig.mcpServerPath,
 		vaultPath: mcpConfig.vaultPath,
 		knowledgeFolders: mcpConfig.knowledgeFolders,
@@ -160,6 +149,7 @@ export function spawnCodex(
 		? [...toolPolicy.codex.readOnlyMcp, ...toolPolicy.codex.vaultWriteMcp]
 		: toolPolicy.codex.readOnlyMcp;
 	args.push(
+		...mcpArgs,
 		"-c", 'approval_policy="never"',
 		"-c", 'sandbox_mode="read-only"',
 		"-c", `mcp_servers.obsidian-vault.enabled_tools=${JSON.stringify(enabledTools)}`,
@@ -172,7 +162,10 @@ export function spawnCodex(
 	appendCodexReasoningEffortArg(args, codexReasoningEffort);
 
 	const codexBin = getCodexPath();
-	console.log("[ai-daily] spawn codex:", codexBin, args.filter(a => a !== prompt).join(" "));
+	const logArgs = args
+		.filter(a => a !== prompt)
+		.map(a => a.includes(".env.WEREAD_API_KEY=") ? "mcp_servers.obsidian-vault.env.WEREAD_API_KEY=***" : a);
+	console.log("[ai-daily] spawn codex:", codexBin, logArgs.join(" "));
 
 	let child: ChildProcess;
 	try {

@@ -178,6 +178,7 @@ npm run test:watch # 监听模式
 - [ ] 切换不同主题（Minimal/Things/Blue Topaz），UI 颜色正常
 - [ ] 桌面端聊天输入框的“回复…”文本行背景透明；下方附件与发送按钮区域仍使用主题背景色
 - [ ] 桌面端输入框按 `Enter` 插入换行，按 `Cmd+Enter` / `Ctrl+Enter` 发送消息
+- [ ] 使用中文输入法或打开 `/` 模板、`@` 引用菜单时，`Cmd+Enter` / `Ctrl+Enter` 仍能发送
 - [ ] 桌面端输入多行文字时输入框逐行增高，达到 200px 后改为内部滚动
 - [ ] Feed badge 颜色使用 CSS 变量而非硬编码
 

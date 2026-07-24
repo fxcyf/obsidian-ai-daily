@@ -28,13 +28,13 @@ describe("shouldSendChatInput", () => {
 		})).toBe(false);
 	});
 
-	it("does not send while an IME composition is active", () => {
+	it("still sends an explicit shortcut while an IME composition is active", () => {
 		expect(shouldSendChatInput({
 			key: "Enter",
 			ctrlKey: true,
 			metaKey: false,
 			isComposing: true,
-		})).toBe(false);
+		})).toBe(true);
 	});
 });
 

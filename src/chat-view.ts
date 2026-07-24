@@ -67,7 +67,6 @@ type ChatInputKey = Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "isCompo
 
 export function shouldSendChatInput(event: ChatInputKey): boolean {
 	return event.key === "Enter"
-		&& !event.isComposing
 		&& (event.metaKey || event.ctrlKey);
 }
 
@@ -542,6 +541,14 @@ export class ChatView extends ItemView {
 			this.handleMentionInput();
 		});
 		this.inputEl.addEventListener("keydown", (e) => {
+			// An explicit desktop send shortcut takes priority over IME state and
+			// open template/mention popups. Plain Enter still selects popup items
+			// or inserts a newline.
+			if (!Platform.isMobile && shouldSendChatInput(e)) {
+				e.preventDefault();
+				this.handleSend();
+				return;
+			}
 			if (this.mentionPopupEl) {
 				if (e.key === "Escape") {
 					e.preventDefault();
@@ -581,10 +588,6 @@ export class ChatView extends ItemView {
 						return;
 					}
 				}
-			}
-			if (!Platform.isMobile && shouldSendChatInput(e)) {
-				e.preventDefault();
-				this.handleSend();
 			}
 		});
 		this.inputEl.addEventListener("paste", (e) => {

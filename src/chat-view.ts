@@ -63,6 +63,23 @@ export function shouldShowChatMoreButton(state: {
 	return state.messageCount > 0 || state.hasSession || state.hasHarnessContext;
 }
 
+type ChatInputKey = Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "isComposing">;
+
+export function shouldSendChatInput(event: ChatInputKey): boolean {
+	return event.key === "Enter"
+		&& !event.isComposing
+		&& (event.metaKey || event.ctrlKey);
+}
+
+export function getChatInputHeight(
+	scrollHeight: number,
+	isExpanded: boolean,
+	viewportHeight: number
+): number {
+	const maxHeight = isExpanded ? viewportHeight * 0.5 : 200;
+	return Math.min(scrollHeight, maxHeight);
+}
+
 type TextSelection = Pick<Selection, "anchorNode" | "focusNode" | "isCollapsed" | "toString">;
 
 export function getSelectedTextWithinElement(
@@ -494,7 +511,7 @@ export class ChatView extends ItemView {
 		const toolbarSpacer = toolbar.createDiv({ cls: "ai-daily-input-toolbar-spacer" });
 
 		this.sendHintEl = toolbar.createDiv({ cls: "ai-daily-send-hint" });
-		this.sendHintEl.createSpan({ text: "⏎ 发送" });
+		this.sendHintEl.createSpan({ text: "⌘/Ctrl + Enter 发送" });
 
 		this.sendBtn = toolbar.createEl("button", {
 			cls: "ai-daily-send-btn",
@@ -565,12 +582,9 @@ export class ChatView extends ItemView {
 					}
 				}
 			}
-			if (e.key === "Enter") {
-				if (Platform.isMobile) return;
-				if (!e.shiftKey) {
-					e.preventDefault();
-					this.handleSend();
-				}
+			if (!Platform.isMobile && shouldSendChatInput(e)) {
+				e.preventDefault();
+				this.handleSend();
 			}
 		});
 		this.inputEl.addEventListener("paste", (e) => {
@@ -1519,8 +1533,14 @@ export class ChatView extends ItemView {
 	private autoResizeInput(): void {
 		this.inputEl.style.height = "auto";
 		const isExpanded = this.inputEl.classList.contains("expanded");
-		const maxH = isExpanded ? window.innerHeight * 0.5 : 200;
-		this.inputEl.style.height = Math.min(this.inputEl.scrollHeight, maxH) + "px";
+		const inputHeight = getChatInputHeight(
+			this.inputEl.scrollHeight,
+			isExpanded,
+			window.innerHeight
+		);
+		this.inputEl.style.height = inputHeight + "px";
+		this.inputEl.style.overflowY =
+			this.inputEl.scrollHeight > inputHeight ? "auto" : "hidden";
 		const overflowing = this.inputEl.scrollHeight > 200;
 		this.expandBtn.classList.toggle("visible", overflowing);
 		if (!overflowing) {

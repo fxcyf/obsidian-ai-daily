@@ -1,5 +1,54 @@
 import { describe, expect, it } from "vitest";
-import { getSelectedTextWithinElement, shouldShowChatMoreButton } from "./chat-view";
+import {
+	getChatInputHeight,
+	getSelectedTextWithinElement,
+	shouldSendChatInput,
+	shouldShowChatMoreButton,
+} from "./chat-view";
+
+describe("shouldSendChatInput", () => {
+	it("only sends desktop input with Cmd/Ctrl+Enter", () => {
+		expect(shouldSendChatInput({
+			key: "Enter",
+			ctrlKey: true,
+			metaKey: false,
+			isComposing: false,
+		})).toBe(true);
+		expect(shouldSendChatInput({
+			key: "Enter",
+			ctrlKey: false,
+			metaKey: true,
+			isComposing: false,
+		})).toBe(true);
+		expect(shouldSendChatInput({
+			key: "Enter",
+			ctrlKey: false,
+			metaKey: false,
+			isComposing: false,
+		})).toBe(false);
+	});
+
+	it("does not send while an IME composition is active", () => {
+		expect(shouldSendChatInput({
+			key: "Enter",
+			ctrlKey: true,
+			metaKey: false,
+			isComposing: true,
+		})).toBe(false);
+	});
+});
+
+describe("getChatInputHeight", () => {
+	it("grows with multiline content up to the normal height limit", () => {
+		expect(getChatInputHeight(32, false, 900)).toBe(32);
+		expect(getChatInputHeight(96, false, 900)).toBe(96);
+		expect(getChatInputHeight(260, false, 900)).toBe(200);
+	});
+
+	it("uses half the viewport as the expanded height limit", () => {
+		expect(getChatInputHeight(600, true, 900)).toBe(450);
+	});
+});
 
 describe("shouldShowChatMoreButton", () => {
 	it("shows menu for a harness context before the first message is sent", () => {

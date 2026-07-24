@@ -10,7 +10,7 @@
 - ✅ [真流式输出](feature-real-streaming.md) — SSE 真流 + 三态降级（auto/real/typewriter/off）
 - ✅ [UX 打磨](feature-ux-polish.md) — Prompt 模板、笔记引用可点击、代码块复制
 - ✅ [信息 Feed 流](feature-info-feed.md) — RSS/HN/Reddit/GitHub 多源聚合 + AI 策展
-- ✅ [Enter 键行为修复](bug-enter-key-behavior.md) — PC Enter 发送，手机 Enter 换行
+- ✅ [Enter 键行为修复](bug-enter-key-behavior.md) — PC Cmd/Ctrl+Enter 发送，Enter 换行
 - ✅ [新对话按钮重叠修复](bug-new-chat-button-overlap.md) — 按钮和消息 block 重合
 - ✅ [Agentic Vault 操作](feature-agentic-vault.md) — 笔记 CRUD、批量整理、知识蒸馏
 - ✅ [本地文件处理](feature-local-file-image.md) — 本地图片识别、base64 编码

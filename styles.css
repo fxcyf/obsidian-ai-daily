@@ -320,11 +320,12 @@
 }
 
 .ai-daily-input {
-	flex: 1;
+	flex: 0 0 auto;
+	width: 100%;
 	min-width: 0;
 	box-sizing: border-box;
 	resize: none;
-	overflow-y: auto;
+	overflow-y: hidden;
 	border: none;
 	border-radius: 0;
 	padding: 8px 10px 4px;

@@ -677,7 +677,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 			const method = event.method as string | undefined;
 			const requestId = event.id as number | undefined;
 			const params = (event.params as Record<string, unknown> | undefined) || {};
-			console.log(`[Proxy] Task ${taskId} codex event=${method || `response:${requestId ?? "unknown"}`}`);
+			console.log(`[Proxy] Task ${taskId} codex event=${method || `response:${requestId ?? "unknown"}`}`, method === "error" || method === "turn/failed" || event.error ? JSON.stringify(event).slice(0, 500) : "");
 
 			if (event.error) {
 				const error = event.error as Record<string, unknown>;
@@ -788,10 +788,16 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 			} else if (method === "error" || method === "turn/failed") {
 				const error = params.error as Record<string, unknown> | undefined;
 				const msg = (params.message as string) || (error?.message as string) || "Codex error";
-				task.status = "error";
-				task.error = msg;
-				sendEvent({ type: "error", message: msg });
-				proc.stdin?.end();
+				const willRetry = params.willRetry === true;
+				if (willRetry) {
+					console.log(`[Proxy] Task ${taskId} codex retryable error, waiting for retry: ${msg}`);
+					sendEvent({ type: "status", message: `Codex 重连中: ${msg}` });
+				} else {
+					task.status = "error";
+					task.error = msg;
+					sendEvent({ type: "error", message: msg });
+					proc.stdin?.end();
+				}
 			}
 		});
 	} else {

@@ -2,6 +2,7 @@ export const CLAUDE_CODE_MODELS: ReadonlyArray<readonly [string, string]> = [
 	["", "CLI 默认（推荐）"],
 	["sonnet", "Sonnet（最新）"],
 	["opus", "Opus（最新）"],
+	["claude-opus-5", "Claude Opus 5"],
 	["haiku", "Haiku（最新）"],
 	["claude-sonnet-5", "Claude Sonnet 5"],
 	["claude-sonnet-4-6", "Claude Sonnet 4.6"],

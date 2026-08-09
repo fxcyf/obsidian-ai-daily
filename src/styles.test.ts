@@ -35,7 +35,10 @@ describe("welcome workspace card styles", () => {
 			/\.ai-daily-welcome-card-panel\s*\{[^}]*padding:\s*6px 14px 12px;/s
 		);
 		expect(styles).toMatch(
-			/\.ai-daily-welcome-chip\s*\{[^}]*font-size:\s*12\.5px;[^}]*padding:\s*6px 10px;[^}]*min-height:\s*32px;/s
+			/\.ai-daily-welcome-chip\s*\{[^}]*font-size:\s*11\.5px;[^}]*padding:\s*4px 8px;[^}]*min-height:\s*28px;/s
+		);
+		expect(styles).toMatch(
+			/\.ai-daily-welcome-chip-bolt svg\s*\{[^}]*width:\s*12px;[^}]*height:\s*12px;/s
 		);
 	});
 });

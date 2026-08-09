@@ -19,13 +19,15 @@ describe("message action toolbar styles", () => {
 });
 
 describe("welcome workspace card styles", () => {
-	it("keeps the accordion header stable across button interaction states", () => {
+	it("keeps the accordion header stable across interaction states", () => {
 		expect(styles).toMatch(
-			/\.ai-daily-welcome-card-head\s*\{[^}]*box-shadow:\s*none;[^}]*transition:\s*none;[^}]*-webkit-tap-highlight-color:\s*transparent;/s
+			/\.ai-daily-welcome-card-head\s*\{[^}]*background:\s*transparent !important;[^}]*box-shadow:\s*none;[^}]*transition:\s*none;[^}]*-webkit-tap-highlight-color:\s*transparent;/s
 		);
 		expect(styles).toMatch(
-			/\.ai-daily-welcome-card-head:hover,\s*\.ai-daily-welcome-card-head:active,\s*\.ai-daily-welcome-card-head:focus\s*\{[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;[^}]*transform:\s*none;[^}]*outline:\s*none;/s
+			/\.ai-daily-welcome-card-head:hover,\s*\.ai-daily-welcome-card-head:active,\s*\.ai-daily-welcome-card-head:focus\s*\{[^}]*background:\s*transparent !important;[^}]*box-shadow:\s*none;[^}]*transform:\s*none;[^}]*outline:\s*none;/s
 		);
+		const expandedCardRule = styles.match(/\.ai-daily-welcome-card--expanded\s*\{([^}]*)\}/s)?.[1] ?? "";
+		expect(expandedCardRule).not.toMatch(/background/);
 	});
 
 	it("separates the compact mode buttons from the header", () => {

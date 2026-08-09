@@ -71,6 +71,12 @@ export function getNextExpandedWorkspace(
 	return currentWorkspace === clickedWorkspace ? null : clickedWorkspace;
 }
 
+export function shouldToggleWorkspaceFromKey(
+	event: Pick<KeyboardEvent, "key">
+): boolean {
+	return event.key === "Enter" || event.key === " ";
+}
+
 type ChatInputKey = Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "isComposing">;
 
 export function shouldSendChatInput(event: ChatInputKey): boolean {
@@ -1489,7 +1495,7 @@ export class ChatView extends ItemView {
 			let expandedWorkspace: string | null = null;
 			const cards = new Map<string, {
 				card: HTMLElement;
-				header: HTMLButtonElement;
+				header: HTMLElement;
 				panel: HTMLElement;
 			}>();
 
@@ -1508,12 +1514,15 @@ export class ChatView extends ItemView {
 				const { project, modes } = entry;
 				const card = container.createDiv({ cls: "ai-daily-welcome-card" });
 
-				// The header is the accordion trigger; every workspace starts collapsed.
+				// Avoid a native button here: Obsidian themes can force their own dark
+				// focus/active background. The role and keyboard handler retain the
+				// same accessible accordion behavior without inheriting button styles.
 				const panelId = `ai-daily-welcome-workspace-${accordionId}-${projectIndex}`;
-				const cardHead = card.createEl("button", {
+				const cardHead = card.createDiv({
 					cls: "ai-daily-welcome-card-head",
 					attr: {
-						type: "button",
+						role: "button",
+						tabindex: "0",
 						"aria-expanded": "false",
 						"aria-controls": panelId,
 					},
@@ -1580,10 +1589,16 @@ export class ChatView extends ItemView {
 					}
 				}
 
-				cards.set(project.name, { card, header: cardHead, panel });
-				cardHead.addEventListener("click", () => {
+				const toggleWorkspace = () => {
 					expandedWorkspace = getNextExpandedWorkspace(expandedWorkspace, project.name);
 					syncExpandedWorkspace();
+				};
+				cards.set(project.name, { card, header: cardHead, panel });
+				cardHead.addEventListener("click", toggleWorkspace);
+				cardHead.addEventListener("keydown", (event) => {
+					if (!shouldToggleWorkspaceFromKey(event)) return;
+					event.preventDefault();
+					toggleWorkspace();
 				});
 			}
 		});

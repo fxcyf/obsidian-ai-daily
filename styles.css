@@ -720,22 +720,22 @@ body:not(.is-mobile) .ai-daily-input {
 	box-sizing: border-box;
 	border: 0;
 	border-radius: 0;
-	background: transparent;
+	background: transparent !important;
 	color: inherit;
 	font-family: inherit;
 	text-align: left;
 	cursor: pointer;
-	-webkit-appearance: none;
-	appearance: none;
 	box-shadow: none;
 	transition: none;
 	-webkit-tap-highlight-color: transparent;
+	touch-action: manipulation;
+	user-select: none;
 }
 
 .ai-daily-welcome-card-head:hover,
 .ai-daily-welcome-card-head:active,
 .ai-daily-welcome-card-head:focus {
-	background: transparent;
+	background: transparent !important;
 	box-shadow: none;
 	transform: none;
 	outline: none;

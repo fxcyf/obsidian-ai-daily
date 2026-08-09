@@ -5,6 +5,7 @@ import {
 	getSelectedTextWithinElement,
 	shouldSendChatInput,
 	shouldShowChatMoreButton,
+	shouldToggleWorkspaceFromKey,
 } from "./chat-view";
 
 describe("getNextExpandedWorkspace", () => {
@@ -18,6 +19,14 @@ describe("getNextExpandedWorkspace", () => {
 
 	it("switches directly to a different workspace", () => {
 		expect(getNextExpandedWorkspace("alpha", "beta")).toBe("beta");
+	});
+});
+
+describe("shouldToggleWorkspaceFromKey", () => {
+	it("supports the native button activation keys", () => {
+		expect(shouldToggleWorkspaceFromKey({ key: "Enter" })).toBe(true);
+		expect(shouldToggleWorkspaceFromKey({ key: " " })).toBe(true);
+		expect(shouldToggleWorkspaceFromKey({ key: "Escape" })).toBe(false);
 	});
 });
 

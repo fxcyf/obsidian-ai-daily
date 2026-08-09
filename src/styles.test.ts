@@ -35,7 +35,7 @@ describe("welcome workspace card styles", () => {
 			/\.ai-daily-welcome-card-panel\s*\{[^}]*padding:\s*6px 14px 12px;/s
 		);
 		expect(styles).toMatch(
-			/\.ai-daily-welcome-chip\s*\{[^}]*font-size:\s*11\.5px;[^}]*padding:\s*4px 8px;[^}]*min-height:\s*28px;/s
+			/\.ai-daily-welcome-chips > button\.ai-daily-welcome-chip\s*\{[^}]*font-size:\s*11\.5px !important;[^}]*padding:\s*4px 8px !important;[^}]*height:\s*28px !important;[^}]*min-height:\s*28px !important;[^}]*max-height:\s*28px !important;/s
 		);
 		expect(styles).toMatch(
 			/\.ai-daily-welcome-chip-bolt svg\s*\{[^}]*width:\s*12px;[^}]*height:\s*12px;/s

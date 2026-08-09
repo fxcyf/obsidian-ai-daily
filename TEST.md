@@ -93,7 +93,7 @@ npm run test:watch # 监听模式
 - [ ] 已展开一个 Workspace 时点击另一个，前一个自动收起且后一个展开
 - [ ] 点击展开区域中的模式或 Action，仍能正常开始对应对话
 - [ ] 点击 Workspace Header 时没有瞬时背景、阴影或缩放闪烁；深色主题下展开前后 Header 均保持卡片灰色背景
-- [ ] 展开后 Header 与模式按钮之间保留清晰间距，模式及 Action 按钮高度约 28px、padding 紧凑
+- [ ] 展开后 Header 与模式按钮之间保留清晰间距，模式及 Action 按钮实际高度固定为 28px，不受 Obsidian 原生按钮 padding/min-height 覆盖
 
 ### 对话头部菜单
 - [ ] 欢迎页初始状态下右上角“更多”按钮隐藏

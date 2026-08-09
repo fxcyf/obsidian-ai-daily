@@ -271,6 +271,12 @@
 - 折叠按钮同步维护 `aria-expanded` / `aria-controls`，并保留模式及一键 Action 的原有启动行为。
 - **经验**：异步读取多组 Workspace 配置时应先按源顺序聚合结果再渲染，避免读取完成时间改变卡片顺序；互斥展开状态只保留一个 workspace 标识即可。
 
+## 2026-08-09 — Workspace 折叠卡片交互样式修复 (`94bda7c`)
+
+- **问题**：Workspace Header 使用原生 `button` 后会继承 Obsidian 主题的 focus/active 阴影、背景和触屏高亮，点击折叠时出现瞬时闪烁；展开内容与 Header 也缺少视觉间距。
+- **解决**：显式统一 Header 的 hover/active/focus 状态并保留 `focus-visible` 键盘轮廓；移除卡片背景过渡，展开区增加顶部间距，并将模式/Action 按钮收紧到 32px。
+- **经验**：将容器改成原生按钮时，需要同时归一化主题样式、浏览器 appearance 与触屏 tap highlight，不能只覆盖默认背景。
+
 ## 待解决
 
 - [ ] 测试覆盖：目前无任何测试文件

@@ -48,6 +48,7 @@ import {
 
 export const VIEW_TYPE = "ai-daily-chat";
 const STREAM_MARKDOWN_RENDER_INTERVAL_MS = 120;
+let welcomeWorkspaceAccordionSequence = 0;
 
 interface ChatMessage {
 	role: "user" | "assistant";
@@ -61,6 +62,13 @@ export function shouldShowChatMoreButton(state: {
 	hasHarnessContext: boolean;
 }): boolean {
 	return state.messageCount > 0 || state.hasSession || state.hasHarnessContext;
+}
+
+export function getNextExpandedWorkspace(
+	currentWorkspace: string | null,
+	clickedWorkspace: string
+): string | null {
+	return currentWorkspace === clickedWorkspace ? null : clickedWorkspace;
 }
 
 type ChatInputKey = Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "isComposing">;
@@ -1450,17 +1458,26 @@ export class ChatView extends ItemView {
 
 	private buildWelcomeHarness(welcomeEl: HTMLElement): void {
 		const container = welcomeEl.createDiv({ cls: "ai-daily-welcome-harness" });
+		const accordionId = ++welcomeWorkspaceAccordionSequence;
 
-		loadProjectIndex(
+		void loadProjectIndex(
 			this.app.vault,
 			this.app.metadataCache,
 			this.plugin.settings.harnessProjectsFolder,
-		).then((index) => {
+		).then(async (index) => {
 			if (!index || index.projects.length === 0) return;
 
 			const projectsFolder = this.plugin.settings.harnessProjectsFolder;
 			const activeProjects = index.projects.filter((p) => p.status !== "archive");
 			const archivedCount = index.projects.length - activeProjects.length;
+			const projectModes = await Promise.all(activeProjects.map(async (project) => {
+				const modesPath = `${projectsFolder}/${project.name}/modes.md`;
+				const modesFile = this.app.vault.getAbstractFileByPath(modesPath);
+				if (!(modesFile instanceof TFile)) return null;
+				const content = await this.app.vault.read(modesFile);
+				const modes = parseModesFromContent(content);
+				return modes.length > 0 ? { project, modes } : null;
+			}));
 
 			// Section header
 			const secHead = container.createDiv({ cls: "ai-daily-welcome-sec-head" });
@@ -1469,65 +1486,104 @@ export class ChatView extends ItemView {
 			if (archivedCount > 0) countParts.push(`${archivedCount} 已归档`);
 			secHead.createSpan({ cls: "ai-daily-welcome-sec-count", text: countParts.join(" · ") });
 
-			for (const project of activeProjects) {
-				const modesPath = `${projectsFolder}/${project.name}/modes.md`;
-				const modesFile = this.app.vault.getAbstractFileByPath(modesPath);
-				if (!(modesFile instanceof TFile)) continue;
+			let expandedWorkspace: string | null = null;
+			const cards = new Map<string, {
+				card: HTMLElement;
+				header: HTMLButtonElement;
+				panel: HTMLElement;
+			}>();
 
-				void this.app.vault.read(modesFile).then((content) => {
-					const modes = parseModesFromContent(content);
-					if (modes.length === 0) return;
+			const syncExpandedWorkspace = () => {
+				for (const [workspace, elements] of cards) {
+					const expanded = workspace === expandedWorkspace;
+					elements.card.toggleClass("ai-daily-welcome-card--expanded", expanded);
+					elements.header.setAttribute("aria-expanded", String(expanded));
+					elements.panel.hidden = !expanded;
+				}
+			};
 
-					const card = container.createDiv({ cls: "ai-daily-welcome-card" });
+			for (let projectIndex = 0; projectIndex < projectModes.length; projectIndex++) {
+				const entry = projectModes[projectIndex];
+				if (!entry) continue;
+				const { project, modes } = entry;
+				const card = container.createDiv({ cls: "ai-daily-welcome-card" });
 
-					// Card header
-					const cardHead = card.createDiv({ cls: "ai-daily-welcome-card-head" });
-					const cardIcon = cardHead.createSpan({ cls: "ai-daily-welcome-card-icon" });
-					setIcon(cardIcon, "folder");
-					cardHead.createSpan({ cls: "ai-daily-welcome-card-name", text: project.name });
+				// The header is the accordion trigger; every workspace starts collapsed.
+				const panelId = `ai-daily-welcome-workspace-${accordionId}-${projectIndex}`;
+				const cardHead = card.createEl("button", {
+					cls: "ai-daily-welcome-card-head",
+					attr: {
+						type: "button",
+						"aria-expanded": "false",
+						"aria-controls": panelId,
+					},
+				});
+				const cardIcon = cardHead.createSpan({ cls: "ai-daily-welcome-card-icon" });
+				setIcon(cardIcon, "folder");
+				cardHead.createSpan({ cls: "ai-daily-welcome-card-name", text: project.name });
+				cardHead.createSpan({
+					cls: "ai-daily-welcome-card-summary",
+					text: `${modes.length} 模式`,
+				});
 
-					// Active dot for the currently active workspace
-					if (project.name === index.activeProject) {
-						cardHead.createSpan({ cls: "ai-daily-welcome-card-dot" });
-					}
+				// Active dot for the currently active workspace
+				if (project.name === index.activeProject) {
+					cardHead.createSpan({
+						cls: "ai-daily-welcome-card-dot",
+						attr: { title: "当前工作区", "aria-label": "当前工作区" },
+					});
+				}
 
-					// Chips: modes as plain chips, actions as bolt chips
-					const chips = card.createDiv({ cls: "ai-daily-welcome-chips" });
-					for (const mode of modes) {
-						const resolveContext = () => {
-							const resolveVars = (p: string) => {
-								let r = p;
-								r = r.replace(/\{active_project\}/g, project.name);
-								r = r.replace(/\{active_work_context\}/g, index.activeWorkContext || "");
-								return r;
-							};
-							const resolvedFiles = resolveFileEntries(mode.files, this.app, resolveVars);
-							return { mode, injectedFiles: resolvedFiles, workspace: project.name } as HarnessContext;
+				const chevron = cardHead.createSpan({ cls: "ai-daily-welcome-card-chevron" });
+				setIcon(chevron, "chevron-down");
+
+				// Chips: modes as plain chips, actions as bolt chips
+				const panel = card.createDiv({
+					cls: "ai-daily-welcome-card-panel",
+					attr: { id: panelId },
+				});
+				panel.hidden = true;
+				const chips = panel.createDiv({ cls: "ai-daily-welcome-chips" });
+				for (const mode of modes) {
+					const resolveContext = () => {
+						const resolveVars = (p: string) => {
+							let r = p;
+							r = r.replace(/\{active_project\}/g, project.name);
+							r = r.replace(/\{active_work_context\}/g, index.activeWorkContext || "");
+							return r;
 						};
+						const resolvedFiles = resolveFileEntries(mode.files, this.app, resolveVars);
+						return { mode, injectedFiles: resolvedFiles, workspace: project.name } as HarnessContext;
+					};
 
-						const boltSvg = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>';
+					const boltSvg = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>';
 
-						if (mode.actions.length >= 1) {
-							for (const action of mode.actions) {
-								const chip = chips.createEl("button", { cls: "ai-daily-welcome-chip ai-daily-welcome-chip--action" });
-								const bolt = chip.createSpan({ cls: "ai-daily-welcome-chip-bolt" });
-								bolt.innerHTML = boltSvg;
-								chip.createSpan({ text: action.label });
-								chip.addEventListener("click", () => {
-									const ctx = resolveContext();
-									this.startWithContext(ctx);
-									this.inputEl.value = action.prompt;
-									void this.handleSend();
-								});
-							}
-						} else {
-							const chip = chips.createEl("button", { cls: "ai-daily-welcome-chip" });
-							chip.createSpan({ text: mode.label });
+					if (mode.actions.length >= 1) {
+						for (const action of mode.actions) {
+							const chip = chips.createEl("button", { cls: "ai-daily-welcome-chip ai-daily-welcome-chip--action" });
+							const bolt = chip.createSpan({ cls: "ai-daily-welcome-chip-bolt" });
+							bolt.innerHTML = boltSvg;
+							chip.createSpan({ text: action.label });
 							chip.addEventListener("click", () => {
-								this.startWithContext(resolveContext());
+								const ctx = resolveContext();
+								this.startWithContext(ctx);
+								this.inputEl.value = action.prompt;
+								void this.handleSend();
 							});
 						}
+					} else {
+						const chip = chips.createEl("button", { cls: "ai-daily-welcome-chip" });
+						chip.createSpan({ text: mode.label });
+						chip.addEventListener("click", () => {
+							this.startWithContext(resolveContext());
+						});
 					}
+				}
+
+				cards.set(project.name, { card, header: cardHead, panel });
+				cardHead.addEventListener("click", () => {
+					expandedWorkspace = getNextExpandedWorkspace(expandedWorkspace, project.name);
+					syncExpandedWorkspace();
 				});
 			}
 		});

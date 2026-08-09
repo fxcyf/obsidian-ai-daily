@@ -74,7 +74,7 @@ npm run test:watch # 监听模式
 | `src/reasoning-effort.test.ts` | 桌面 Claude/Codex 推理强度 CLI 参数 |
 | `src/model-options.test.ts` | Claude Code 模型下拉选项与旧自定义模型兼容 |
 | `proxy-server/src/reasoning.test.ts` | Proxy Claude 参数与 Codex app-server config 映射 |
-| `src/chat-view.test.ts` | Chat View 头部更多菜单显示条件 |
+| `src/chat-view.test.ts` | Chat View 头部更多菜单显示条件、欢迎页 Workspace 单开折叠状态切换 |
 | `src/styles.test.ts` | 消息 pin/fork 操作按钮的不透明主题背景 |
 | `src/feeds.test.ts` | timeDecay, socialBoost, detectBursts, scoreRelevance |
 | `src/chat-session.test.ts` | newSessionId, titleFromMessages, isValidChatSession, shouldPruneToday |
@@ -86,6 +86,12 @@ npm run test:watch # 监听模式
 | `src/auto-tagger.test.ts` | parseTaggingResponse（JSON 解析、容错、字段过滤） |
 
 ## 手动测试清单（UX 功能）
+
+### 欢迎页 Workspace 折叠
+- [ ] 首次进入欢迎页时，所有 Workspace 卡片均为折叠状态，仅显示名称和模式数量
+- [ ] 点击一个 Workspace 后显示其模式与 Action，再次点击同一 Workspace 后收起
+- [ ] 已展开一个 Workspace 时点击另一个，前一个自动收起且后一个展开
+- [ ] 点击展开区域中的模式或 Action，仍能正常开始对应对话
 
 ### 对话头部菜单
 - [ ] 欢迎页初始状态下右上角“更多”按钮隐藏

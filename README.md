@@ -24,7 +24,7 @@
 - **Codex 安全模式** — 桌面端与 Proxy 均使用无需交互审批的只读 Shell；读取型 MCP（Vault、Feed、播客、微信读书）保持可用，可选择仅通过白名单创建和编辑笔记，删除与重命名始终禁用
 - **无侵入 MCP 配置** — 桌面端 Codex 仅通过当前子进程的 `-c` 参数注入 Vault MCP，不修改或覆盖用户的全局 Codex 配置
 - **桌面环境兼容** — Claude Code 与 Codex 共享 NVM/FNM/Volta/asdf Node 路径解析，避免 Electron 精简 PATH 导致 Vault MCP 启动失败
-- **Harness 面板** — 独立的学习/工作模式管理面板，支持模式切换（学习、Inbox、工作、自由对话）、项目选择、状态摘要展示；点击「开始」自动注入对应文件内容到 Chat View 的 system prompt，AI 直接进入对应角色
+- **Workspace 工作区** — 欢迎页以单开折叠卡片展示工作区，默认全部收起；展开后可选择模式或一键 Action，并自动把对应文件内容注入 Chat View 的 system prompt
 - **对话存档** — 会话自动保存为 vault 内 JSON（默认 `.ai-chat/`），「历史」中可搜索与恢复；切换到远端 Codex 时会把已有消息恢复为原生 Codex thread，并为 Claude Code/Codex 分别保存代理会话
 - **回复摘录** — 在 AI 回复中选中文字后点击图钉，仅将选中内容保存到 Inbox；未选择文字时仍保存整条回复
 - **受限写入** — Codex 默认可通过 Obsidian Vault MCP 创建、追加、编辑笔记和更新 frontmatter；Shell 始终只读，删除与重命名工具不开放，也可在设置中切换为完全只读

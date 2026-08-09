@@ -1,10 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
 	getChatInputHeight,
+	getNextExpandedWorkspace,
 	getSelectedTextWithinElement,
 	shouldSendChatInput,
 	shouldShowChatMoreButton,
 } from "./chat-view";
+
+describe("getNextExpandedWorkspace", () => {
+	it("opens a collapsed workspace", () => {
+		expect(getNextExpandedWorkspace(null, "alpha")).toBe("alpha");
+	});
+
+	it("closes the current workspace when it is clicked again", () => {
+		expect(getNextExpandedWorkspace("alpha", "alpha")).toBeNull();
+	});
+
+	it("switches directly to a different workspace", () => {
+		expect(getNextExpandedWorkspace("alpha", "beta")).toBe("beta");
+	});
+});
 
 describe("shouldSendChatInput", () => {
 	it("only sends desktop input with Cmd/Ctrl+Enter", () => {

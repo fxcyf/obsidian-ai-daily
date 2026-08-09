@@ -703,11 +703,10 @@ body:not(.is-mobile) .ai-daily-input {
 	border-radius: 13px;
 	margin-bottom: 10px;
 	overflow: hidden;
-	transition: border-color 0.14s, background 0.14s;
+	transition: border-color 0.14s;
 }
 
 .ai-daily-welcome-card--expanded {
-	background: rgba(var(--mono-rgb-100), 0.08);
 	border-color: color-mix(in srgb, var(--interactive-accent) 24%, transparent);
 }
 
@@ -726,10 +725,20 @@ body:not(.is-mobile) .ai-daily-input {
 	font-family: inherit;
 	text-align: left;
 	cursor: pointer;
+	-webkit-appearance: none;
+	appearance: none;
+	box-shadow: none;
+	transition: none;
+	-webkit-tap-highlight-color: transparent;
 }
 
-.ai-daily-welcome-card-head:hover {
-	background: rgba(var(--mono-rgb-100), 0.04);
+.ai-daily-welcome-card-head:hover,
+.ai-daily-welcome-card-head:active,
+.ai-daily-welcome-card-head:focus {
+	background: transparent;
+	box-shadow: none;
+	transform: none;
+	outline: none;
 }
 
 .ai-daily-welcome-card-head:focus-visible {
@@ -791,7 +800,7 @@ body:not(.is-mobile) .ai-daily-input {
 }
 
 .ai-daily-welcome-card-panel {
-	padding: 0 14px 13px;
+	padding: 6px 14px 12px;
 }
 
 .ai-daily-welcome-card-panel[hidden] {
@@ -809,17 +818,17 @@ body:not(.is-mobile) .ai-daily-input {
 .ai-daily-welcome-chip {
 	display: inline-flex;
 	align-items: center;
-	gap: 7px;
-	font-size: 13.5px;
+	gap: 5px;
+	font-size: 12.5px;
 	color: var(--text-normal);
 	background: rgba(var(--mono-rgb-100), 0.08);
 	border: 1px solid rgba(var(--mono-rgb-100), 0.1);
-	padding: 8px 13px;
-	border-radius: 10px;
+	padding: 6px 10px;
+	border-radius: 8px;
 	cursor: pointer;
 	font-family: inherit;
 	transition: border-color 0.14s, background 0.14s;
-	min-height: 38px;
+	min-height: 32px;
 	box-sizing: border-box;
 }
 
@@ -849,8 +858,8 @@ body:not(.is-mobile) .ai-daily-input {
 }
 
 .ai-daily-welcome-chip-bolt svg {
-	width: 15px;
-	height: 15px;
+	width: 13px;
+	height: 13px;
 }
 
 /* ── Bottom toolbar ── */

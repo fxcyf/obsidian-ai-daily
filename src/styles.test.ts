@@ -17,3 +17,23 @@ describe("message action toolbar styles", () => {
 		);
 	});
 });
+
+describe("welcome workspace card styles", () => {
+	it("keeps the accordion header stable across button interaction states", () => {
+		expect(styles).toMatch(
+			/\.ai-daily-welcome-card-head\s*\{[^}]*box-shadow:\s*none;[^}]*transition:\s*none;[^}]*-webkit-tap-highlight-color:\s*transparent;/s
+		);
+		expect(styles).toMatch(
+			/\.ai-daily-welcome-card-head:hover,\s*\.ai-daily-welcome-card-head:active,\s*\.ai-daily-welcome-card-head:focus\s*\{[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;[^}]*transform:\s*none;[^}]*outline:\s*none;/s
+		);
+	});
+
+	it("separates the compact mode buttons from the header", () => {
+		expect(styles).toMatch(
+			/\.ai-daily-welcome-card-panel\s*\{[^}]*padding:\s*6px 14px 12px;/s
+		);
+		expect(styles).toMatch(
+			/\.ai-daily-welcome-chip\s*\{[^}]*font-size:\s*12\.5px;[^}]*padding:\s*6px 10px;[^}]*min-height:\s*32px;/s
+		);
+	});
+});

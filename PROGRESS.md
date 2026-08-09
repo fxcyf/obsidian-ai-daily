@@ -288,6 +288,12 @@
 - 模式与快捷 Action 按钮从 32px 收紧到 28px，padding 调整为 `4px 8px`，并同步缩小字号、内部间距和闪电图标。
 - **经验**：高密度快捷入口应一起调整高度、文字、图标和组间距；只减外层 padding 容易被默认行高或图标尺寸抵消。
 
+## 2026-08-09 — 模式按钮原生样式覆盖修复 (`57c60e1`)
+
+- **问题**：按钮尺寸虽已写成 28px，但单 class 选择器会输给 Obsidian 的 `button:not(...)` 等原生规则，实际 padding 和高度看起来没有变化。
+- **解决**：使用区域限定的原生按钮选择器，并显式锁定 `height/min-height/max-height`、padding、字号和 appearance；主题色 Action 描边继续通过 `var(--interactive-accent)` 派生。
+- **经验**：宿主应用的原生控件规则可能同时覆盖 min-height、padding 与 appearance；紧凑尺寸需要用足够 specificity 固定完整盒模型，而不只是改一个 padding。
+
 ## 待解决
 
 - [ ] 测试覆盖：目前无任何测试文件

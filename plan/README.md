@@ -20,6 +20,10 @@
 
 - ⬜ [语义搜索与智能检索](feature-semantic-search.md) — Embedding 向量索引、混合检索、GraphRAG、Context Engineering
 
+## 架构调研
+
+- ✅ [Obsidian Headless 云端 Agent 部署调研](headless-cloud-deployment-research.md) — 官方能力、同步风险、API 替代成本、备份与上线方案
+
 ## 长期 — 知识库自组织
 
 - ⬜ [LLM 驱动自组织](feature-llm-driven-org.md) — Auto-tagging/linking、健康报告、多模型后端、智能回顾

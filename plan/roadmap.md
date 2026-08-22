@@ -83,6 +83,18 @@
 
 ---
 
+## 专项：Headless 云端 Agent
+
+> 使用官方 Obsidian Headless 同步云端 Vault，移动端保留 Cortex UI，云端运行 Proxy、CLI Agent 和文件系统 MCP，以消除个人笔记本在线依赖。
+
+| 功能 | 状态 | 来源 | 说明 |
+|------|------|------|------|
+| 官方能力、风险与 API 替代调研 | ✅ | [Headless 云端部署调研](headless-cloud-deployment-research.md) | Headless 仅负责 Sync/Publish，不运行社区插件；文件系统 fallback 已覆盖 15/16 endpoint |
+| 云端 FilesystemBackend 加固 | ⬜ | [Headless 云端部署调研](headless-cloud-deployment-research.md) #5-6 | 完整 YAML、图片、原子写入、路径安全、link index |
+| Headless Sync 生产部署 | ⬜ | [Headless 云端部署调研](headless-cloud-deployment-research.md) #7-10 | 版本固定、systemd、watchdog、备份、Actions 迁移 |
+
+---
+
 ## 专项计划索引
 
 | 文档 | 主题 | 状态 |
@@ -104,6 +116,7 @@
 | [feature-workspace-studio.md](feature-workspace-studio.md) | Workspace Studio（对话归属 Workspace + Studio View） | ⬜ |
 | [feature-workspace-dashboard.md](feature-workspace-dashboard.md) | Workspace Dashboard 扩展（路线图 + 知识图谱，Phase 3-4） | ⬜ |
 | [feature-pdf-image-input.md](feature-pdf-image-input.md) | PDF/图片输入（粘贴/拖拽多模态输入） | ⬜ |
+| [headless-cloud-deployment-research.md](headless-cloud-deployment-research.md) | Obsidian Headless 云端 Agent 架构、风险、API 替代与实施评估 | ✅ 调研完成 |
 
 ---
 

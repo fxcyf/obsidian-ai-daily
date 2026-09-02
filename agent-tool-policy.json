@@ -9,7 +9,7 @@
 			"podcast_search", "podcast_episodes", "podcast_transcript",
 			"fetch_feeds", "fetch_rss", "weread_api"
 		],
-		"vaultWriteMcp": ["create_note", "append_to_note", "edit_note", "update_frontmatter"],
+		"vaultWriteMcp": ["create_note", "append_to_note", "edit_note", "update_frontmatter", "rename_note"],
 		"alwaysDisabledMcp": ["delete_note"]
 	}
 }

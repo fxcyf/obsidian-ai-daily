@@ -32,6 +32,14 @@
 4. 在同一聊天中从 Claude Proxy 切换到 Codex，确认不会把 Claude session ID 传给 Codex；首次切换应依次执行 `thread/start`、`thread/inject_items`、`turn/start`，不能把历史拼接进首轮 prompt。
 5. 在历史 assistant 消息中放入一个随机标记，当前问题只询问该标记；确认 Codex 能从原生 thread 历史准确返回它。
 
+## 本地 Codex 历史交接
+
+1. 先通过 Proxy 完成至少一轮对话，并让 assistant 回复一个随机标记。
+2. 保持当前聊天不变，关闭 Proxy 或切到可用的桌面端本地 Codex，再询问该随机标记。
+3. 确认本地 Codex 能引用切换前的消息，且首轮启动的是新的本地 Codex thread，没有尝试 resume Proxy thread ID。
+4. 再发一条续问，确认只 resume 第 3 步创建的本地 thread，历史交接块不会重复注入。
+5. 从「历史」重新打开一条仅含 Proxy 消息的旧会话，切到本地 Codex 重复上述检查。
+
 ## Codex Proxy Obsidian MCP
 
 1. 通过远端 Codex Proxy 发送“调用 list_notes 列出 vault 根目录文件（folder 传空字符串）”。
@@ -75,6 +83,7 @@ npm run test:watch # 监听模式
 | `src/model-options.test.ts` | Claude Code 模型下拉选项与旧自定义模型兼容 |
 | `proxy-server/src/reasoning.test.ts` | Proxy Claude 参数与 Codex app-server config 映射 |
 | `src/chat-view.test.ts` | Chat View 头部更多菜单显示条件、欢迎页 Workspace 单开折叠状态切换 |
+| `src/conversation-context.test.ts` | 切换后端时提取前序消息并为不支持原生注入的后端生成带角色的首轮历史交接 |
 | `src/styles.test.ts` | 消息 pin/fork 操作按钮的不透明主题背景 |
 | `src/feeds.test.ts` | timeDecay, socialBoost, detectBursts, scoreRelevance |
 | `src/chat-session.test.ts` | newSessionId, titleFromMessages, isValidChatSession, shouldPruneToday |

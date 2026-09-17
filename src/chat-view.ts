@@ -31,6 +31,7 @@ import { normalizeMarkdownForObsidian } from "./markdown-normalize";
 import { distillConversation, prepareDistillation, prepareHealthFix, type HealthCheckResult } from "./knowledge-agent";
 import { isClaudeCodeAvailable, spawnClaudeCode, getMcpServerPath, seedClaudeCodeSession, type UndoData } from "./claude-code";
 import { isCodexAvailable, spawnCodex } from "./codex";
+import { buildTextSeededFirstTurn, historyBeforeCurrentTurn } from "./conversation-context";
 import {
 	newSessionId,
 	titleFromMessages,
@@ -1948,10 +1949,7 @@ export class ChatView extends ItemView {
 				const isFirstProxyMessage = !this.client!.getProxySessionId(proxyBackend);
 				let seedHistory: { role: string; content: string }[] | undefined;
 				if (isFirstProxyMessage && this.messages.length > 1) {
-					seedHistory = this.messages.slice(0, -1).map((m) => ({
-						role: m.role,
-						content: m.content,
-					}));
+					seedHistory = historyBeforeCurrentTurn(this.messages);
 				}
 				let proxyMessage = userMessage;
 				if (isFirstProxyMessage && this.harnessContext) {
@@ -2072,10 +2070,7 @@ export class ChatView extends ItemView {
 		if (isFirstMessage && this.messages.length > 1) {
 			const adapter = this.app.vault.adapter as { basePath?: string };
 			const vaultAbsPath = adapter.basePath || "";
-			const history = this.messages.slice(0, -1).map((m) => ({
-				role: m.role,
-				content: m.content,
-			}));
+			const history = historyBeforeCurrentTurn(this.messages);
 			try {
 				const seededId = await seedClaudeCodeSession(history, vaultAbsPath, this.plugin.settings.claudeCodeModel);
 				this.claudeCodeSessionId = seededId;
@@ -2123,7 +2118,6 @@ export class ChatView extends ItemView {
 		if (isFirstMessage) {
 			const adapter = this.app.vault.adapter as { basePath?: string };
 			const vaultAbsPath = adapter.basePath || "";
-
 			const systemPromptText = buildSystemPrompt({
 				mode: "codex",
 				knowledgeFolders: this.plugin.settings.knowledgeFolders,
@@ -2136,7 +2130,15 @@ export class ChatView extends ItemView {
 				vaultAbsPath,
 			});
 
-			prompt = systemPromptText + "\n\n" + (attachedContent ? attachedContent + "\n\n" : "") + text;
+			const currentMessage = [
+				attachedContent,
+				text + ChatView.buildImagePrompt(imagePaths),
+			].filter(Boolean).join("\n\n");
+			prompt = buildTextSeededFirstTurn({
+				systemPrompt: systemPromptText,
+				history: historyBeforeCurrentTurn(this.messages),
+				currentMessage,
+			});
 		} else if (attachedContent) {
 			prompt = attachedContent + "\n\n" + text;
 		}

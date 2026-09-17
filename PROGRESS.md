@@ -300,6 +300,12 @@
 - **解决**：以插件 UI 消息为跨 backend 的历史真源，统一提取当前轮之前的消息；本地 Codex 在新 thread 首轮接收带角色边界的历史交接，后续仅 resume 新的本地 thread，远端与本地 session ID 继续隔离。
 - **经验**：原生 session ID 只在同一 backend 与运行位置内有效。跨 backend 恢复不能只清空旧 ID，还必须为目标 backend 明确定义一次性的历史交接策略，并用测试覆盖首轮与续轮边界。
 
+## 2026-09-17 — Backend 上下文初始化策略集中化 (`61c87e3`)
+
+- **问题**：虽然已抽取历史消息和文本交接格式，但本地 Claude、本地 Codex 与 Proxy 的首次初始化判断仍分散在 Chat View，新增 backend 仍可能漏掉历史 seed。
+- **解决**：在 `src/conversation-context.ts` 建立穷举 backend 注册表和初始化策略表，并用同一个 planner 决定 `client-managed`、`native-seed`、`text-seed` 或 `resume`；所有 CLI 路径均改为消费该计划。
+- **经验**：共享 helper 只能减少重复，不能保证新分支接入。关键跨实现约束应做成穷举 registry、判别式计划和精确测试，使遗漏同时触发类型错误与测试失败。
+
 ## 待解决
 
 - [ ] 测试覆盖：目前无任何测试文件

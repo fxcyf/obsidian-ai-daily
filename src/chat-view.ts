@@ -32,7 +32,6 @@ import { distillConversation, prepareDistillation, prepareHealthFix, type Health
 import { isClaudeCodeAvailable, spawnClaudeCode, getMcpServerPath, seedClaudeCodeSession, type UndoData } from "./claude-code";
 import { isCodexAvailable, spawnCodex } from "./codex";
 import {
-	buildTextSeededFirstTurn,
 	planBackendContext,
 	resolveCliConversationBackend,
 } from "./conversation-context";
@@ -2130,11 +2129,12 @@ export class ChatView extends ItemView {
 		const attachedContent = await this.consumeAttachedFiles();
 		const imagePaths = ChatView.saveImagesToDisk(images);
 		let prompt = text + ChatView.buildImagePrompt(imagePaths);
+		let systemPrompt: string | undefined;
 
-		if (contextPlan.mode === "text-seed") {
+		if (contextPlan.mode === "native-seed") {
 			const adapter = this.app.vault.adapter as { basePath?: string };
 			const vaultAbsPath = adapter.basePath || "";
-			const systemPromptText = buildSystemPrompt({
+			systemPrompt = buildSystemPrompt({
 				mode: "codex",
 				knowledgeFolders: this.plugin.settings.knowledgeFolders,
 				distillTargetFolder: this.plugin.settings.distillTargetFolder,
@@ -2146,20 +2146,17 @@ export class ChatView extends ItemView {
 				vaultAbsPath,
 			});
 
-			const currentMessage = [
-				attachedContent,
-				text + ChatView.buildImagePrompt(imagePaths),
-			].filter(Boolean).join("\n\n");
-			prompt = buildTextSeededFirstTurn({
-				systemPrompt: systemPromptText,
-				history: contextPlan.history,
-				currentMessage,
-			});
-		} else if (attachedContent) {
-			prompt = attachedContent + "\n\n" + text;
 		}
+		if (attachedContent) prompt = attachedContent + "\n\n" + prompt;
 
-		this.runCodexStream(prompt, this.getMcpConfig(), this.codexSessionId, this.plugin.settings.codexModel);
+		this.runCodexStream(
+			prompt,
+			this.getMcpConfig(),
+			this.codexSessionId,
+			this.plugin.settings.codexModel,
+			contextPlan.mode === "native-seed" ? contextPlan.history : undefined,
+			systemPrompt,
+		);
 	}
 
 	private readImageCount = 0;
@@ -2825,7 +2822,14 @@ export class ChatView extends ItemView {
 		this.claudeCodeAbort = handle.abort;
 	}
 
-	private runCodexStream(prompt: string, mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[]; wereadApiKey?: string }, sessionId?: string, model?: string): void {
+	private runCodexStream(
+		prompt: string,
+		mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[]; wereadApiKey?: string },
+		sessionId?: string,
+		model?: string,
+		history?: { role: "user" | "assistant"; content: string }[],
+		systemPrompt?: string,
+	): void {
 		const loadingEl = this.messagesEl.createDiv({ cls: "ai-daily-loading" });
 		loadingEl.createSpan({ text: "Codex 处理中" });
 		const dotsEl = loadingEl.createSpan({ cls: "ai-daily-loading-dots" });
@@ -2883,6 +2887,8 @@ export class ChatView extends ItemView {
 		const handle = spawnCodex(prompt, {
 			mcpConfig,
 			sessionId,
+			history,
+			systemPrompt,
 			model,
 			codexPermissionMode: this.plugin.settings.codexPermissionMode,
 			codexReasoningEffort: this.plugin.settings.codexReasoningEffort,

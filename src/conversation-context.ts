@@ -12,7 +12,7 @@ export const CONVERSATION_BACKENDS = [
 ] as const;
 
 export type ConversationBackend = typeof CONVERSATION_BACKENDS[number];
-export type BackendContextStrategy = "client-managed" | "native-seed" | "text-seed";
+export type BackendContextStrategy = "client-managed" | "native-seed";
 
 /**
  * Exhaustive registry: adding a backend requires choosing how it receives
@@ -21,7 +21,7 @@ export type BackendContextStrategy = "client-managed" | "native-seed" | "text-se
 export const BACKEND_CONTEXT_STRATEGIES = {
 	api: "client-managed",
 	"local-claude-code": "native-seed",
-	"local-codex": "text-seed",
+	"local-codex": "native-seed",
 	"proxy-claude-code": "native-seed",
 	"proxy-codex": "native-seed",
 } as const satisfies Record<ConversationBackend, BackendContextStrategy>;
@@ -70,34 +70,4 @@ export function planBackendContext(options: {
 		mode: BACKEND_CONTEXT_STRATEGIES[options.backend],
 		history: historyBeforeCurrentTurn(options.messages),
 	};
-}
-
-/**
- * Fallback for backends that cannot accept native role-preserving history.
- * JSON keeps role and message boundaries unambiguous when embedded in a prompt.
- */
-export function buildTextHistoryHandoff(
-	history: ConversationContextMessage[],
-): string {
-	if (history.length === 0) return "";
-
-	return [
-		"## 历史对话上下文",
-		"以下 JSON 是本次切换后端前已经发生的对话。请将它作为连续会话历史，回答当前新消息；不要声称看不到前文，也不要复述整段历史。",
-		"```json",
-		JSON.stringify(history, null, 2),
-		"```",
-	].join("\n");
-}
-
-export function buildTextSeededFirstTurn(options: {
-	systemPrompt: string;
-	history: ConversationContextMessage[];
-	currentMessage: string;
-}): string {
-	return [
-		options.systemPrompt,
-		buildTextHistoryHandoff(options.history),
-		options.currentMessage,
-	].filter(Boolean).join("\n\n");
 }

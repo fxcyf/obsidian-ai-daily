@@ -25,7 +25,7 @@
 - **无侵入 MCP 配置** — 桌面端 Codex 仅通过当前子进程的 `-c` 参数注入 Vault MCP，不修改或覆盖用户的全局 Codex 配置
 - **桌面环境兼容** — Claude Code 与 Codex 共享 NVM/FNM/Volta/asdf Node 路径解析，避免 Electron 精简 PATH 导致 Vault MCP 启动失败
 - **Workspace 工作区** — 欢迎页以单开折叠卡片展示工作区，默认全部收起；展开后可选择模式或一键 Action，并自动把对应文件内容注入 Chat View 的 system prompt
-- **对话存档与后端切换** — 会话自动保存为 vault 内 JSON（默认 `.ai-chat/`），「历史」中可搜索与恢复；插件会把已有消息交接给新后端，再分别续接本地 Claude Code、本地 Codex、Proxy Claude Code 和 Proxy Codex 的原生 session，远端与本地 session ID 不混用
+- **对话存档与后端切换** — 会话自动保存为 vault 内 JSON（默认 `.ai-chat/`），「历史」中可搜索与恢复；插件会把已有 user/assistant 消息原生注入新的本地或 Proxy Codex thread，再分别续接各 runtime 的原生 session，远端与本地 session ID 不混用
 - **回复摘录** — 在 AI 回复中选中文字后点击图钉，仅将选中内容保存到 Inbox；未选择文字时仍保存整条回复
 - **受限写入** — Codex 默认可通过 Obsidian Vault MCP 创建、追加、编辑笔记和更新 frontmatter；Shell 始终只读，删除与重命名工具不开放，也可在设置中切换为完全只读
 - **微信读书 Skill** — 启用微信读书后，Codex 可自动发现 `weread-library` skill，并通过 Vault MCP 查询书架、进度、划线、想法、统计与推荐

@@ -1,11 +1,20 @@
 import { Platform } from "obsidian";
-import { ChildProcess } from "child_process";
+import { ChildProcess, spawn } from "child_process";
 import { buildEnhancedPath, findNodeExecutable } from "./claude-code";
 import type { ClaudeCodeStreamCallbacks, ClaudeCodeOptions } from "./claude-code";
 import toolPolicy from "../agent-tool-policy.json";
-import { appendCodexReasoningEffortArg } from "./reasoning-effort";
+import {
+	appServerRequest,
+	buildCodexHistoryItems,
+	buildCodexThreadOpenRequest,
+} from "./codex-app-server";
 
 let cachedCodexPath: string | false | null = null;
+
+export interface CodexOptions extends ClaudeCodeOptions {
+	history?: { role: "user" | "assistant"; content: string }[];
+	systemPrompt?: string;
+}
 
 function getCodexSearchPaths(home: string): string[] {
 	return [
@@ -90,17 +99,38 @@ export function buildCodexMcpArgs(config: {
 	return args;
 }
 
+export function buildCodexAppServerArgs(
+	mcpArgs: string[],
+	enabledTools: string[],
+): string[] {
+	return [
+		"app-server", "--stdio",
+		...mcpArgs,
+		"-c", 'approval_policy="never"',
+		"-c", 'sandbox_mode="read-only"',
+		"-c", `mcp_servers.obsidian-vault.enabled_tools=${JSON.stringify(enabledTools)}`,
+		"-c", 'mcp_servers.obsidian-vault.default_tools_approval_mode="approve"',
+	];
+}
+
 // ---------------------------------------------------------------------------
 // Spawn Codex
 // ---------------------------------------------------------------------------
 
 export function spawnCodex(
 	prompt: string,
-	options: ClaudeCodeOptions,
+	options: CodexOptions,
 	callbacks: ClaudeCodeStreamCallbacks
 ): { abort: () => void } {
-	const { spawn } = require("child_process") as typeof import("child_process");
-	const { mcpConfig, sessionId, model, codexPermissionMode = "vault-write", codexReasoningEffort } = options;
+	const {
+		mcpConfig,
+		sessionId,
+		history = [],
+		systemPrompt,
+		model,
+		codexPermissionMode = "vault-write",
+		codexReasoningEffort,
+	} = options;
 	const home = process.env.HOME || process.env.USERPROFILE || "";
 
 	const nodeBin = findNodeExecutable(home) || "node";
@@ -117,39 +147,13 @@ export function spawnCodex(
 		nodeBin,
 	});
 
-	let args: string[];
-	if (sessionId) {
-		args = [
-			"exec", "resume", sessionId, prompt,
-			"--json",
-			"--skip-git-repo-check",
-		];
-	} else {
-		args = [
-			"exec", prompt,
-			"--json",
-			"--skip-git-repo-check",
-		];
-	}
 	const enabledTools = codexPermissionMode === "vault-write"
 		? [...toolPolicy.codex.readOnlyMcp, ...toolPolicy.codex.vaultWriteMcp]
 		: toolPolicy.codex.readOnlyMcp;
-	args.push(
-		...mcpArgs,
-		"-c", 'approval_policy="never"',
-		"-c", 'sandbox_mode="read-only"',
-		"-c", `mcp_servers.obsidian-vault.enabled_tools=${JSON.stringify(enabledTools)}`,
-		"-c", 'mcp_servers.obsidian-vault.default_tools_approval_mode="approve"',
-	);
-
-	if (model) {
-		args.push("-m", model);
-	}
-	appendCodexReasoningEffortArg(args, codexReasoningEffort);
+	const args = buildCodexAppServerArgs(mcpArgs, enabledTools);
 
 	const codexBin = getCodexPath();
 	const logArgs = args
-		.filter(a => a !== prompt)
 		.map(a => a.includes(".env.WEREAD_API_KEY=") ? "mcp_servers.obsidian-vault.env.WEREAD_API_KEY=***" : a);
 	console.log("[ai-daily] spawn codex:", codexBin, logArgs.join(" "));
 
@@ -158,7 +162,7 @@ export function spawnCodex(
 	if (home) env.PATH = buildEnhancedPath(home);
 	try {
 		child = spawn(codexBin, args, {
-			stdio: ["ignore", "pipe", "pipe"],
+			stdio: ["pipe", "pipe", "pipe"],
 			env,
 			cwd: mcpConfig.vaultPath || undefined,
 		});
@@ -169,6 +173,29 @@ export function spawnCodex(
 
 	let fullText = "";
 	let buffer = "";
+	let threadId = sessionId || "";
+	let finished = false;
+	let failed = false;
+
+	const writeRequest = (id: number, method: string, params: Record<string, unknown>) => {
+		child.stdin?.write(appServerRequest(id, method, params));
+	};
+	const startTurn = () => writeRequest(4, "turn/start", {
+		threadId,
+		input: [{ type: "text", text: prompt }],
+	});
+	const fail = (message: string) => {
+		if (failed || finished) return;
+		failed = true;
+		callbacks.onError(message);
+		child.stdin?.end();
+	};
+	const complete = () => {
+		if (failed || finished) return;
+		finished = true;
+		callbacks.onDone(fullText);
+		child.stdin?.end();
+	};
 
 	child.stdout?.on("data", (chunk: Buffer) => {
 		buffer += chunk.toString("utf-8");
@@ -179,11 +206,64 @@ export function spawnCodex(
 		for (const line of lines) {
 			if (!line.trim()) continue;
 			try {
-				const event = JSON.parse(line);
-				handleCodexStreamEvent(event, callbacks, (t) => { fullText += t; });
+				const event = JSON.parse(line) as Record<string, unknown>;
+				const method = event.method as string | undefined;
+				const requestId = event.id as number | undefined;
+				const params = (event.params as Record<string, unknown> | undefined) || {};
+
+				if (event.error) {
+					const error = event.error as Record<string, unknown>;
+					fail((error.message as string) || "Codex app-server error");
+				} else if (requestId === 1 && event.result) {
+					const openRequest = buildCodexThreadOpenRequest({
+						sessionId,
+						cwd: mcpConfig.vaultPath || home || "/",
+						model,
+						reasoningEffort: codexReasoningEffort,
+						systemPrompt,
+					});
+					writeRequest(2, openRequest.method, openRequest.params);
+				} else if (requestId === 2 && event.result) {
+					const result = event.result as Record<string, unknown>;
+					const thread = result.thread as Record<string, unknown> | undefined;
+					threadId = (thread?.id as string) || sessionId || threadId;
+					if (!threadId) {
+						fail("Codex app-server did not return a thread ID");
+						continue;
+					}
+					callbacks.onSessionId?.(threadId);
+					const historyItems = sessionId ? [] : buildCodexHistoryItems(history);
+					if (historyItems.length > 0) {
+						writeRequest(3, "thread/inject_items", { threadId, items: historyItems });
+					} else {
+						startTurn();
+					}
+				} else if (requestId === 3 && event.result) {
+					startTurn();
+				} else if (method === "item/agentMessage/delta") {
+					const delta = (params.delta as string) || "";
+					if (delta) {
+						fullText += delta;
+						callbacks.onText(delta);
+					}
+				} else if (method === "item/started") {
+					handleAppServerItem(params, callbacks, "running");
+				} else if (method === "item/completed") {
+					handleAppServerItem(params, callbacks, "done");
+				} else if (method === "item/reasoning/summaryTextDelta" || method === "item/reasoning/textDelta") {
+					const delta = (params.delta as string) || "";
+					if (delta) callbacks.onThinking?.(delta);
+				} else if (method === "turn/completed") {
+					complete();
+				} else if (method === "mcpServer/elicitation/request" && requestId !== undefined) {
+					child.stdin?.write(JSON.stringify({ id: requestId, result: { action: "approve" } }) + "\n");
+				} else if (method === "error" || method === "turn/failed") {
+					const error = params.error as Record<string, unknown> | undefined;
+					const message = (params.message as string) || (error?.message as string) || "Codex error";
+					if (params.willRetry !== true) fail(message);
+				}
 			} catch {
-				callbacks.onText(line);
-				fullText += line;
+				console.warn("[ai-daily] invalid Codex app-server event:", line.slice(0, 500));
 			}
 		}
 	});
@@ -194,25 +274,17 @@ export function spawnCodex(
 	});
 
 	child.on("close", (code: number | null) => {
-		if (buffer.trim()) {
-			try {
-				const event = JSON.parse(buffer);
-				handleCodexStreamEvent(event, callbacks, (t) => { fullText += t; });
-			} catch {
-				callbacks.onText(buffer);
-				fullText += buffer;
-			}
-		}
-
-		if (code !== 0 && code !== null && !fullText) {
-			callbacks.onError(`Codex exited with code ${code}`);
-		} else {
-			callbacks.onDone(fullText);
-		}
+		if (finished || failed) return;
+		if (code !== 0 && code !== null) fail(`Codex app-server exited with code ${code}`);
+		else complete();
 	});
 
 	child.on("error", (err: Error) => {
-		callbacks.onError(`Codex error: ${err.message}`);
+		fail(`Codex error: ${err.message}`);
+	});
+
+	writeRequest(1, "initialize", {
+		clientInfo: { name: "obsidian-ai-daily", version: "0.1.0" },
 	});
 
 	return {
@@ -222,83 +294,32 @@ export function spawnCodex(
 	};
 }
 
-// ---------------------------------------------------------------------------
-// Codex JSONL stream event parsing
-// ---------------------------------------------------------------------------
-
-function handleCodexStreamEvent(
-	event: Record<string, unknown>,
+function handleAppServerItem(
+	params: Record<string, unknown>,
 	callbacks: ClaudeCodeStreamCallbacks,
-	appendText: (t: string) => void
+	status: "running" | "done",
 ): void {
-	const type = event.type as string | undefined;
-
-	switch (type) {
-		case "thread.started": {
-			const threadId = event.thread_id as string | undefined;
-			if (threadId) callbacks.onSessionId?.(threadId);
-			break;
+	const item = params.item as Record<string, unknown> | undefined;
+	if (!item) return;
+	const id = (item.id as string) || `tool-${Date.now()}`;
+	if (item.type === "commandExecution") {
+		const isError = status === "done" && item.status === "failed";
+		callbacks.onToolCall?.(id, "shell", { command: item.command }, isError ? "error" : status);
+		if (status === "done" && item.aggregatedOutput) {
+			callbacks.onToolResult?.(id, String(item.aggregatedOutput), isError);
 		}
-		case "item.started": {
-			const item = event.item as Record<string, unknown> | undefined;
-			if (!item) break;
-			if (item.type === "command_execution") {
-				const id = (item.id as string) || `tool-${Date.now()}`;
-				const cmd = (item.command as string) || "";
-				callbacks.onToolCall?.(id, "shell", { command: cmd }, "running");
-			} else if (item.type === "mcp_tool_call") {
-				const id = (item.id as string) || `tool-${Date.now()}`;
-				const name = (item.name as string) || (item.tool as string) || "mcp_tool";
-				const input = (item.arguments as Record<string, unknown>) || {};
-				callbacks.onToolCall?.(id, name, input, "running");
-			}
-			break;
-		}
-		case "item.completed": {
-			const item = event.item as Record<string, unknown> | undefined;
-			if (!item) break;
-			if (item.type === "command_execution") {
-				const id = (item.id as string) || "";
-				const output = (item.aggregated_output as string) || "";
-				const exitCode = item.exit_code as number | null;
-				const isError = exitCode !== null && exitCode !== 0;
-				callbacks.onToolCall?.(id, "shell", {}, isError ? "error" : "done");
-				if (output) callbacks.onToolResult?.(id, output, isError);
-			} else if (item.type === "mcp_tool_call") {
-				const id = (item.id as string) || "";
-				const output = (item.output as string) || JSON.stringify(item.result ?? "");
-				const isError = item.status === "failed";
-				const name = (item.name as string) || (item.tool as string) || "mcp_tool";
-				callbacks.onToolCall?.(id, name, {}, isError ? "error" : "done");
-				if (output) callbacks.onToolResult?.(id, output, isError);
-			} else if (item.type === "agent_message") {
-				const text = (item.text as string) || "";
-				if (text) {
-					callbacks.onText(text);
-					appendText(text);
-				}
-			} else if (item.type === "reasoning") {
-				const text = (item.text as string) || "";
-				if (text) callbacks.onThinking?.(text);
-			} else if (item.type === "error") {
-				const msg = (item.message as string) || "Unknown error";
-				console.warn("[ai-daily] codex item error:", msg);
-			}
-			break;
-		}
-		case "turn.completed": {
-			break;
-		}
-		case "turn.failed": {
-			const error = event.error as Record<string, unknown> | undefined;
-			const msg = (error?.message as string) || "Codex turn failed";
-			callbacks.onError(msg);
-			break;
-		}
-		case "error": {
-			const msg = (event.message as string) || "Codex error";
-			callbacks.onError(msg);
-			break;
+	} else if (item.type === "mcpToolCall") {
+		const isError = status === "done" && (item.status === "failed" || !!item.error);
+		const name = (item.name as string) || (item.tool as string) || "mcp_tool";
+		callbacks.onToolCall?.(
+			id,
+			name,
+			(item.arguments as Record<string, unknown>) || {},
+			isError ? "error" : status,
+		);
+		if (status === "done" && (item.output || item.result)) {
+			const output = typeof item.output === "string" ? item.output : JSON.stringify(item.result ?? "");
+			callbacks.onToolResult?.(id, output, isError);
 		}
 	}
 }

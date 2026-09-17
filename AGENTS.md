@@ -13,3 +13,4 @@ Codex 开始任务前必须先阅读根目录 `CLAUDE.md`，并遵守其中的�
 - 生产构建统一使用 `npm run build`，由它同步含 MCP Server 的根 `main.js`；禁止用裸 `esbuild` 覆盖该文件
 - 桌面 CLI 的 Node/PATH 解析必须由 Claude Code 与 Codex 共用，兼容 Electron 下的 NVM/FNM/Volta/asdf；详细约定见 `CLAUDE.md`
 - backend 切换时以插件保存的 UI 历史为交接真源；所有 runtime backend 的初始化策略、首次交接和 resume 规划统一放在 `src/conversation-context.ts`，新增 backend 必须补齐穷举映射和测试；详细约定见 `CLAUDE.md`
+- 桌面端 Codex 统一通过本次进程的 app-server 原生注入历史并 resume thread，不得退回把历史拼进用户 prompt；详细约定见 `CLAUDE.md`

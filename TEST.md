@@ -36,8 +36,8 @@
 
 1. 先通过 Proxy 完成至少一轮对话，并让 assistant 回复一个随机标记。
 2. 保持当前聊天不变，关闭 Proxy 或切到可用的桌面端本地 Codex，再询问该随机标记。
-3. 确认本地 Codex 能引用切换前的消息，且首轮启动的是新的本地 Codex thread，没有尝试 resume Proxy thread ID。
-4. 再发一条续问，确认只 resume 第 3 步创建的本地 thread，历史交接块不会重复注入。
+3. 确认本地 Codex 能引用切换前的消息，且首轮依次执行 `thread/start`、`thread/inject_items`、`turn/start`，没有尝试 resume Proxy thread ID，也没有把历史拼进当前用户 prompt。
+4. 再发一条续问，确认只通过 `thread/resume` 续接第 3 步创建的本地 thread，不重复注入历史。
 5. 从「历史」重新打开一条仅含 Proxy 消息的旧会话，切到本地 Codex 重复上述检查。
 
 ## Codex Proxy Obsidian MCP
@@ -79,11 +79,13 @@ npm run test:watch # 监听模式
 |------|---------|
 | `src/anthropic-sse.test.ts` | SSE 解析与 ApiResponse 组装 |
 | `proxy-server/src/codex-app-server.test.ts` | Codex 原生历史 item 映射与 JSON-RPC 请求序列化 |
+| `src/codex-app-server.test.ts` | 桌面 Codex thread start/resume 参数、原生历史 item 映射与 JSON-RPC 序列化 |
+| `src/cli-spawn.test.ts` | 桌面 Codex app-server 启动参数及 initialize → start → inject → turn 完整协议顺序 |
 | `src/reasoning-effort.test.ts` | 桌面 Claude/Codex 推理强度 CLI 参数 |
 | `src/model-options.test.ts` | Claude Code 模型下拉选项与旧自定义模型兼容 |
 | `proxy-server/src/reasoning.test.ts` | Proxy Claude 参数与 Codex app-server config 映射 |
 | `src/chat-view.test.ts` | Chat View 头部更多菜单显示条件、欢迎页 Workspace 单开折叠状态切换 |
-| `src/conversation-context.test.ts` | 穷举所有 runtime backend 的初始化策略，验证本地/Proxy 身份隔离、首次历史 seed、后续 resume，以及文本型角色交接 |
+| `src/conversation-context.test.ts` | 穷举所有 runtime backend 的初始化策略，验证本地/Proxy 身份隔离、首次原生历史 seed 与后续 resume |
 | `src/styles.test.ts` | 消息 pin/fork 操作按钮的不透明主题背景 |
 | `src/feeds.test.ts` | timeDecay, socialBoost, detectBursts, scoreRelevance |
 | `src/chat-session.test.ts` | newSessionId, titleFromMessages, isValidChatSession, shouldPruneToday |

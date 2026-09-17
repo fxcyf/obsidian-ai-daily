@@ -111,7 +111,7 @@ rebase 发生冲突时：
 - `.agents/skills/weread-library/` — 微信读书 skill 单一来源；部署到 Vault 的 `.agents/skills`（Codex）与 `.claude/skills`（Claude Code）
 - `src/system-prompt.ts` — 统一 system prompt 构建（API/Claude Code/Proxy 三模式共享，含 harness 注入）
 - `src/chat-view.ts` — 聊天侧边栏 UI
-- `src/conversation-context.ts` — backend 上下文初始化的单一入口：集中注册所有 runtime backend 及其 `client-managed` / `native-seed` / `text-seed` 策略，统一规划首次历史交接与后续 resume；新增 backend 必须补齐此处的穷举映射和测试
+- `src/conversation-context.ts` — backend 上下文初始化的单一入口：集中注册所有 runtime backend 及其 `client-managed` / `native-seed` 策略，统一规划首次历史交接与后续 resume；新增 backend 必须补齐此处的穷举映射和测试
 - `src/markdown-normalize.ts` — 助手消息渲染兼容层，将 Codex 常用的 `\\[...\\]` / `\\(...\\)` 数学分隔符转换为 Obsidian MathJax 语法（代码区域除外）
 - `src/claude.ts` — Claude API client，支持 tool_use agentic loop、real/typewriter/off 流式调度、proxy 模式（含重试）
 - `src/anthropic-sse.ts` — Anthropic SSE 解析与组装（纯函数，单测覆盖）
@@ -133,8 +133,9 @@ rebase 发生冲突时：
 - `src/harness-view.ts` — Harness View 面板（从 `{active_project}/modes.md` 读取模式定义，`## {id}` 正文作为 prompt，注入到 Chat View）；同时导出 `parseModesFromContent`/`loadProjectIndex`/`resolveFileEntries` 给 Studio 复用
 - `src/workspace-studio.ts` — Workspace Studio 面板（Chat View 内部页面，非独立 View）：workspace 选择器 + mode 卡片 + 最近对话 + 创建/编辑/移除 workspace（modal）
 - `src/modes-serializer.ts` — 将 `HarnessMode[]` 序列化回 `modes.md`（YAML block + `## {id}` sections），供 Studio 编辑功能使用
-- `src/codex.ts` — Codex CLI 集成（检测、spawn、JSONL 流解析、MCP 配置管理），与 `claude-code.ts` 对称
-- 桌面端 Codex 的 Vault MCP 配置只通过本次 `codex exec` 的 `-c` 参数注入，禁止调用 `codex mcp add/remove` 修改用户全局配置
+- `src/codex.ts` — 桌面 Codex app-server 集成（检测、spawn、JSON-RPC/事件流、MCP 配置），新会话通过 `thread/inject_items` 原生注入历史，后续通过 `thread/resume` 续接
+- `src/codex-app-server.ts` — 桌面 Codex app-server 协议纯函数（历史 item 映射、请求序列化、thread start/resume 参数）
+- 桌面端 Codex 的 Vault MCP 配置只通过本次 `codex app-server` 的 `-c` 参数注入，禁止调用 `codex mcp add/remove` 修改用户全局配置
 - Claude Code 与 Codex 必须共用 `src/claude-code.ts` 的 Node/PATH 解析逻辑，确保 Electron 中的 NVM/FNM/Volta/asdf 安装可被 MCP 子进程发现
 - `src/reasoning-effort.ts` — Claude Code/Codex 桌面 CLI 推理强度参数映射；Proxy 对应映射位于 `proxy-server/src/reasoning.ts`
 - `src/settings.ts` — 插件设置（含 Feed 配置、微信读书配置、CLI 后端选择）

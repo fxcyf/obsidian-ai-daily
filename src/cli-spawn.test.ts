@@ -1,11 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { existsSync } from "fs";
+import { spawn } from "child_process";
 import toolPolicy from "../agent-tool-policy.json";
-import { buildCodexMcpArgs, spawnCodex } from "./codex";
+import { buildCodexAppServerArgs, buildCodexMcpArgs, spawnCodex } from "./codex";
 import { buildEnhancedPath, findNodeExecutable } from "./claude-code";
 
 vi.mock("child_process", () => ({
 	spawn: vi.fn(() => ({
+		stdin: { write: vi.fn(), end: vi.fn() },
 		stdout: { on: vi.fn() },
 		stderr: { on: vi.fn() },
 		on: vi.fn(),
@@ -56,6 +58,61 @@ describe("Claude Code spawn args", () => {
 });
 
 describe("Codex spawn args", () => {
+	it("uses app-server stdio so local history can be injected natively", () => {
+		const args = buildCodexAppServerArgs(
+			["-c", "mcp_servers.obsidian-vault.enabled=true"],
+			["read_note"],
+		);
+
+		expect(args.slice(0, 2)).toEqual(["app-server", "--stdio"]);
+		expect(args).not.toContain("exec");
+		expect(args).toContain('mcp_servers.obsidian-vault.enabled_tools=["read_note"]');
+
+		const onText = vi.fn();
+		const onDone = vi.fn();
+		const onSessionId = vi.fn();
+		spawnCodex("current question", {
+			mcpConfig: {
+				mcpServerPath: `${process.cwd()}/main.js`,
+				vaultPath: "/vault",
+				knowledgeFolders: ["Wiki"],
+			},
+			history: [{ role: "user", content: "previous question" }],
+			systemPrompt: "developer context",
+		}, { onText, onError: vi.fn(), onDone, onSessionId });
+
+		const call = vi.mocked(spawn).mock.calls[0];
+		expect(call[1]).toEqual(expect.arrayContaining(["app-server", "--stdio"]));
+		expect(call[2]).toEqual(expect.objectContaining({ stdio: ["pipe", "pipe", "pipe"] }));
+		const child = vi.mocked(spawn).mock.results[0].value as unknown as {
+			stdin: { write: ReturnType<typeof vi.fn> };
+			stdout: { on: ReturnType<typeof vi.fn> };
+		};
+		expect(child.stdin.write).toHaveBeenCalledWith(expect.stringContaining('"method":"initialize"'));
+
+		const dataHandler = child.stdout.on.mock.calls.find(([event]) => event === "data")?.[1] as
+			| ((chunk: Buffer) => void)
+			| undefined;
+		expect(dataHandler).toBeTypeOf("function");
+		dataHandler!(Buffer.from('{"id":1,"result":{}}\n'));
+		expect(child.stdin.write).toHaveBeenLastCalledWith(expect.stringContaining('"method":"thread/start"'));
+		expect(child.stdin.write).toHaveBeenLastCalledWith(expect.stringContaining('"developerInstructions":"developer context"'));
+
+		dataHandler!(Buffer.from('{"id":2,"result":{"thread":{"id":"local-thread"}}}\n'));
+		expect(onSessionId).toHaveBeenCalledWith("local-thread");
+		expect(child.stdin.write).toHaveBeenLastCalledWith(expect.stringContaining('"method":"thread/inject_items"'));
+		expect(child.stdin.write).toHaveBeenLastCalledWith(expect.stringContaining('"content":[{"type":"input_text","text":"previous question"}]'));
+
+		dataHandler!(Buffer.from('{"id":3,"result":{}}\n'));
+		expect(child.stdin.write).toHaveBeenLastCalledWith(expect.stringContaining('"method":"turn/start"'));
+		expect(child.stdin.write).toHaveBeenLastCalledWith(expect.stringContaining('"text":"current question"'));
+
+		dataHandler!(Buffer.from('{"method":"item/agentMessage/delta","params":{"delta":"answer"}}\n'));
+		dataHandler!(Buffer.from('{"method":"turn/completed","params":{}}\n'));
+		expect(onText).toHaveBeenCalledWith("answer");
+		expect(onDone).toHaveBeenCalledWith("answer");
+	});
+
 	it("uses the shared enhanced Node path when spawning the MCP server", () => {
 		const home = process.env.HOME || "";
 		const nodeBin = findNodeExecutable(home);

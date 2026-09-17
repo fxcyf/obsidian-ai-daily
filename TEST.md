@@ -83,7 +83,7 @@ npm run test:watch # 监听模式
 | `src/model-options.test.ts` | Claude Code 模型下拉选项与旧自定义模型兼容 |
 | `proxy-server/src/reasoning.test.ts` | Proxy Claude 参数与 Codex app-server config 映射 |
 | `src/chat-view.test.ts` | Chat View 头部更多菜单显示条件、欢迎页 Workspace 单开折叠状态切换 |
-| `src/conversation-context.test.ts` | 切换后端时提取前序消息并为不支持原生注入的后端生成带角色的首轮历史交接 |
+| `src/conversation-context.test.ts` | 穷举所有 runtime backend 的初始化策略，验证本地/Proxy 身份隔离、首次历史 seed、后续 resume，以及文本型角色交接 |
 | `src/styles.test.ts` | 消息 pin/fork 操作按钮的不透明主题背景 |
 | `src/feeds.test.ts` | timeDecay, socialBoost, detectBursts, scoreRelevance |
 | `src/chat-session.test.ts` | newSessionId, titleFromMessages, isValidChatSession, shouldPruneToday |

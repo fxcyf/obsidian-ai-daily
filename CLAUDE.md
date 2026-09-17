@@ -111,7 +111,7 @@ rebase 发生冲突时：
 - `.agents/skills/weread-library/` — 微信读书 skill 单一来源；部署到 Vault 的 `.agents/skills`（Codex）与 `.claude/skills`（Claude Code）
 - `src/system-prompt.ts` — 统一 system prompt 构建（API/Claude Code/Proxy 三模式共享，含 harness 注入）
 - `src/chat-view.ts` — 聊天侧边栏 UI
-- `src/conversation-context.ts` — backend 切换时的历史交接单一逻辑：提取当前消息之前的 UI 历史，并为不支持原生 history 注入的本地 Codex 生成首轮上下文
+- `src/conversation-context.ts` — backend 上下文初始化的单一入口：集中注册所有 runtime backend 及其 `client-managed` / `native-seed` / `text-seed` 策略，统一规划首次历史交接与后续 resume；新增 backend 必须补齐此处的穷举映射和测试
 - `src/markdown-normalize.ts` — 助手消息渲染兼容层，将 Codex 常用的 `\\[...\\]` / `\\(...\\)` 数学分隔符转换为 Obsidian MathJax 语法（代码区域除外）
 - `src/claude.ts` — Claude API client，支持 tool_use agentic loop、real/typewriter/off 流式调度、proxy 模式（含重试）
 - `src/anthropic-sse.ts` — Anthropic SSE 解析与组装（纯函数，单测覆盖）

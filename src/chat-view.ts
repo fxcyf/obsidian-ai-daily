@@ -31,7 +31,11 @@ import { normalizeMarkdownForObsidian } from "./markdown-normalize";
 import { distillConversation, prepareDistillation, prepareHealthFix, type HealthCheckResult } from "./knowledge-agent";
 import { isClaudeCodeAvailable, spawnClaudeCode, getMcpServerPath, seedClaudeCodeSession, type UndoData } from "./claude-code";
 import { isCodexAvailable, spawnCodex } from "./codex";
-import { buildTextSeededFirstTurn, historyBeforeCurrentTurn } from "./conversation-context";
+import {
+	buildTextSeededFirstTurn,
+	planBackendContext,
+	resolveCliConversationBackend,
+} from "./conversation-context";
 import {
 	newSessionId,
 	titleFromMessages,
@@ -1946,11 +1950,15 @@ export class ChatView extends ItemView {
 			let actualSource: MessageSource = "api";
 			if (this.client!.isProxyMode()) {
 				const proxyBackend = this.plugin.settings.cliBackend;
-				const isFirstProxyMessage = !this.client!.getProxySessionId(proxyBackend);
-				let seedHistory: { role: string; content: string }[] | undefined;
-				if (isFirstProxyMessage && this.messages.length > 1) {
-					seedHistory = historyBeforeCurrentTurn(this.messages);
-				}
+				const contextPlan = planBackendContext({
+					backend: resolveCliConversationBackend("proxy", proxyBackend),
+					hasSession: !!this.client!.getProxySessionId(proxyBackend),
+					messages: this.messages,
+				});
+				const isFirstProxyMessage = contextPlan.mode !== "resume";
+				const seedHistory = contextPlan.mode === "native-seed" && contextPlan.history.length > 0
+					? contextPlan.history
+					: undefined;
 				let proxyMessage = userMessage;
 				if (isFirstProxyMessage && this.harnessContext) {
 					const hm = this.harnessContext.mode;
@@ -2062,17 +2070,21 @@ export class ChatView extends ItemView {
 		this.addMessage("user", displayText, "claude-code");
 		if (!this.sessionId) this.sessionId = newSessionId();
 
-		const isFirstMessage = !this.claudeCodeSessionId;
+		const contextPlan = planBackendContext({
+			backend: resolveCliConversationBackend("local", "claude-code"),
+			hasSession: !!this.claudeCodeSessionId,
+			messages: this.messages,
+		});
+		const isFirstMessage = contextPlan.mode !== "resume";
 		const attachedContent = await this.consumeAttachedFiles();
 		const imagePaths = ChatView.saveImagesToDisk(images);
 		let prompt = text + ChatView.buildImagePrompt(imagePaths);
 
-		if (isFirstMessage && this.messages.length > 1) {
+		if (contextPlan.mode === "native-seed" && contextPlan.history.length > 0) {
 			const adapter = this.app.vault.adapter as { basePath?: string };
 			const vaultAbsPath = adapter.basePath || "";
-			const history = historyBeforeCurrentTurn(this.messages);
 			try {
-				const seededId = await seedClaudeCodeSession(history, vaultAbsPath, this.plugin.settings.claudeCodeModel);
+				const seededId = await seedClaudeCodeSession(contextPlan.history, vaultAbsPath, this.plugin.settings.claudeCodeModel);
 				this.claudeCodeSessionId = seededId;
 			} catch (e) {
 				console.error("[ai-daily] Failed to seed claude-code session:", e);
@@ -2110,12 +2122,16 @@ export class ChatView extends ItemView {
 		this.addMessage("user", displayText, "codex");
 		if (!this.sessionId) this.sessionId = newSessionId();
 
-		const isFirstMessage = !this.codexSessionId;
+		const contextPlan = planBackendContext({
+			backend: resolveCliConversationBackend("local", "codex"),
+			hasSession: !!this.codexSessionId,
+			messages: this.messages,
+		});
 		const attachedContent = await this.consumeAttachedFiles();
 		const imagePaths = ChatView.saveImagesToDisk(images);
 		let prompt = text + ChatView.buildImagePrompt(imagePaths);
 
-		if (isFirstMessage) {
+		if (contextPlan.mode === "text-seed") {
 			const adapter = this.app.vault.adapter as { basePath?: string };
 			const vaultAbsPath = adapter.basePath || "";
 			const systemPromptText = buildSystemPrompt({
@@ -2136,7 +2152,7 @@ export class ChatView extends ItemView {
 			].filter(Boolean).join("\n\n");
 			prompt = buildTextSeededFirstTurn({
 				systemPrompt: systemPromptText,
-				history: historyBeforeCurrentTurn(this.messages),
+				history: contextPlan.history,
 				currentMessage,
 			});
 		} else if (attachedContent) {

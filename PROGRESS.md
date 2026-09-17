@@ -312,6 +312,12 @@
 - **解决**：桌面端从 `codex exec --json` 迁移到 `codex app-server --stdio`，新 thread 使用 `thread/inject_items` 注入 user/assistant 历史，当前消息再通过 `turn/start` 发送，后续使用 `thread/resume`；Vault MCP 仍只做进程级配置。
 - **经验**：当 CLI 已提供稳定的结构化会话协议时，应优先复用原生 thread/item 语义，而不是在 prompt 中模拟历史；协议测试应覆盖 initialize → start → inject → turn 的完整顺序。
 
+## 2026-09-17 — Claude Resume 保留共享 System Prompt (`ac1143c`)
+
+- **问题**：Proxy Claude 在历史 seed 后虽然能 resume transcript，但 `seedSession` 未使用传入的 system prompt，且 resume 分支刻意跳过 `--system-prompt`；本地 Claude 也只在首轮把共享指令拼进用户 prompt，后续新进程无法保证保留。
+- **解决**：本地与 Proxy Claude 每次启动新进程或 resume 时都通过 `--append-system-prompt` 注入当前共享指令，transcript 仅保存 user/assistant 历史；Proxy 客户端在已有 session ID 时仍发送 system prompt，所有命令入口统一回到标准发送链路。
+- **经验**：CLI session 持久化的是对话历史，不代表上一次进程的启动参数也会持久化。运行时 system instructions 必须在每个新进程显式重放，并与 transcript 历史分别测试。
+
 ## 待解决
 
 - [ ] 测试覆盖：目前无任何测试文件

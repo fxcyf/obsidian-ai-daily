@@ -294,6 +294,12 @@
 - **解决**：使用区域限定的原生按钮选择器，并显式锁定 `height/min-height/max-height`、padding、字号和 appearance；主题色 Action 描边继续通过 `var(--interactive-accent)` 派生。
 - **经验**：宿主应用的原生控件规则可能同时覆盖 min-height、padding 与 appearance；紧凑尺寸需要用足够 specificity 固定完整盒模型，而不只是改一个 padding。
 
+## 2026-09-17 — 本地 Codex 后端切换历史交接 (`62545c5`)
+
+- **问题**：Proxy Codex 和本地 Claude Code 都实现了历史恢复，但本地 Codex 新建 thread 时只收到 system prompt 和当前问题；从 Proxy 或历史会话切换后必然看不到前文。
+- **解决**：以插件 UI 消息为跨 backend 的历史真源，统一提取当前轮之前的消息；本地 Codex 在新 thread 首轮接收带角色边界的历史交接，后续仅 resume 新的本地 thread，远端与本地 session ID 继续隔离。
+- **经验**：原生 session ID 只在同一 backend 与运行位置内有效。跨 backend 恢复不能只清空旧 ID，还必须为目标 backend 明确定义一次性的历史交接策略，并用测试覆盖首轮与续轮边界。
+
 ## 待解决
 
 - [ ] 测试覆盖：目前无任何测试文件

@@ -306,6 +306,12 @@
 - **解决**：在 `src/conversation-context.ts` 建立穷举 backend 注册表和初始化策略表，并用同一个 planner 决定 `client-managed`、`native-seed`、`text-seed` 或 `resume`；所有 CLI 路径均改为消费该计划。
 - **经验**：共享 helper 只能减少重复，不能保证新分支接入。关键跨实现约束应做成穷举 registry、判别式计划和精确测试，使遗漏同时触发类型错误与测试失败。
 
+## 2026-09-17 — 本地 Codex 原生 thread 历史恢复 (`7ee1ae7`)
+
+- **问题**：本地 Codex 虽已能收到切换前的历史，但仍通过首轮文本 prompt 携带 JSON 交接块；角色边界和 developer instructions 不如 Proxy 的 app-server 原生 thread 恢复可靠。
+- **解决**：桌面端从 `codex exec --json` 迁移到 `codex app-server --stdio`，新 thread 使用 `thread/inject_items` 注入 user/assistant 历史，当前消息再通过 `turn/start` 发送，后续使用 `thread/resume`；Vault MCP 仍只做进程级配置。
+- **经验**：当 CLI 已提供稳定的结构化会话协议时，应优先复用原生 thread/item 语义，而不是在 prompt 中模拟历史；协议测试应覆盖 initialize → start → inject → turn 的完整顺序。
+
 ## 待解决
 
 - [ ] 测试覆盖：目前无任何测试文件

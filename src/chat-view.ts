@@ -2074,14 +2074,24 @@ export class ChatView extends ItemView {
 			hasSession: !!this.claudeCodeSessionId,
 			messages: this.messages,
 		});
-		const isFirstMessage = contextPlan.mode !== "resume";
 		const attachedContent = await this.consumeAttachedFiles();
 		const imagePaths = ChatView.saveImagesToDisk(images);
 		let prompt = text + ChatView.buildImagePrompt(imagePaths);
+		const adapter = this.app.vault.adapter as { basePath?: string };
+		const vaultAbsPath = adapter.basePath || "";
+		const systemPrompt = buildSystemPrompt({
+			mode: "claude-code",
+			knowledgeFolders: this.plugin.settings.knowledgeFolders,
+			distillTargetFolder: this.plugin.settings.distillTargetFolder,
+			autoTagFolders: this.plugin.settings.autoTagFolders,
+			enableWebSearch: false,
+			enableWeRead: this.plugin.settings.enableWeRead && !!this.plugin.settings.wereadApiKey,
+			enablePodcast: false,
+			harnessContext: this.harnessContext,
+			vaultAbsPath,
+		});
 
 		if (contextPlan.mode === "native-seed" && contextPlan.history.length > 0) {
-			const adapter = this.app.vault.adapter as { basePath?: string };
-			const vaultAbsPath = adapter.basePath || "";
 			try {
 				const seededId = await seedClaudeCodeSession(contextPlan.history, vaultAbsPath, this.plugin.settings.claudeCodeModel);
 				this.claudeCodeSessionId = seededId;
@@ -2090,28 +2100,15 @@ export class ChatView extends ItemView {
 			}
 		}
 
-		if (isFirstMessage && !this.claudeCodeSessionId) {
-			const adapter = this.app.vault.adapter as { basePath?: string };
-			const vaultAbsPath = adapter.basePath || "";
+		if (attachedContent) prompt = attachedContent + "\n\n" + prompt;
 
-			const systemPromptText = buildSystemPrompt({
-				mode: "claude-code",
-				knowledgeFolders: this.plugin.settings.knowledgeFolders,
-				distillTargetFolder: this.plugin.settings.distillTargetFolder,
-				autoTagFolders: this.plugin.settings.autoTagFolders,
-				enableWebSearch: false,
-				enableWeRead: this.plugin.settings.enableWeRead && !!this.plugin.settings.wereadApiKey,
-				enablePodcast: false,
-				harnessContext: this.harnessContext,
-				vaultAbsPath,
-			});
-
-			prompt = systemPromptText + "\n\n" + (attachedContent ? attachedContent + "\n\n" : "") + text;
-		} else if (attachedContent) {
-			prompt = attachedContent + "\n\n" + text;
-		}
-
-		this.runClaudeCodeStream(prompt, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.claudeCodeModel);
+		this.runClaudeCodeStream(
+			prompt,
+			this.getMcpConfig(),
+			this.claudeCodeSessionId,
+			this.plugin.settings.claudeCodeModel,
+			systemPrompt,
+		);
 	}
 
 	private async handleSendViaCodex(text: string, images: PreparedImage[] = []): Promise<void> {
@@ -2626,20 +2623,16 @@ export class ChatView extends ItemView {
 	}
 
 	sendClaudeCodeMessage(userText: string): void {
-		if (this.isLoading) return;
-		this.isLoading = true;
-		this.setSendButtonState(true);
-		const source: MessageSource = this.plugin.settings.cliBackend === "codex" ? "codex" : "claude-code";
-		this.addMessage("user", userText, source);
-		if (!this.sessionId) this.sessionId = newSessionId();
-		if (source === "codex") {
-			this.runCodexStream(userText, this.getMcpConfig(), this.codexSessionId, this.plugin.settings.codexModel);
-		} else {
-			this.runClaudeCodeStream(userText, this.getMcpConfig(), this.claudeCodeSessionId, this.plugin.settings.claudeCodeModel);
-		}
+		this.sendMessage(userText);
 	}
 
-	private runClaudeCodeStream(prompt: string, mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] }, sessionId?: string, model?: string): void {
+	private runClaudeCodeStream(
+		prompt: string,
+		mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[] },
+		sessionId?: string,
+		model?: string,
+		systemPrompt?: string,
+	): void {
 		const loadingEl = this.messagesEl.createDiv({ cls: "ai-daily-loading" });
 		loadingEl.createSpan({ text: "Claude Code 处理中" });
 		const dotsEl = loadingEl.createSpan({ cls: "ai-daily-loading-dots" });
@@ -2695,7 +2688,7 @@ export class ChatView extends ItemView {
 			if (streamTextEl) streamTextEl.removeClass("ai-daily-stream-text");
 		};
 
-		const handle = spawnClaudeCode(prompt, { mcpConfig, sessionId, model, effort: this.plugin.settings.claudeCodeEffort }, {
+		const handle = spawnClaudeCode(prompt, { mcpConfig, sessionId, model, systemPrompt, effort: this.plugin.settings.claudeCodeEffort }, {
 			onText: (delta) => {
 				if (this.closed) return;
 				loadingEl.remove();

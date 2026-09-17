@@ -7,6 +7,7 @@ import {
 	type ToolUseBlock,
 } from "./anthropic-sse";
 import type { PreparedImage } from "./image-tools";
+import { buildProxyContextFields } from "./conversation-context";
 
 const STREAM_CHUNK_SIZE = 6;
 const STREAM_CHUNK_DELAY_MS = 22;
@@ -552,14 +553,11 @@ export class ClaudeClient {
 			if (images?.length) {
 				body.images = images;
 			}
-			if (this.proxySessionIds[backend]) {
-				body.sessionId = this.proxySessionIds[backend];
-			} else {
-				body.systemPrompt = this.systemPrompt;
-				if (seedHistory?.length) {
-					body.history = seedHistory;
-				}
-			}
+			Object.assign(body, buildProxyContextFields({
+				sessionId: this.proxySessionIds[backend],
+				systemPrompt: this.systemPrompt,
+				history: seedHistory,
+			}));
 
 			const PROXY_RETRY_MAX = 2;
 			let resp: Response | null = null;

@@ -7,7 +7,7 @@ import { readFile, writeFile, mkdir, unlink, rm } from "fs/promises";
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { randomUUID } from "crypto";
 import { appServerRequest, buildCodexHistoryItems } from "./codex-app-server.js";
-import { claudeEffortArgs, codexReasoningConfig } from "./reasoning.js";
+import { claudeEffortArgs, claudeSessionArgs, codexReasoningConfig } from "./reasoning.js";
 
 // ── Config ─────────────────────────────────────────────────────────
 
@@ -469,7 +469,6 @@ function cwdToProjectDir(): string {
 async function seedSession(
 	sessionId: string,
 	history: { role: string; content: string }[],
-	systemPrompt?: string,
 ): Promise<void> {
 	const home = process.env.HOME || process.env.USERPROFILE || "";
 	const dir = resolve(home, ".claude", "projects", cwdToProjectDir());
@@ -583,7 +582,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
 	if (body.history?.length && !body.sessionId && !useCodex) {
 		const seededId = randomUUID();
 		try {
-			await seedSession(seededId, body.history, body.systemPrompt);
+			await seedSession(seededId, body.history);
 			body.sessionId = seededId;
 		} catch (e) {
 			console.error("[Proxy] Failed to seed session:", e);
@@ -912,14 +911,7 @@ function buildClaudeArgs(body: ChatRequest): string[] {
 		"--model", body.model || CLAUDE_MODEL,
 	];
 	args.push(...claudeEffortArgs(body.reasoningEffort));
-
-	if (body.sessionId) {
-		args.push("--resume", body.sessionId);
-	}
-
-	if (body.systemPrompt && !body.sessionId) {
-		args.push("--system-prompt", body.systemPrompt);
-	}
+	args.push(...claudeSessionArgs(body.sessionId, body.systemPrompt));
 
 	return args;
 }

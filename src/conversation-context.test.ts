@@ -2,12 +2,32 @@ import { describe, expect, it } from "vitest";
 import {
 	BACKEND_CONTEXT_STRATEGIES,
 	CONVERSATION_BACKENDS,
+	buildProxyContextFields,
 	historyBeforeCurrentTurn,
 	planBackendContext,
 	resolveCliConversationBackend,
 } from "./conversation-context";
 
 describe("conversation backend handoff", () => {
+	it("sends system instructions on both Proxy seed and resume requests", () => {
+		const history = [{ role: "user" as const, content: "old question" }];
+		expect(buildProxyContextFields({
+			systemPrompt: "vault instructions",
+			history,
+		})).toEqual({
+			systemPrompt: "vault instructions",
+			history,
+		});
+		expect(buildProxyContextFields({
+			sessionId: "session-1",
+			systemPrompt: "vault instructions",
+			history,
+		})).toEqual({
+			systemPrompt: "vault instructions",
+			sessionId: "session-1",
+		});
+	});
+
 	it("requires an explicit initialization strategy for every supported backend", () => {
 		expect(CONVERSATION_BACKENDS).toEqual([
 			"api",

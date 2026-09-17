@@ -40,6 +40,12 @@
 4. 再发一条续问，确认只通过 `thread/resume` 续接第 3 步创建的本地 thread，不重复注入历史。
 5. 从「历史」重新打开一条仅含 Proxy 消息的旧会话，切到本地 Codex 重复上述检查。
 
+## Claude Code 历史与 System Prompt
+
+1. 在带 Harness 模式的会话中先通过其他 backend 完成一轮，再切到本地 Claude Code，确认历史内容和 Harness/Vault 工具规则同时生效。
+2. 向同一本地 Claude Code session 再发送一条消息，确认 `--resume` 与 `--append-system-prompt` 同时传入，当前问题中不包含整段 system prompt。
+3. 对 Proxy Claude 重复上述步骤；首次 transcript seed 和后续 resume 请求都必须包含 `--append-system-prompt`，且 transcript JSONL 只包含 user/assistant 历史。
+
 ## Codex Proxy Obsidian MCP
 
 1. 通过远端 Codex Proxy 发送“调用 list_notes 列出 vault 根目录文件（folder 传空字符串）”。
@@ -81,9 +87,9 @@ npm run test:watch # 监听模式
 | `proxy-server/src/codex-app-server.test.ts` | Codex 原生历史 item 映射与 JSON-RPC 请求序列化 |
 | `src/codex-app-server.test.ts` | 桌面 Codex thread start/resume 参数、原生历史 item 映射与 JSON-RPC 序列化 |
 | `src/cli-spawn.test.ts` | 桌面 Codex app-server 启动参数及 initialize → start → inject → turn 完整协议顺序 |
-| `src/reasoning-effort.test.ts` | 桌面 Claude/Codex 推理强度 CLI 参数 |
+| `src/reasoning-effort.test.ts` | 桌面 Claude/Codex 推理强度，以及 Claude 新建/resume 时的 system prompt 参数 |
 | `src/model-options.test.ts` | Claude Code 模型下拉选项与旧自定义模型兼容 |
-| `proxy-server/src/reasoning.test.ts` | Proxy Claude 参数与 Codex app-server config 映射 |
+| `proxy-server/src/reasoning.test.ts` | Proxy Claude 新建/resume 参数与 Codex app-server config 映射 |
 | `src/chat-view.test.ts` | Chat View 头部更多菜单显示条件、欢迎页 Workspace 单开折叠状态切换 |
 | `src/conversation-context.test.ts` | 穷举所有 runtime backend 的初始化策略，验证本地/Proxy 身份隔离、首次原生历史 seed 与后续 resume |
 | `src/styles.test.ts` | 消息 pin/fork 操作按钮的不透明主题背景 |

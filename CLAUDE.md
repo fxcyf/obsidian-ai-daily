@@ -136,6 +136,7 @@ rebase 发生冲突时：
 - `src/codex.ts` — 桌面 Codex app-server 集成（检测、spawn、JSON-RPC/事件流、MCP 配置），新会话通过 `thread/inject_items` 原生注入历史，后续通过 `thread/resume` 续接
 - `src/codex-app-server.ts` — 桌面 Codex app-server 协议纯函数（历史 item 映射、请求序列化、thread start/resume 参数）
 - 桌面端 Codex 的 Vault MCP 配置只通过本次 `codex app-server` 的 `-c` 参数注入，禁止调用 `codex mcp add/remove` 修改用户全局配置
+- 本地与 Proxy Claude Code 的 transcript 只承载历史消息；每次新建或 resume CLI 进程都必须通过 `--append-system-prompt` 注入当前共享 system prompt，不能假设 CLI 启动参数会随 session 持久化
 - Claude Code 与 Codex 必须共用 `src/claude-code.ts` 的 Node/PATH 解析逻辑，确保 Electron 中的 NVM/FNM/Volta/asdf 安装可被 MCP 子进程发现
 - `src/reasoning-effort.ts` — Claude Code/Codex 桌面 CLI 推理强度参数映射；Proxy 对应映射位于 `proxy-server/src/reasoning.ts`
 - `src/settings.ts` — 插件设置（含 Feed 配置、微信读书配置、CLI 后端选择）

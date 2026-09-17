@@ -1,7 +1,7 @@
 import { Platform } from "obsidian";
 import toolPolicy from "../agent-tool-policy.json";
 import { ChildProcess } from "child_process";
-import { appendClaudeEffortArg } from "./reasoning-effort";
+import { appendClaudeEffortArg, appendClaudeSessionArgs } from "./reasoning-effort";
 
 declare const __MCP_SERVER_CODE__: string | undefined;
 
@@ -329,6 +329,7 @@ export interface ClaudeCodeStreamCallbacks {
 export interface ClaudeCodeOptions {
 	mcpConfig: { vaultPath: string; mcpServerPath: string; knowledgeFolders: string[]; wereadApiKey?: string };
 	sessionId?: string;
+	systemPrompt?: string;
 	model?: string;
 	effort?: "low" | "medium" | "high" | "xhigh" | "max" | "";
 	codexReasoningEffort?: "none" | "low" | "medium" | "high" | "xhigh" | "max" | "";
@@ -345,7 +346,7 @@ export function spawnClaudeCode(
 	callbacks: ClaudeCodeStreamCallbacks
 ): { abort: () => void } {
 	const { spawn } = require("child_process") as typeof import("child_process");
-	const { mcpConfig, sessionId, model, effort } = options;
+	const { mcpConfig, sessionId, systemPrompt, model, effort } = options;
 	const home = process.env.HOME || process.env.USERPROFILE || "";
 
 	// Resolve node to absolute path for MCP server command
@@ -396,12 +397,10 @@ export function spawnClaudeCode(
 		args.push("--model", model);
 	}
 	appendClaudeEffortArg(args, effort);
-	if (sessionId) {
-		args.push("--resume", sessionId);
-	}
+	appendClaudeSessionArgs(args, sessionId, systemPrompt);
 
 	const claudeBin = getClaudePath();
-	console.log("[ai-daily] spawn:", claudeBin, args.filter(a => a !== prompt).join(" "));
+	console.log("[ai-daily] spawn:", claudeBin, args.filter(a => a !== prompt && a !== systemPrompt).join(" "));
 	const env = { ...process.env };
 	if (home) {
 		env.PATH = buildEnhancedPath(home);

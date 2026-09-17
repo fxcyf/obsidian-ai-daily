@@ -14,3 +14,4 @@ Codex 开始任务前必须先阅读根目录 `CLAUDE.md`，并遵守其中的�
 - 桌面 CLI 的 Node/PATH 解析必须由 Claude Code 与 Codex 共用，兼容 Electron 下的 NVM/FNM/Volta/asdf；详细约定见 `CLAUDE.md`
 - backend 切换时以插件保存的 UI 历史为交接真源；所有 runtime backend 的初始化策略、首次交接和 resume 规划统一放在 `src/conversation-context.ts`，新增 backend 必须补齐穷举映射和测试；详细约定见 `CLAUDE.md`
 - 桌面端 Codex 统一通过本次进程的 app-server 原生注入历史并 resume thread，不得退回把历史拼进用户 prompt；详细约定见 `CLAUDE.md`
+- 本地与 Proxy Claude Code 每次新建或 resume 进程都必须通过 `--append-system-prompt` 注入共享指令，transcript 只承载历史消息；详细约定见 `CLAUDE.md`

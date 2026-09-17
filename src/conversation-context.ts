@@ -56,6 +56,27 @@ export interface BackendContextPlan {
 	history: ConversationContextMessage[];
 }
 
+export function buildProxyContextFields(options: {
+	sessionId?: string;
+	systemPrompt: string;
+	history?: { role: string; content: string }[];
+}): {
+	systemPrompt: string;
+	sessionId?: string;
+	history?: { role: string; content: string }[];
+} {
+	if (options.sessionId) {
+		return {
+			systemPrompt: options.systemPrompt,
+			sessionId: options.sessionId,
+		};
+	}
+	return {
+		systemPrompt: options.systemPrompt,
+		...(options.history?.length ? { history: options.history } : {}),
+	};
+}
+
 export function planBackendContext(options: {
 	backend: ConversationBackend;
 	hasSession: boolean;
